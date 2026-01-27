@@ -380,10 +380,18 @@ async function blockUserForSpam(
   // 5. Kirim pesan ke user yang diblokir (TANPA menyebutkan alasan untuk mencegah user mengakali sistem)
   const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
   
+  // Keyboard dengan opsi bayar denda
+  const blockedKeyboard = {
+    inline_keyboard: [
+      [{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]
+    ]
+  };
+  
   await sendTelegramMessage(
     botToken,
     userId,
-    `🚫 <b>Akun Anda Diblokir</b>\n\nAnda telah diblokir dari menggunakan layanan ini karena melanggar ketentuan penggunaan.\n\n📞 Hubungi admin jika ini adalah kekeliruan: @FizatalkCS`
+    `🚫 <b>Akun Anda Diblokir</b>\n\nAnda telah diblokir dari menggunakan layanan ini karena melanggar ketentuan penggunaan.\n\n💰 <b>Opsi Buka Blokir:</b>\nBayar denda Rp10.000 untuk membuka blokir akun.\n\n📞 Atau hubungi admin: @FizatalkCS`,
+    blockedKeyboard
   );
   
   // 6. Kirim notifikasi ke admin
@@ -1865,16 +1873,21 @@ Deno.serve(async (req) => {
       // ************************************************
       // CEK APAKAH USER SUDAH DIBLOKIR (CALLBACK QUERY)
       // ************************************************
-      const userIsBlockedCallback = await isUserBlocked(supabase, userId);
-      if (userIsBlockedCallback) {
-        // User diblokir, kirim alert dan abaikan
-        await answerCallbackQuery(botToken, query.id, '🚫 Akun Anda diblokir. Hubungi @FizatalkCS jika ini kekeliruan.', true);
-        return new Response('OK', { status: 200 });
+      // PENGECUALIAN: pay_fine dan cancel_fine harus diizinkan agar user bisa bayar denda
+      const fineAllowedCallbacks = ['pay_fine', 'cancel_fine'];
+      
+      if (!fineAllowedCallbacks.includes(callbackData)) {
+        const userIsBlockedCallback = await isUserBlocked(supabase, userId);
+        if (userIsBlockedCallback) {
+          // User diblokir, kirim alert dan abaikan
+          await answerCallbackQuery(botToken, query.id, '🚫 Akun Anda diblokir. Hubungi @FizatalkCS jika ini kekeliruan.', true);
+          return new Response('OK', { status: 200 });
+        }
       }
 
       // === CEK STATE AWAITING_PAYMENT - BLOKIR SEMUA TOMBOL KECUALI CANCEL ===
-      // Hanya izinkan cancel_topup dan cancel_premium saat sedang dalam pembayaran
-      const paymentAllowedCallbacks = ['cancel_topup', 'cancel_premium'];
+      // Hanya izinkan cancel_topup, cancel_premium, dan cancel_fine saat sedang dalam pembayaran
+      const paymentAllowedCallbacks = ['cancel_topup', 'cancel_premium', 'cancel_fine'];
       
       if (!paymentAllowedCallbacks.includes(callbackData)) {
         const { data: userPaymentCheck } = await supabase
@@ -1933,6 +1946,100 @@ Deno.serve(async (req) => {
           );
           
           return new Response('OK', { status: 200 });
+      }
+
+      // --- LOGIKA BAYAR DENDA (BUKA BLOKIR) ---
+      if (callbackData === 'pay_fine') {
+        await answerCallbackQuery(botToken, query.id);
+        
+        const FINE_AMOUNT = 10000; // Denda Rp10.000
+        
+        // Generate unique code untuk pembayaran
+        const { data: uniqueCodeResult } = await supabase.rpc('generate_unique_payment_code');
+        const uniqueCode = uniqueCodeResult || Math.floor(Math.random() * 999) + 1;
+        const totalAmount = FINE_AMOUNT + uniqueCode;
+        
+        // Simpan transaksi denda ke pending_transactions
+        await supabase.from('pending_transactions').insert({
+          user_id: userId,
+          amount: FINE_AMOUNT,
+          unique_code: uniqueCode,
+          total_amount: totalAmount,
+          status: 'pending',
+          admin_notes: 'FINE_PAYMENT' // Mark sebagai pembayaran denda
+        });
+        
+        // Update state user ke awaiting_payment
+        await supabase
+          .from('telegram_users')
+          .update({ state: 'awaiting_payment' })
+          .eq('id', userId);
+        
+        // Kirim QRIS pembayaran
+        await sendQRISPayment({
+          supabase,
+          botToken,
+          chatId: userId,
+          title: 'PEMBAYARAN DENDA - BUKA BLOKIR',
+          price: FINE_AMOUNT,
+          uniqueCode,
+          totalAmount,
+          expiryMinutes: 30,
+          cancelCallbackData: 'cancel_fine'
+        });
+        
+        // Notifikasi admin
+        const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+        if (csChatId) {
+          const userName = query.from.username ? `@${query.from.username}` : query.from.first_name || 'Unknown';
+          await sendTelegramMessage(
+            botToken,
+            parseInt(csChatId),
+            `💰 <b>PEMBAYARAN DENDA DIMULAI</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n💵 Total: Rp ${totalAmount.toLocaleString('id-ID')}\n\n⏳ Menunggu bukti pembayaran...`
+          );
+        }
+        
+        return new Response('OK', { status: 200 });
+      }
+
+      // --- LOGIKA PEMBATALAN DENDA DARI INLINE BUTTON ---
+      if (callbackData === 'cancel_fine') {
+        // Batalkan pending transaction dengan notes FINE_PAYMENT
+        await supabase
+          .from('pending_transactions')
+          .update({ status: 'cancelled' })
+          .eq('user_id', userId)
+          .eq('status', 'pending')
+          .eq('admin_notes', 'FINE_PAYMENT');
+        
+        // Reset state user ke idle (tetap blocked)
+        await supabase
+          .from('telegram_users')
+          .update({ state: 'idle' })
+          .eq('id', userId);
+
+        await answerCallbackQuery(botToken, query.id, '🚫 Pembayaran denda dibatalkan!');
+        
+        // Hapus pesan QRIS
+        if (message) {
+          await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+        }
+        
+        // Kirim pesan konfirmasi (tetap blocked)
+        const blockedKeyboard = {
+          inline_keyboard: [
+            [{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]
+          ]
+        };
+        
+        await sendTelegramMessage(
+          botToken,
+          userId,
+          `🚫 <b>Pembayaran Denda Dibatalkan</b>\n\nAkun Anda masih dalam status diblokir.\n\n💰 Bayar denda Rp10.000 untuk membuka blokir.`,
+          blockedKeyboard
+        );
+        
+        return new Response('OK', { status: 200 });
       }
 
       // --- LOGIKA PEMILIHAN GENDER (DARI /START - PERTAMA KALI) ---
@@ -3659,6 +3766,135 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
         return new Response('OK', { status: 200 });
       }
 
+      // --- LOGIKA ADMIN APPROVE/REJECT FINE (UNBLOCK USER) ---
+      if (callbackData.startsWith('admin_approve_fine_') || callbackData.startsWith('admin_reject_fine_')) {
+        const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+        
+        if (userId.toString() !== csChatId) {
+          await answerCallbackQuery(botToken, query.id, '❌ Anda bukan admin!');
+          return new Response('OK', { status: 200 });
+        }
+
+        const isApprove = callbackData.startsWith('admin_approve_fine_');
+        const requestId = callbackData.replace('admin_approve_fine_', '').replace('admin_reject_fine_', '');
+
+        // Get fine payment request
+        const { data: fineRequest, error: fetchError } = await supabase
+          .from('pending_transactions')
+          .select('*')
+          .eq('id', requestId)
+          .eq('status', 'pending')
+          .eq('admin_notes', 'FINE_PAYMENT')
+          .single();
+
+        if (fetchError || !fineRequest) {
+          await answerCallbackQuery(botToken, query.id, '❌ Transaksi tidak ditemukan atau sudah diproses.');
+          return new Response('OK', { status: 200 });
+        }
+
+        if (isApprove) {
+          // 1. Update pending_transaction ke approved
+          await supabase
+            .from('pending_transactions')
+            .update({ 
+              status: 'approved',
+              approved_at: new Date().toISOString(),
+              approved_by: userId
+            })
+            .eq('id', requestId);
+
+          // 2. UNBLOCK USER - set is_active = false
+          await supabase
+            .from('blocked_users')
+            .update({ 
+              is_active: false,
+              unblocked_at: new Date().toISOString(),
+              unblocked_by: userId
+            })
+            .eq('user_id', fineRequest.user_id);
+
+          // 3. Record transaction
+          await supabase.from('coin_transactions').insert({
+            user_id: fineRequest.user_id,
+            amount: -fineRequest.amount,
+            type: 'fine_payment',
+            description: `Pembayaran denda buka blokir Rp${fineRequest.amount.toLocaleString('id-ID')}`
+          });
+
+          // 4. Notify user - UNBLOCKED!
+          const welcomeKeyboard = {
+            inline_keyboard: [
+              [{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]
+            ]
+          };
+
+          await sendTelegramMessage(
+            botToken,
+            fineRequest.user_id,
+            `✅ <b>AKUN TELAH DIBUKA BLOKIR!</b>\n\n🎉 Pembayaran denda berhasil diverifikasi.\n💰 Denda: Rp ${fineRequest.total_amount.toLocaleString('id-ID')}\n\nAkun Anda sekarang aktif kembali. Harap patuhi ketentuan penggunaan untuk menghindari blokir di kemudian hari.\n\nSilakan mulai chat dengan menekan tombol di bawah:`,
+            welcomeKeyboard
+          );
+
+          await answerCallbackQuery(botToken, query.id, '✅ User di-unblock!');
+
+          // 5. Edit admin message
+          if (message) {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageCaption`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message.chat.id,
+                message_id: message.message_id,
+                caption: `✅ <b>DENDA DIAPPROVE - USER UNBLOCKED</b>\n\n👤 User ID: ${fineRequest.user_id}\n💰 Denda: Rp ${fineRequest.total_amount.toLocaleString('id-ID')}\n\n✅ Diproses oleh admin`,
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: [] }
+              })
+            });
+          }
+        } else {
+          // Reject fine payment
+          await supabase
+            .from('pending_transactions')
+            .update({ 
+              status: 'rejected',
+              approved_at: new Date().toISOString()
+            })
+            .eq('id', requestId);
+
+          // Notify user - still blocked
+          const blockedKeyboard = {
+            inline_keyboard: [
+              [{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]
+            ]
+          };
+
+          await sendTelegramMessage(
+            botToken,
+            fineRequest.user_id,
+            `❌ <b>PEMBAYARAN DENDA DITOLAK</b>\n\n😔 Maaf, bukti pembayaran denda tidak valid.\n\nKemungkinan:\n- Nominal tidak sesuai\n- Bukti transfer tidak jelas\n\nSilakan bayar ulang dengan nominal yang tepat:\n💵 Total: Rp ${fineRequest.total_amount.toLocaleString('id-ID')}`,
+            blockedKeyboard
+          );
+
+          await answerCallbackQuery(botToken, query.id, '❌ Denda ditolak!');
+
+          if (message) {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageCaption`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message.chat.id,
+                message_id: message.message_id,
+                caption: `❌ <b>DENDA DITOLAK</b>\n\n👤 User ID: ${fineRequest.user_id}\n💰 Denda: Rp ${fineRequest.total_amount.toLocaleString('id-ID')}\n\n❌ Ditolak oleh admin - User tetap blocked`,
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: [] }
+              })
+            });
+          }
+        }
+
+        return new Response('OK', { status: 200 });
+      }
+
       // --- LOGIKA RATING: PERUBAHAN UTAMA UNTUK MENAMBAH KOIN PARTNER ---
       if (callbackData.startsWith('rate_')) {
         const RATING_COST = 10;
@@ -3932,6 +4168,72 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
             botToken,
             userId,
             '✅ <b>Bukti pembayaran Premium diterima!</b>\n\n⏳ Mohon tunggu verifikasi admin. Anda akan mendapat notifikasi setelah Premium aktif.'
+          );
+          return new Response('OK', { status: 200 });
+        }
+
+        // Cek apakah ini untuk pembayaran denda (FINE_PAYMENT)
+        const { data: finePayment } = await supabase
+          .from('pending_transactions')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('status', 'pending')
+          .eq('admin_notes', 'FINE_PAYMENT')
+          .is('payment_proof_url', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (finePayment) {
+          // Update pending transaction dengan bukti bayar
+          await supabase
+            .from('pending_transactions')
+            .update({ payment_proof_url: fileId })
+            .eq('id', finePayment.id);
+
+          // Reset state user ke idle (masih blocked sampai di-approve)
+          await supabase
+            .from('telegram_users')
+            .update({ state: 'idle' })
+            .eq('id', userId);
+
+          // Kirim notifikasi ke CS
+          const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+          if (csChatId) {
+            const { data: userData } = await supabase
+              .from('telegram_users')
+              .select('username, first_name')
+              .eq('id', userId)
+              .single();
+
+            const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'Unknown';
+
+            const adminFineKeyboard = {
+              inline_keyboard: [
+                [
+                  { text: '✅ Approve (Unblock)', callback_data: `admin_approve_fine_${finePayment.id}` },
+                  { text: '❌ Reject', callback_data: `admin_reject_fine_${finePayment.id}` }
+                ]
+              ]
+            };
+
+            await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: csChatId,
+                photo: fileId,
+                caption: `🚨 <b>BUKTI PEMBAYARAN DENDA (BUKA BLOKIR)</b>\n\n👤 User: ${userName} (ID: ${userId})\n💰 Denda: Rp ${finePayment.amount.toLocaleString('id-ID')}\n🔢 Kode Unik: ${finePayment.unique_code}\n💳 Total Transfer: Rp ${finePayment.total_amount.toLocaleString('id-ID')}\n🆔 Request ID: <code>${finePayment.id}</code>\n\n⚠️ <b>Approve untuk UNBLOCK user ini</b>`,
+                parse_mode: 'HTML',
+                reply_markup: adminFineKeyboard
+              })
+            });
+          }
+
+          await sendTelegramMessage(
+            botToken,
+            userId,
+            '✅ <b>Bukti pembayaran denda diterima!</b>\n\n⏳ Mohon tunggu verifikasi admin. Anda akan mendapat notifikasi setelah akun dibuka blokirnya.'
           );
           return new Response('OK', { status: 200 });
         }
