@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      blocked_users: {
+        Row: {
+          blocked_at: string | null
+          blocked_message: string | null
+          first_name: string | null
+          id: string
+          is_active: boolean | null
+          reason: string
+          unblocked_at: string | null
+          unblocked_by: number | null
+          user_id: number
+          username: string | null
+        }
+        Insert: {
+          blocked_at?: string | null
+          blocked_message?: string | null
+          first_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          reason: string
+          unblocked_at?: string | null
+          unblocked_by?: number | null
+          user_id: number
+          username?: string | null
+        }
+        Update: {
+          blocked_at?: string | null
+          blocked_message?: string | null
+          first_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          reason?: string
+          unblocked_at?: string | null
+          unblocked_by?: number | null
+          user_id?: number
+          username?: string | null
+        }
+        Relationships: []
+      }
       bot_settings: {
         Row: {
           key: string
@@ -253,6 +292,33 @@ export type Database = {
           promo_buttons?: Json | null
           sent_message_id?: number | null
           status?: string
+          user_id?: number
+        }
+        Relationships: []
+      }
+      spam_detection: {
+        Row: {
+          detected_at: string | null
+          detection_type: string
+          id: string
+          message_hash: string
+          message_preview: string | null
+          user_id: number
+        }
+        Insert: {
+          detected_at?: string | null
+          detection_type: string
+          id?: string
+          message_hash: string
+          message_preview?: string | null
+          user_id: number
+        }
+        Update: {
+          detected_at?: string | null
+          detection_type?: string
+          id?: string
+          message_hash?: string
+          message_preview?: string | null
           user_id?: number
         }
         Relationships: []
