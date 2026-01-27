@@ -2109,8 +2109,25 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
         
-        // User sudah bergabung, lanjutkan pencarian partner
+        // User sudah bergabung, hapus pesan join channel dan lanjutkan pencarian partner
         await answerCallbackQuery(botToken, query.id, '✅ Terverifikasi! Mencari partner...');
+        
+        // Hapus pesan join channel
+        if (query.message?.message_id) {
+          try {
+            await fetch(`${TELEGRAM_API}${botToken}/deleteMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: userId,
+                message_id: query.message.message_id
+              })
+            });
+          } catch (e) {
+            console.error('Failed to delete join channel message:', e);
+          }
+        }
+        
         await searchPartnerWithQueueCheck(supabase, botToken, userId);
         return new Response('OK', { status: 200 });
       }
