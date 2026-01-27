@@ -123,11 +123,23 @@ const EXCLUDED_GREETINGS = [
   'mba', 'mas', 'kak', 'bang', 'bro', 'sis',
   'hy', 'haloo', 'halloo', 'haiii', 'hyy',
   'assalamualaikum', 'assalamu alaikum', 'waalaikumsalam',
-  'p', 'pp', 'gas', 'yuk', 'ayo'
+  'p', 'pp', 'gas', 'yuk', 'ayo',
+  'wkwk', 'wkwkwk', 'haha', 'hahaha', 'hihi', 'hehe',
+  'ok', 'oke', 'sip', 'siap', 'ya', 'iya', 'gak', 'tidak',
+  'makasih', 'terima kasih', 'thanks', 'thx', 'ty',
+  'lagi apa', 'lg apa', 'lagi ngapain', 'lg ngapain',
+  'dari mana', 'darimana', 'dimana', 'di mana',
+  'umur berapa', 'umur brp', 'berapa umur', 'brp umur',
+  'asl', 'asl?', 'mau kenalan', 'kenalan yuk'
 ];
 
-// Minimum karakter untuk dianggap copy-paste spam
+// Minimum karakter untuk dianggap copy-paste spam (pesan panjang)
 const MIN_SPAM_CHARS = 50;
+
+// Konfigurasi deteksi pesan pendek berulang
+const SHORT_MESSAGE_MAX_CHARS = 49; // Pesan di bawah ini dianggap pendek
+const SHORT_MESSAGE_SPAM_THRESHOLD = 4; // Berapa kali pesan pendek sama untuk dianggap spam
+const SHORT_MESSAGE_INTERVAL_MINUTES = 15; // Dalam interval waktu berapa menit
 
 // Konfigurasi deteksi username tag spam
 const USERNAME_TAG_THRESHOLD = 3; // Minimal berapa kali kirim username tag untuk dianggap spam
@@ -227,7 +239,7 @@ async function detectSpam(supabase: any, userId: number, text: string): Promise<
     console.log(`📝 Username tag tracked for user ${userId}: ${usernameMatches.join(', ')} (${(tagCount || 0) + 1}/${USERNAME_TAG_THRESHOLD})`);
   }
   
-  // 2. Deteksi copy-paste (pesan panjang yang berulang)
+  // 2. Deteksi copy-paste (pesan panjang yang berulang) - langsung blokir jika dikirim 2x
   if (text.length >= MIN_SPAM_CHARS) {
     const messageHash = simpleHash(text);
     
@@ -255,6 +267,43 @@ async function detectSpam(supabase: any, userId: number, text: string): Promise<
       message_preview: text.substring(0, 200),
       detection_type: 'tracking'
     });
+  }
+  
+  // 3. Deteksi pesan pendek yang di-copy paste berulang kali (bukan sapaan umum)
+  if (text.length >= 10 && text.length <= SHORT_MESSAGE_MAX_CHARS) {
+    const messageHash = simpleHash(text);
+    const intervalStart = new Date(Date.now() - SHORT_MESSAGE_INTERVAL_MINUTES * 60 * 1000).toISOString();
+    
+    // Cek berapa kali pesan yang sama persis dikirim dalam interval waktu tertentu
+    const { count: repeatCount } = await supabase
+      .from('spam_detection')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('message_hash', messageHash)
+      .eq('detection_type', 'short_repeat')
+      .gte('detected_at', intervalStart);
+    
+    // Simpan record untuk tracking
+    await supabase.from('spam_detection').insert({
+      user_id: userId,
+      message_hash: messageHash,
+      message_preview: text.substring(0, 200),
+      detection_type: 'short_repeat'
+    });
+    
+    // Blokir jika sudah melebihi threshold
+    if (repeatCount && repeatCount >= SHORT_MESSAGE_SPAM_THRESHOLD - 1) {
+      return {
+        isSpam: true,
+        reason: `Copy-paste pesan pendek berulang kali (${(repeatCount || 0) + 1}x dalam ${SHORT_MESSAGE_INTERVAL_MINUTES} menit): "${text.substring(0, 50)}"`,
+        detectionType: 'repeated_message'
+      };
+    }
+    
+    // Log tracking
+    if (repeatCount && repeatCount >= 1) {
+      console.log(`📝 Short message tracked for user ${userId}: "${text.substring(0, 30)}..." (${(repeatCount || 0) + 1}/${SHORT_MESSAGE_SPAM_THRESHOLD})`);
+    }
   }
   
   return { isSpam: false, reason: '', detectionType: null };
