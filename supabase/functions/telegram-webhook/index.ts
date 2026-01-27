@@ -589,7 +589,7 @@ async function deleteTelegramMessage(botToken: string, chatId: number, messageId
 // ============================================
 
 // HELPER: Cek apakah user sudah bergabung di channel yang diperlukan
-async function checkChannelMembership(botToken: string, userId: number, channelUsername: string): Promise<{ isMember: boolean; status: string }> {
+async function checkChannelMembership(botToken: string, userId: number, channelUsername: string): Promise<{ isMember: boolean; status: string; botNotAdmin: boolean }> {
   try {
     const url = `${TELEGRAM_API}${botToken}/getChatMember`;
     const response = await fetch(url, {
@@ -605,33 +605,52 @@ async function checkChannelMembership(botToken: string, userId: number, channelU
     
     if (!data.ok) {
       console.error('getChatMember error:', data);
-      // Jika error (misalnya bot bukan admin channel), anggap user sudah member untuk tidak memblokir
-      return { isMember: true, status: 'unknown' };
+      // Jika error "member list is inaccessible", bot bukan admin channel
+      if (data.description?.includes('member list is inaccessible')) {
+        return { isMember: false, status: 'bot_not_admin', botNotAdmin: true };
+      }
+      // Error lain (misal user belum pernah join), anggap belum member
+      return { isMember: false, status: 'unknown', botNotAdmin: false };
     }
     
     const status = data.result.status;
     // Status yang dianggap sebagai member: creator, administrator, member
     const isMember = ['creator', 'administrator', 'member'].includes(status);
     
-    return { isMember, status };
+    return { isMember, status, botNotAdmin: false };
   } catch (error) {
     console.error('checkChannelMembership exception:', error);
-    // Jika exception, anggap user sudah member untuk tidak memblokir
-    return { isMember: true, status: 'error' };
+    // Jika exception, anggap belum member untuk memaksa join
+    return { isMember: false, status: 'error', botNotAdmin: false };
   }
 }
 
 // HELPER: Kirim pesan permintaan join channel
-async function sendJoinChannelMessage(botToken: string, userId: number): Promise<void> {
+async function sendJoinChannelMessage(botToken: string, userId: number, botNotAdmin: boolean = false): Promise<void> {
   const channelUrl = `https://t.me/${REQUIRED_CHANNEL.replace('@', '')}`;
   
-  const message = `⚠️ <b>Kamu belum bergabung ke channel kami!</b>
+  let message: string;
+  
+  if (botNotAdmin) {
+    // Bot belum jadi admin, tampilkan pesan khusus
+    message = `⚠️ <b>Gabung ke channel kami dulu ya!</b>
+
+Untuk menggunakan fitur pencarian partner, kamu harus bergabung ke channel official kami terlebih dahulu.
+
+📢 <b>Channel:</b> ${REQUIRED_CHANNEL}
+
+Setelah bergabung, tekan tombol "✅ Sudah Gabung" untuk melanjutkan.
+
+<i>💡 Tips: Pastikan kamu sudah menekan tombol "Join" di channel.</i>`;
+  } else {
+    message = `⚠️ <b>Kamu belum bergabung ke channel kami!</b>
 
 Untuk menggunakan fitur pencarian partner, kamu harus bergabung ke channel official kami terlebih dahulu.
 
 📢 <b>Channel:</b> ${REQUIRED_CHANNEL}
 
 Setelah bergabung, tekan tombol "✅ Sudah Gabung" untuk melanjutkan.`;
+  }
 
   const keyboard = {
     inline_keyboard: [
@@ -2082,11 +2101,11 @@ Deno.serve(async (req) => {
       // --- LOGIKA CHECK CHANNEL JOINED (INLINE BUTTON) ---
       if (callbackData === 'check_channel_joined') {
         // Cek apakah user sudah bergabung ke channel
-        const { isMember } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
+        const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
         
         if (!isMember) {
           await answerCallbackQuery(botToken, query.id, '❌ Kamu belum bergabung ke channel!', true);
-          await sendJoinChannelMessage(botToken, userId);
+          await sendJoinChannelMessage(botToken, userId, botNotAdmin);
           return new Response('OK', { status: 200 });
         }
         
@@ -2168,11 +2187,11 @@ Deno.serve(async (req) => {
         }
 
         // CEK KEANGGOTAAN CHANNEL SEBELUM MENCARI PARTNER
-        const { isMember: isChannelMember } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
+        const { isMember: isChannelMember, botNotAdmin: botNotAdminSearch } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
         
         if (!isChannelMember) {
           await answerCallbackQuery(botToken, query.id, '⚠️ Gabung channel dulu!');
-          await sendJoinChannelMessage(botToken, userId);
+          await sendJoinChannelMessage(botToken, userId, botNotAdminSearch);
           return new Response('OK', { status: 200 });
         }
 
@@ -2236,11 +2255,11 @@ Deno.serve(async (req) => {
         await smartUpsertUser(supabase, userId, query.from.username, query.from.first_name);
 
         // CEK KEANGGOTAAN CHANNEL SEBELUM NEXT
-        const { isMember: isChannelMemberNext } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
+        const { isMember: isChannelMemberNext, botNotAdmin: botNotAdminNext } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
         
         if (!isChannelMemberNext) {
           await answerCallbackQuery(botToken, query.id, '⚠️ Gabung channel dulu!');
-          await sendJoinChannelMessage(botToken, userId);
+          await sendJoinChannelMessage(botToken, userId, botNotAdminNext);
           return new Response('OK', { status: 200 });
         }
 
