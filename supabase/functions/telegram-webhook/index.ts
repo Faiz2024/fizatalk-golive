@@ -193,6 +193,13 @@ interface SpamDetectionResult {
 }
 
 async function detectSpam(supabase: any, userId: number, text: string): Promise<SpamDetectionResult> {
+  // Cek apakah autoblock diaktifkan
+  const autoBlockEnabled = await getBotSetting(supabase, 'autoblock_enabled');
+  if (autoBlockEnabled === 'off') {
+    // Autoblock dinonaktifkan, skip semua deteksi spam (hemat biaya cloud)
+    return { isSpam: false, reason: '', detectionType: null };
+  }
+  
   // Skip jika teks kosong atau terlalu pendek
   if (!text || text.length < 10) {
     return { isSpam: false, reason: '', detectionType: null };
@@ -5587,6 +5594,48 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
           const promoId = await getBotSetting(supabase, 'promo_premium_file_id');
           
           await sendTelegramMessage(botToken, userId, `📷 <b>Status Foto Bot:</b>\n\n🔹 QRIS: ${qrisId ? '✅ Sudah diset' : '❌ Belum diset'}\n🔹 Premium: ${premiumId ? '✅ Sudah diset' : '❌ Belum diset'}\n🔹 Promo: ${promoId ? '✅ Sudah diset' : '❌ Belum diset'}\n\n<b>Cara set foto:</b>\n1. Kirim foto ke bot\n2. Reply foto dengan:\n   • /set_qris - untuk QRIS\n   • /set_premium - untuk Premium\n   • /set_promo - untuk Promo`);
+        }
+        // COMMAND /AUTOBLOCK - ADMIN ONLY (Toggle auto-blocking system)
+        if (text === '/autoblock on' || text === '/autoblock off' || text === '/autoblock') {
+          const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+          if (userId.toString() !== csChatId) {
+            await sendTelegramMessage(botToken, userId, '❌ Command ini hanya untuk admin.');
+            return new Response('OK', { status: 200 });
+          }
+          
+          if (text === '/autoblock') {
+            // Tampilkan status saat ini
+            const currentStatus = await getBotSetting(supabase, 'autoblock_enabled');
+            const isEnabled = currentStatus !== 'off'; // Default ON jika tidak ada setting
+            
+            const statusText = isEnabled 
+              ? '🟢 <b>AKTIF</b> - Sistem deteksi spam berjalan normal'
+              : '🔴 <b>NONAKTIF</b> - Sistem deteksi spam dimatikan (hemat biaya cloud)';
+            
+            await sendTelegramMessage(
+              botToken,
+              userId,
+              `🛡️ <b>Status Auto-Block</b>\n\n${statusText}\n\n<b>Penggunaan:</b>\n• <code>/autoblock on</code> - Aktifkan auto-block\n• <code>/autoblock off</code> - Nonaktifkan auto-block\n\n⚠️ <i>Menonaktifkan auto-block akan menghentikan semua operasi database terkait deteksi spam (read/insert/update/delete pada tabel spam_detection dan blocked_users).</i>`
+            );
+          } else {
+            // Set status baru
+            const newStatus = text === '/autoblock on' ? 'on' : 'off';
+            await setBotSetting(supabase, 'autoblock_enabled', newStatus, userId);
+            
+            if (newStatus === 'on') {
+              await sendTelegramMessage(
+                botToken,
+                userId,
+                `🟢 <b>Auto-Block DIAKTIFKAN</b>\n\nSistem deteksi spam sekarang berjalan normal.\n\n⚠️ Ini akan meningkatkan penggunaan database cloud.`
+              );
+            } else {
+              await sendTelegramMessage(
+                botToken,
+                userId,
+                `🔴 <b>Auto-Block DINONAKTIFKAN</b>\n\nSistem deteksi spam telah dimatikan.\n\n✅ <b>Keuntungan:</b>\n• Tidak ada read/insert ke tabel spam_detection\n• Tidak ada operasi blokir otomatis\n• Hemat biaya cloud\n\n⚠️ <b>Risiko:</b>\n• Spam/promosi tidak akan terdeteksi otomatis\n• User spam tidak akan diblokir otomatis\n\n💡 Aktifkan kembali dengan <code>/autoblock on</code>`
+              );
+            }
+          }
         }
     }
     else {
