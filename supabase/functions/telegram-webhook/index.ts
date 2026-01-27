@@ -129,6 +129,10 @@ const EXCLUDED_GREETINGS = [
 // Minimum karakter untuk dianggap copy-paste spam
 const MIN_SPAM_CHARS = 50;
 
+// Konfigurasi deteksi username tag spam
+const USERNAME_TAG_THRESHOLD = 3; // Minimal berapa kali kirim username tag untuk dianggap spam
+const USERNAME_TAG_INTERVAL_MINUTES = 10; // Dalam interval waktu berapa menit
+
 // HELPER: Cek apakah user sudah diblokir
 async function isUserBlocked(supabase: any, userId: number): Promise<boolean> {
   const { data } = await supabase
@@ -187,16 +191,40 @@ async function detectSpam(supabase: any, userId: number, text: string): Promise<
     return { isSpam: false, reason: '', detectionType: null };
   }
   
-  // 1. Deteksi tag username (@username)
+  // 1. Deteksi tag username (@username) - hanya spam jika berulang dalam interval waktu tertentu
   const usernamePattern = /@[a-zA-Z0-9_]{3,}/g;
   const usernameMatches = text.match(usernamePattern);
   
   if (usernameMatches && usernameMatches.length > 0) {
-    return {
-      isSpam: true,
-      reason: `Mengirim tag username: ${usernameMatches.join(', ')}`,
-      detectionType: 'username_tag'
-    };
+    const intervalStart = new Date(Date.now() - USERNAME_TAG_INTERVAL_MINUTES * 60 * 1000).toISOString();
+    
+    // Cek berapa kali user mengirim pesan dengan username tag dalam interval terakhir
+    const { count: tagCount } = await supabase
+      .from('spam_detection')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('detection_type', 'username_tag')
+      .gte('detected_at', intervalStart);
+    
+    // Simpan record untuk tracking
+    await supabase.from('spam_detection').insert({
+      user_id: userId,
+      message_hash: `tag_${usernameMatches.join('_')}`,
+      message_preview: text.substring(0, 200),
+      detection_type: 'username_tag'
+    });
+    
+    // Hanya blokir jika sudah melebihi threshold (sudah kirim tag berulang kali)
+    if (tagCount && tagCount >= USERNAME_TAG_THRESHOLD - 1) {
+      return {
+        isSpam: true,
+        reason: `Mengirim tag username berulang kali (${(tagCount || 0) + 1}x dalam ${USERNAME_TAG_INTERVAL_MINUTES} menit): ${usernameMatches.join(', ')}`,
+        detectionType: 'username_tag'
+      };
+    }
+    
+    // Belum spam, tapi sudah di-track
+    console.log(`📝 Username tag tracked for user ${userId}: ${usernameMatches.join(', ')} (${(tagCount || 0) + 1}/${USERNAME_TAG_THRESHOLD})`);
   }
   
   // 2. Deteksi copy-paste (pesan panjang yang berulang)
