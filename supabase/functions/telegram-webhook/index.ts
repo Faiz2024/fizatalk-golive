@@ -1807,6 +1807,16 @@ Deno.serve(async (req) => {
       const callbackData = query.data || '';
       const message = query.message;
 
+      // ************************************************
+      // CEK APAKAH USER SUDAH DIBLOKIR (CALLBACK QUERY)
+      // ************************************************
+      const userIsBlockedCallback = await isUserBlocked(supabase, userId);
+      if (userIsBlockedCallback) {
+        // User diblokir, kirim alert dan abaikan
+        await answerCallbackQuery(botToken, query.id, '🚫 Akun Anda diblokir. Hubungi @FizatalkCS jika ini kekeliruan.', true);
+        return new Response('OK', { status: 200 });
+      }
+
       // === CEK STATE AWAITING_PAYMENT - BLOKIR SEMUA TOMBOL KECUALI CANCEL ===
       // Hanya izinkan cancel_topup dan cancel_premium saat sedang dalam pembayaran
       const paymentAllowedCallbacks = ['cancel_topup', 'cancel_premium'];
@@ -3715,6 +3725,15 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
     if (update.message_reaction) {
       const reaction = update.message_reaction;
       const userId = reaction.user.id;
+
+      // ************************************************
+      // CEK APAKAH USER SUDAH DIBLOKIR (REACTION)
+      // ************************************************
+      const userIsBlockedReaction = await isUserBlocked(supabase, userId);
+      if (userIsBlockedReaction) {
+        // User diblokir, abaikan reaction
+        return new Response('OK', { status: 200 });
+      }
 
       // Get current user and partner
       const { data: currentUser } = await supabase
