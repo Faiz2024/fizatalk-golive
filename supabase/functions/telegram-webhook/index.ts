@@ -110,52 +110,34 @@ async function setBotSetting(supabase: any, key: string, value: string, updatedB
   return !error;
 }
 
-// HELPER: Smart upsert user - only update last_active if older than 1 hour (cost optimization)
+// HELPER: Simple upsert user - only update username/first_name, NEVER update last_active (maximum cost savings)
+async function simpleUpsertUser(
+  supabase: any, 
+  userId: number, 
+  username: string | undefined, 
+  firstName: string | undefined
+): Promise<void> {
+  await supabase.from('telegram_users').upsert({
+    id: userId,
+    username: username,
+    first_name: firstName
+  }, { onConflict: 'id' });
+}
+
+// HELPER: Smart upsert user - update last_active (only called on "Cari Partner" button)
 async function smartUpsertUser(
   supabase: any, 
   userId: number, 
   username: string | undefined, 
   firstName: string | undefined
 ): Promise<void> {
-  // First check if user exists and when last_active was
-  const { data: existingUser } = await supabase
-    .from('telegram_users')
-    .select('last_active')
-    .eq('id', userId)
-    .single();
-  
   const now = new Date();
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-  
-  if (!existingUser) {
-    // User doesn't exist, insert with last_active
-    await supabase.from('telegram_users').upsert({
-      id: userId,
-      username: username,
-      first_name: firstName,
-      last_active: now.toISOString()
-    }, { onConflict: 'id' });
-  } else {
-    // User exists, check if last_active is older than 1 hour
-    const lastActiveDate = new Date(existingUser.last_active);
-    
-    if (lastActiveDate < oneHourAgo) {
-      // Update with new last_active
-      await supabase.from('telegram_users').upsert({
-        id: userId,
-        username: username,
-        first_name: firstName,
-        last_active: now.toISOString()
-      }, { onConflict: 'id' });
-    } else {
-      // Only update username/first_name, skip last_active to save costs
-      await supabase.from('telegram_users').upsert({
-        id: userId,
-        username: username,
-        first_name: firstName
-      }, { onConflict: 'id' });
-    }
-  }
+  await supabase.from('telegram_users').upsert({
+    id: userId,
+    username: username,
+    first_name: firstName,
+    last_active: now.toISOString()
+  }, { onConflict: 'id' });
 }
 
 // HELPER: Kirim foto QRIS dengan instruksi pembayaran
@@ -2268,8 +2250,8 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHAT NEXT (INLINE BUTTON) ---
       if (callbackData === 'chat_next') {
-        // PENTING: Pastikan user ada di database sebelum proses
-        await smartUpsertUser(supabase, userId, query.from.username, query.from.first_name);
+        // PENTING: Pastikan user ada di database sebelum proses (tanpa update last_active untuk hemat biaya)
+        await simpleUpsertUser(supabase, userId, query.from.username, query.from.first_name);
 
         // CEK KEANGGOTAAN CHANNEL SEBELUM NEXT
         const { isMember: isChannelMemberNext, botNotAdmin: botNotAdminNext } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
@@ -2522,8 +2504,8 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
         }
         
-        // Pastikan user ada di database
-        await smartUpsertUser(supabase, userId, query.from.username, query.from.first_name);
+        // Pastikan user ada di database (tanpa update last_active untuk hemat biaya)
+        await simpleUpsertUser(supabase, userId, query.from.username, query.from.first_name);
         
         // Hapus dari promo_queue jika ada
         await supabase
@@ -3538,8 +3520,8 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
     const userId = message.from.id;
     const text = message.text; 
 
-    // Upsert user (Dipindahkan ke sini agar data user update bahkan jika pesan hanya media)
-    await smartUpsertUser(supabase, userId, message.from.username, message.from.first_name);
+    // Upsert user - hanya update username/first_name (tanpa last_active untuk hemat biaya cloud)
+    await simpleUpsertUser(supabase, userId, message.from.username, message.from.first_name);
 
     // Photo received - log for debugging only
     if (message.photo && message.photo.length > 0) {
