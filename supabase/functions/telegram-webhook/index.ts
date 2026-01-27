@@ -84,6 +84,9 @@ interface Gift {
 
 const TELEGRAM_API = 'https://api.telegram.org/bot';
 
+// Channel yang wajib di-join sebelum bisa menggunakan fitur next/search
+const REQUIRED_CHANNEL = '@FizaTalkCh';
+
 // HELPER: Get bot setting from database
 async function getBotSetting(supabase: any, key: string): Promise<string | null> {
   const { data } = await supabase
@@ -579,6 +582,66 @@ async function deleteTelegramMessage(botToken: string, chatId: number, messageId
 }
 
 // FUNGSI LAMA forwardTelegramMessage DIHAPUS
+
+// ============================================
+// CHANNEL MEMBERSHIP CHECK
+// Cek apakah user sudah join channel wajib
+// ============================================
+
+// HELPER: Cek apakah user sudah bergabung di channel yang diperlukan
+async function checkChannelMembership(botToken: string, userId: number, channelUsername: string): Promise<{ isMember: boolean; status: string }> {
+  try {
+    const url = `${TELEGRAM_API}${botToken}/getChatMember`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: channelUsername,
+        user_id: userId
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!data.ok) {
+      console.error('getChatMember error:', data);
+      // Jika error (misalnya bot bukan admin channel), anggap user sudah member untuk tidak memblokir
+      return { isMember: true, status: 'unknown' };
+    }
+    
+    const status = data.result.status;
+    // Status yang dianggap sebagai member: creator, administrator, member
+    const isMember = ['creator', 'administrator', 'member'].includes(status);
+    
+    return { isMember, status };
+  } catch (error) {
+    console.error('checkChannelMembership exception:', error);
+    // Jika exception, anggap user sudah member untuk tidak memblokir
+    return { isMember: true, status: 'error' };
+  }
+}
+
+// HELPER: Kirim pesan permintaan join channel
+async function sendJoinChannelMessage(botToken: string, userId: number): Promise<void> {
+  const channelUrl = `https://t.me/${REQUIRED_CHANNEL.replace('@', '')}`;
+  
+  const message = `⚠️ <b>Kamu belum bergabung ke channel kami!</b>
+
+Untuk menggunakan fitur pencarian partner, kamu harus bergabung ke channel official kami terlebih dahulu.
+
+📢 <b>Channel:</b> ${REQUIRED_CHANNEL}
+
+Setelah bergabung, tekan tombol "✅ Sudah Gabung" untuk melanjutkan.`;
+
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '📢 Gabung Channel', url: channelUrl }],
+      [{ text: '✅ Sudah Gabung', callback_data: 'check_channel_joined' }]
+    ]
+  };
+  
+  await sendTelegramMessage(botToken, userId, message, keyboard);
+}
 
 // ============================================
 // RPC-BASED PARTNER MATCHING (Cost Optimized)
@@ -2016,6 +2079,23 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
+      // --- LOGIKA CHECK CHANNEL JOINED (INLINE BUTTON) ---
+      if (callbackData === 'check_channel_joined') {
+        // Cek apakah user sudah bergabung ke channel
+        const { isMember } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
+        
+        if (!isMember) {
+          await answerCallbackQuery(botToken, query.id, '❌ Kamu belum bergabung ke channel!', true);
+          await sendJoinChannelMessage(botToken, userId);
+          return new Response('OK', { status: 200 });
+        }
+        
+        // User sudah bergabung, lanjutkan pencarian partner
+        await answerCallbackQuery(botToken, query.id, '✅ Terverifikasi! Mencari partner...');
+        await searchPartnerWithQueueCheck(supabase, botToken, userId);
+        return new Response('OK', { status: 200 });
+      }
+
       // --- LOGIKA SEARCH PARTNER (INLINE BUTTON) ---
       if (callbackData === 'search_partner') {
         // PENTING: Pastikan user ada di database sebelum proses
@@ -2087,6 +2167,15 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
 
+        // CEK KEANGGOTAAN CHANNEL SEBELUM MENCARI PARTNER
+        const { isMember: isChannelMember } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
+        
+        if (!isChannelMember) {
+          await answerCallbackQuery(botToken, query.id, '⚠️ Gabung channel dulu!');
+          await sendJoinChannelMessage(botToken, userId);
+          return new Response('OK', { status: 200 });
+        }
+
         // User idle - langsung cari partner dengan logika baru
         await answerCallbackQuery(botToken, query.id, '🔍 Mencari partner...');
         
@@ -2145,6 +2234,15 @@ Deno.serve(async (req) => {
       if (callbackData === 'chat_next') {
         // PENTING: Pastikan user ada di database sebelum proses
         await smartUpsertUser(supabase, userId, query.from.username, query.from.first_name);
+
+        // CEK KEANGGOTAAN CHANNEL SEBELUM NEXT
+        const { isMember: isChannelMemberNext } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
+        
+        if (!isChannelMemberNext) {
+          await answerCallbackQuery(botToken, query.id, '⚠️ Gabung channel dulu!');
+          await sendJoinChannelMessage(botToken, userId);
+          return new Response('OK', { status: 200 });
+        }
 
         // Cek state user saat ini
         const { data: userData } = await supabase
