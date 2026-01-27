@@ -110,6 +110,213 @@ async function setBotSetting(supabase: any, key: string, value: string, updatedB
   return !error;
 }
 
+// ============================================
+// SPAM DETECTION & AUTO-BLOCK SYSTEM
+// ============================================
+
+// Daftar kata sapaan awal yang dikecualikan dari deteksi spam
+const EXCLUDED_GREETINGS = [
+  'ce', 'co', 'cwek', 'cwok', 'cewek', 'cowok',
+  'hai', 'halo', 'hi', 'hello', 'hey',
+  'pagi', 'siang', 'sore', 'malam',
+  'selamat pagi', 'selamat siang', 'selamat sore', 'selamat malam',
+  'mba', 'mas', 'kak', 'bang', 'bro', 'sis',
+  'hy', 'haloo', 'halloo', 'haiii', 'hyy',
+  'assalamualaikum', 'assalamu alaikum', 'waalaikumsalam',
+  'p', 'pp', 'gas', 'yuk', 'ayo'
+];
+
+// Minimum karakter untuk dianggap copy-paste spam
+const MIN_SPAM_CHARS = 50;
+
+// HELPER: Cek apakah user sudah diblokir
+async function isUserBlocked(supabase: any, userId: number): Promise<boolean> {
+  const { data } = await supabase
+    .from('blocked_users')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .maybeSingle();
+  
+  return !!data;
+}
+
+// HELPER: Generate simple hash for message comparison
+function simpleHash(text: string): string {
+  // Normalize: lowercase, remove extra spaces, remove special chars
+  const normalized = text.toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s]/g, '')
+    .trim();
+  
+  // Simple hash using first 100 chars + length
+  return `${normalized.substring(0, 100)}_${normalized.length}`;
+}
+
+// HELPER: Cek apakah pesan adalah sapaan awal yang dikecualikan
+function isExcludedGreeting(text: string): boolean {
+  const normalized = text.toLowerCase().trim();
+  
+  // Jika pesan kurang dari 20 karakter, cek apakah sapaan
+  if (normalized.length <= 20) {
+    for (const greeting of EXCLUDED_GREETINGS) {
+      if (normalized === greeting || normalized.startsWith(greeting + ' ') || normalized.endsWith(' ' + greeting)) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
+// HELPER: Deteksi spam dalam pesan
+interface SpamDetectionResult {
+  isSpam: boolean;
+  reason: string;
+  detectionType: 'username_tag' | 'copy_paste' | 'repeated_message' | null;
+}
+
+async function detectSpam(supabase: any, userId: number, text: string): Promise<SpamDetectionResult> {
+  // Skip jika teks kosong atau terlalu pendek
+  if (!text || text.length < 10) {
+    return { isSpam: false, reason: '', detectionType: null };
+  }
+  
+  // Skip jika sapaan awal
+  if (isExcludedGreeting(text)) {
+    return { isSpam: false, reason: '', detectionType: null };
+  }
+  
+  // 1. Deteksi tag username (@username)
+  const usernamePattern = /@[a-zA-Z0-9_]{3,}/g;
+  const usernameMatches = text.match(usernamePattern);
+  
+  if (usernameMatches && usernameMatches.length > 0) {
+    return {
+      isSpam: true,
+      reason: `Mengirim tag username: ${usernameMatches.join(', ')}`,
+      detectionType: 'username_tag'
+    };
+  }
+  
+  // 2. Deteksi copy-paste (pesan panjang yang berulang)
+  if (text.length >= MIN_SPAM_CHARS) {
+    const messageHash = simpleHash(text);
+    
+    // Cek apakah pesan dengan hash serupa sudah pernah dikirim
+    const { data: existingSpam } = await supabase
+      .from('spam_detection')
+      .select('id, detected_at')
+      .eq('user_id', userId)
+      .eq('message_hash', messageHash)
+      .gte('detected_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // 24 jam terakhir
+      .maybeSingle();
+    
+    if (existingSpam) {
+      return {
+        isSpam: true,
+        reason: `Copy-paste pesan panjang (${text.length} karakter) yang sudah pernah dikirim`,
+        detectionType: 'copy_paste'
+      };
+    }
+    
+    // Simpan hash pesan untuk tracking
+    await supabase.from('spam_detection').insert({
+      user_id: userId,
+      message_hash: messageHash,
+      message_preview: text.substring(0, 200),
+      detection_type: 'tracking'
+    });
+  }
+  
+  return { isSpam: false, reason: '', detectionType: null };
+}
+
+// HELPER: Blokir user dan kirim notifikasi
+async function blockUserForSpam(
+  supabase: any,
+  botToken: string,
+  userId: number,
+  username: string | undefined,
+  firstName: string | undefined,
+  reason: string,
+  blockedMessage: string
+): Promise<void> {
+  // 1. Insert ke tabel blocked_users
+  await supabase.from('blocked_users').upsert({
+    user_id: userId,
+    username: username,
+    first_name: firstName,
+    reason: reason,
+    blocked_message: blockedMessage.substring(0, 500), // Limit panjang pesan
+    blocked_at: new Date().toISOString(),
+    is_active: true
+  }, { onConflict: 'user_id' });
+  
+  // 2. Hapus dari waiting_queue jika ada
+  await supabase.from('waiting_queue').delete().eq('user_id', userId);
+  
+  // 3. Disconnect dari partner jika sedang chatting
+  const { data: userData } = await supabase
+    .from('telegram_users')
+    .select('partner_id, state')
+    .eq('id', userId)
+    .single();
+  
+  if (userData?.partner_id && userData?.state === 'chatting') {
+    const partnerId = userData.partner_id;
+    
+    // Reset partner
+    await supabase
+      .from('telegram_users')
+      .update({ state: 'idle', partner_id: null })
+      .eq('id', partnerId);
+    
+    // Notifikasi partner
+    const endKeyboard = {
+      inline_keyboard: [
+        [{ text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }]
+      ]
+    };
+    
+    await sendTelegramMessage(
+      botToken,
+      partnerId,
+      '⚠️ <b>Partner telah keluar dari chat.</b>\n\nPilih aksi untuk melanjutkan:',
+      endKeyboard
+    );
+  }
+  
+  // 4. Reset state user yang diblokir
+  await supabase
+    .from('telegram_users')
+    .update({ state: 'idle', partner_id: null })
+    .eq('id', userId);
+  
+  // 5. Kirim pesan ke user yang diblokir
+  const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+  const csContact = csChatId ? `\n\n📞 Hubungi admin jika ini adalah kekeliruan: @FizatalkCS` : '';
+  
+  await sendTelegramMessage(
+    botToken,
+    userId,
+    `🚫 <b>Akun Anda Diblokir</b>\n\nAnda terdeteksi melakukan aktivitas mencurigakan dan telah diblokir dari menggunakan layanan ini.\n\n<b>Alasan:</b> ${reason}${csContact}`
+  );
+  
+  // 6. Kirim notifikasi ke admin
+  if (csChatId) {
+    const userName = username ? `@${username}` : firstName || 'Unknown';
+    
+    await sendTelegramMessage(
+      botToken,
+      parseInt(csChatId),
+      `🚨 <b>USER DIBLOKIR OTOMATIS</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n\n⚠️ <b>Alasan:</b>\n${reason}\n\n💬 <b>Pesan yang menyebabkan blokir:</b>\n<code>${blockedMessage.substring(0, 300)}${blockedMessage.length > 300 ? '...' : ''}</code>\n\n⏰ Waktu: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`
+    );
+  }
+  
+  console.log(`🚫 User ${userId} (${username || firstName}) blocked for spam: ${reason}`);
+}
+
 // HELPER: Simple upsert user - only update username/first_name, NEVER update last_active (maximum cost savings)
 async function simpleUpsertUser(
   supabase: any, 
@@ -3520,6 +3727,20 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
     const userId = message.from.id;
     const text = message.text; 
 
+    // ************************************************
+    // CEK APAKAH USER SUDAH DIBLOKIR
+    // ************************************************
+    const userIsBlocked = await isUserBlocked(supabase, userId);
+    if (userIsBlocked) {
+      // User diblokir, kirim pesan dan abaikan
+      await sendTelegramMessage(
+        botToken,
+        userId,
+        '🚫 <b>Akun Anda Diblokir</b>\n\nAnda tidak dapat menggunakan layanan ini karena terdeteksi aktivitas mencurigakan.\n\n📞 Hubungi admin jika ini adalah kekeliruan: @FizatalkCS'
+      );
+      return new Response('OK', { status: 200 });
+    }
+
     // Upsert user - hanya update username/first_name (tanpa last_active untuk hemat biaya cloud)
     await simpleUpsertUser(supabase, userId, message.from.username, message.from.first_name);
 
@@ -3981,6 +4202,30 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
               return new Response('OK', { status: 200 }); 
           }
         }
+        // ************************************************
+        // SPAM DETECTION SAAT CHATTING
+        // ************************************************
+        const messageToCheck = text || message.caption || '';
+        
+        if (messageToCheck.length > 0) {
+          const spamResult = await detectSpam(supabase, userId, messageToCheck);
+          
+          if (spamResult.isSpam) {
+            // User terdeteksi spam - blokir otomatis
+            await blockUserForSpam(
+              supabase,
+              botToken,
+              userId,
+              message.from.username,
+              message.from.first_name,
+              spamResult.reason,
+              messageToCheck
+            );
+            
+            return new Response('OK', { status: 200 });
+          }
+        }
+
            // === LOGIKA HANDLER REPLY / BALAS PESAN (UPDATED) ===
             
             const isReply = message.reply_to_message ? true : false;
@@ -4001,7 +4246,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                     // Copy message biasa
                     await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
                 }
-            } 
+            }
             // B. Jika USER MENGIRIM STICKER (Handling Khusus)
             else if (message.sticker) {
                 // Sticker tidak support caption/quote di dalamnya
