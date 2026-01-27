@@ -321,14 +321,13 @@ async function blockUserForSpam(
     .update({ state: 'idle', partner_id: null })
     .eq('id', userId);
   
-  // 5. Kirim pesan ke user yang diblokir
+  // 5. Kirim pesan ke user yang diblokir (TANPA menyebutkan alasan untuk mencegah user mengakali sistem)
   const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
-  const csContact = csChatId ? `\n\n📞 Hubungi admin jika ini adalah kekeliruan: @FizatalkCS` : '';
   
   await sendTelegramMessage(
     botToken,
     userId,
-    `🚫 <b>Akun Anda Diblokir</b>\n\nAnda terdeteksi melakukan aktivitas mencurigakan dan telah diblokir dari menggunakan layanan ini.\n\n<b>Alasan:</b> ${reason}${csContact}`
+    `🚫 <b>Akun Anda Diblokir</b>\n\nAnda telah diblokir dari menggunakan layanan ini karena melanggar ketentuan penggunaan.\n\n📞 Hubungi admin jika ini adalah kekeliruan: @FizatalkCS`
   );
   
   // 6. Kirim notifikasi ke admin
