@@ -580,197 +580,149 @@ async function deleteTelegramMessage(botToken: string, chatId: number, messageId
 
 // FUNGSI LAMA forwardTelegramMessage DIHAPUS
 
-// Atomic findAndLockPartner - mencegah race condition dengan menghapus dari antrian terlebih dahulu
-// UPDATED: Tidak perlu user dalam state waiting, cek antrian dulu baru masuk antrian
-async function findAndLockPartner(supabase: any, userId: number, skipStateCheck: boolean = false): Promise<number | null> {
-  console.log(`🔍 findAndLockPartner: Mencari partner untuk user ${userId} (skipStateCheck=${skipStateCheck})`);
+// ============================================
+// RPC-BASED PARTNER MATCHING (Cost Optimized)
+// Menggunakan database RPC untuk mengurangi round-trip
+// ============================================
+
+// HELPER: Panggil RPC find_and_pair_partner dan kirim notifikasi jika berhasil
+async function searchPartnerWithRPC(supabase: any, botToken: string, userId: number): Promise<boolean> {
+  console.log(`🔍 searchPartnerWithRPC: Memulai pencarian untuk user ${userId}`);
   
-  // Get current user's info (gender, target_gender, location, target_location)
-  const { data: currentUser } = await supabase
-    .from('telegram_users')
-    .select('gender, target_gender, location, target_location, premium_until, state')
-    .eq('id', userId)
-    .single();
-
-  // Validasi: user harus dalam state waiting ATAU skipStateCheck = true
-  if (!skipStateCheck && currentUser?.state !== 'waiting') {
-    console.log(`⚠️ User ${userId} tidak dalam state waiting (state: ${currentUser?.state})`);
-    return null;
-  }
-
-  const isPremium = currentUser?.premium_until && new Date(currentUser.premium_until) > new Date();
-  const myGender = currentUser?.gender;
-  const myTargetGender = isPremium ? currentUser?.target_gender : null;
-  const myLocation = currentUser?.location;
-  const myTargetLocation = isPremium ? currentUser?.target_location : null;
-  
-  console.log(`👤 User ${userId}: isPremium=${isPremium}, myGender=${myGender}, myTargetGender=${myTargetGender}, myLocation=${myLocation}, myTargetLocation=${myTargetLocation}`);
-
-  // Ambil semua user yang sedang menunggu (kecuali diri sendiri)
-  const { data: waitingUsers } = await supabase
-    .from('waiting_queue')
-    .select('user_id')
-    .neq('user_id', userId)
-    .order('joined_at', { ascending: true });
-
-  if (!waitingUsers || waitingUsers.length === 0) {
-    console.log(`❌ Tidak ada user di antrian`);
-    return null;
-  }
-
-  console.log(`📋 User di antrian: ${waitingUsers.map((u: any) => u.user_id).join(', ')}`);
-
-  // Loop melalui setiap user di antrian untuk mencari partner yang kompatibel
-  for (const waiting of waitingUsers) {
-    const candidateId = waiting.user_id;
+  try {
+    // Panggil RPC function di database - semua logika matching dilakukan di sini
+    const { data, error } = await supabase.rpc('find_and_pair_partner', {
+      p_user_id: userId
+    });
     
-    // Ambil info kandidat partner DAN VALIDASI STATE
-    const { data: candidate } = await supabase
-      .from('telegram_users')
-      .select('gender, target_gender, location, target_location, premium_until, state, partner_id')
-      .eq('id', candidateId)
-      .single();
-
-    if (!candidate) continue;
-
-    // VALIDASI: kandidat harus dalam state waiting dan belum punya partner
-    if (candidate.state !== 'waiting' || candidate.partner_id) {
-      console.log(`⚠️ Kandidat ${candidateId} tidak valid (state: ${candidate.state}, partner_id: ${candidate.partner_id})`);
-      // Hapus kandidat dari antrian jika tidak valid
-      await supabase.from('waiting_queue').delete().eq('user_id', candidateId);
-      continue;
-    }
-
-    const candidateIsPremium = candidate?.premium_until && new Date(candidate.premium_until) > new Date();
-    const candidateGender = candidate?.gender;
-    const candidateTargetGender = candidateIsPremium ? candidate?.target_gender : null;
-    const candidateLocation = candidate?.location;
-    const candidateTargetLocation = candidateIsPremium ? candidate?.target_location : null;
-
-    console.log(`🎯 Cek kandidat ${candidateId}: isPremium=${candidateIsPremium}, gender=${candidateGender}, targetGender=${candidateTargetGender}, location=${candidateLocation}, targetLocation=${candidateTargetLocation}`);
-
-    // === CEK KOMPATIBILITAS DUA ARAH (GENDER) ===
-    let iSatisfiedGender = true;
-    if (myTargetGender && myTargetGender !== 'semua') {
-      if (candidateGender !== myTargetGender) {
-        console.log(`❌ Kandidat ${candidateId} tidak match target gender saya (${myTargetGender} != ${candidateGender})`);
-        iSatisfiedGender = false;
-      }
-    }
-
-    let candidateSatisfiedGender = true;
-    if (candidateTargetGender && candidateTargetGender !== 'semua') {
-      if (myGender !== candidateTargetGender) {
-        console.log(`❌ Gender saya (${myGender}) tidak match target kandidat ${candidateId} (${candidateTargetGender})`);
-        candidateSatisfiedGender = false;
-      }
-    }
-
-    // === CEK KOMPATIBILITAS DUA ARAH (LOKASI) ===
-    let iSatisfiedLocation = true;
-    if (myTargetLocation && myTargetLocation !== 'semua') {
-      if (candidateLocation !== myTargetLocation) {
-        console.log(`❌ Kandidat ${candidateId} tidak match target lokasi saya (${myTargetLocation} != ${candidateLocation})`);
-        iSatisfiedLocation = false;
-      }
-    }
-
-    let candidateSatisfiedLocation = true;
-    if (candidateTargetLocation && candidateTargetLocation !== 'semua') {
-      if (myLocation !== candidateTargetLocation) {
-        console.log(`❌ Lokasi saya (${myLocation}) tidak match target kandidat ${candidateId} (${candidateTargetLocation})`);
-        candidateSatisfiedLocation = false;
-      }
-    }
-
-    // KEDUA PIHAK HARUS PUAS (GENDER DAN LOKASI) untuk dipasangkan
-    if (iSatisfiedGender && candidateSatisfiedGender && iSatisfiedLocation && candidateSatisfiedLocation) {
-      // === ATOMIC LOCK: Hapus kandidat dari antrian terlebih dahulu ===
-      // Ini mencegah race condition dimana user lain juga mengambil kandidat yang sama
-      const { data: deleteResult, error: deleteError } = await supabase
-        .from('waiting_queue')
-        .delete()
-        .eq('user_id', candidateId)
-        .select();
-      
-      // Jika delete berhasil DAN ada row yang dihapus, berarti kita berhasil "lock" kandidat
-      if (!deleteError && deleteResult && deleteResult.length > 0) {
-        console.log(`✅ Lock berhasil! User ${userId} <-> ${candidateId}`);
-        return candidateId;
-      } else {
-        // Kandidat sudah diambil orang lain
-        console.log(`⚠️ Kandidat ${candidateId} sudah diambil user lain, lanjut cari...`);
-        continue;
-      }
-    }
-  }
-
-  console.log(`❌ Tidak ada partner yang kompatibel untuk user ${userId}`);
-  return null;
-}
-
-// HELPER BARU: Cek antrian dulu, jika tidak ada yang cocok baru masuk antrian
-// Flow: Check queue first → if match found, pair → if no match, add to queue
-async function searchPartnerWithQueueCheck(supabase: any, botToken: string, userId: number): Promise<boolean> {
-  console.log(`🔍 searchPartnerWithQueueCheck: Memulai pencarian untuk user ${userId}`);
-  
-  // Step 1: Coba cari partner dari antrian TANPA masuk antrian dulu
-  const partnerId = await findAndLockPartner(supabase, userId, true); // skipStateCheck = true
-  
-  if (partnerId) {
-    // Ada partner yang cocok! Langsung pair tanpa masuk antrian
-    console.log(`✅ Partner ditemukan langsung: ${partnerId}`);
-
-    try {
-    // A. Update state user sendiri ke 'waiting' agar valid masuk ke pairUsers
-      const { error: updateError } = await supabase
-        .from('telegram_users')
-        .update({ state: 'waiting' })
-        .eq('id', userId);
-
-      if (updateError) {
-        throw new Error(`Gagal update state user ${userId}: ${updateError.message}`);
-      }
-      const paired = await pairUsers(supabase, botToken, userId, partnerId);
-      if (paired) {
-        console.log(`✅ Pairing berhasil: ${userId} <-> ${partnerId}`);
-        return true; // SUKSES
-      } else {
-        // Jika pairUsers return false (misal gagal lock salah satu pihak)
-        throw new Error("Fungsi pairUsers mengembalikan false");
-      }
-    } catch (error) {
-      console.error(`⚠️ PAIRING ERROR (RESCUE PHASE):`, error);
-
-      // --- CRITICAL RESCUE ---
-      // Partner sudah dihapus dari antrian oleh 'findAndLockPartner', tapi pairing gagal.
-      // KITA HARUS KEMBALIKAN DIA KE ANTRIAN agar tidak jadi "Zombie".
+    if (error) {
+      console.error(`❌ RPC Error:`, error);
+      // Fallback: masukkan user ke antrian secara manual
       await supabase.from('waiting_queue').upsert({
-        user_id: partnerId,
+        user_id: userId,
         joined_at: new Date().toISOString()
       });
-      
-      console.log(`🚑 Partner ${partnerId} berhasil diselamatkan (dikembalikan ke antrian).`);
-      
-      // Kita kembalikan ke flow bawah (return false) agar user sendiri masuk antrian
+      await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
+      await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+      return false;
     }
+    
+    console.log(`📦 RPC Result:`, data);
+    
+    // Cek hasil RPC
+    if (!data.success) {
+      // Error dari RPC (user_not_found, user_already_chatting, dll)
+      console.log(`⚠️ RPC tidak sukses: ${data.error}`);
+      if (data.error === 'user_already_chatting') {
+        await sendTelegramMessage(botToken, userId, '⚠️ Kamu sudah dalam sesi chat!');
+      }
+      return false;
+    }
+    
+    if (!data.matched) {
+      // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
+      console.log(`📥 User ${userId} masuk antrian via RPC`);
+      await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+      return false;
+    }
+    
+    // Partner ditemukan! Kirim notifikasi ke kedua user
+    const partnerId = data.partner_id;
+    console.log(`✅ Partner ditemukan via RPC: ${userId} <-> ${partnerId}`);
+    
+    // Kirim notifikasi pairing berhasil
+    await sendPairingNotifications(supabase, botToken, userId, partnerId);
+    return true;
+    
+  } catch (err) {
+    console.error(`❌ searchPartnerWithRPC exception:`, err);
+    // Fallback: masukkan user ke antrian
+    await supabase.from('waiting_queue').upsert({
+      user_id: userId,
+      joined_at: new Date().toISOString()
+    });
+    await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
+    await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+    return false;
   }
-  
-  // Step 2: Tidak ada partner yang cocok, masuk antrian
-  console.log(`📥 Tidak ada partner cocok, user ${userId} masuk antrian`);
-  
-  await supabase.from('waiting_queue').upsert({
-    user_id: userId,
-    joined_at: new Date().toISOString()
+}
+
+// HELPER: Kirim notifikasi setelah pairing berhasil
+async function sendPairingNotifications(supabase: any, botToken: string, user1Id: number, user2Id: number): Promise<void> {
+  // Get reaction stats for both users
+  const [{ data: user1AllReactions }, { data: user2AllReactions }] = await Promise.all([
+    supabase.from('user_reactions').select('emoji').eq('user_id', user1Id),
+    supabase.from('user_reactions').select('emoji').eq('user_id', user2Id)
+  ]);
+
+  const user1ReactionCount = user1AllReactions?.length || 0;
+  const user2ReactionCount = user2AllReactions?.length || 0;
+
+  // Count each emoji type
+  const countEmojis = (reactions: any[]) => (reactions || []).reduce((acc: Record<string, number>, curr: any) => {
+    acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
+    return acc;
+  }, {});
+
+  const user1EmojiCounts = countEmojis(user1AllReactions);
+  const user2EmojiCounts = countEmojis(user2AllReactions);
+
+  const formatEmojiStats = (emojiCounts: Record<string, number>) => {
+    if (Object.keys(emojiCounts).length === 0) return 'Belum ada gift';
+    return Object.entries(emojiCounts)
+      .map(([emoji, count]) => `${emoji} x${count}`)
+      .join(' | ');
+  };
+
+  const user1Stats = formatEmojiStats(user1EmojiCounts);
+  const user2Stats = formatEmojiStats(user2EmojiCounts);
+
+  // Get premium status for both users
+  const [{ data: user1Data }, { data: user2Data }] = await Promise.all([
+    supabase.from('telegram_users').select('premium_until').eq('id', user1Id).single(),
+    supabase.from('telegram_users').select('premium_until').eq('id', user2Id).single()
+  ]);
+
+  const user1IsPremium = user1Data?.premium_until && new Date(user1Data.premium_until) > new Date();
+  const user2IsPremium = user2Data?.premium_until && new Date(user2Data.premium_until) > new Date();
+
+  // Build chat action keyboard
+  const buildChatKeyboard = (isPremium: boolean) => ({
+    inline_keyboard: [
+      [
+        { text: '🛑 Stop', callback_data: 'chat_stop' },
+        { text: '⏭️ Next', callback_data: 'chat_next' }
+      ],
+      [
+        { text: '🎯 Filter Gender', callback_data: 'change_target' },
+        { text: '📍 Filter Lokasi', callback_data: 'change_location' }
+      ],
+      [
+        { text: '🎁 Kirim Gift', callback_data: 'open_gift_menu' }
+      ]
+    ]
   });
-  
-  await supabase
-    .from('telegram_users')
-    .update({ state: 'waiting' })
-    .eq('id', userId);
-  
-  await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
-  return false;
+
+  // Send notifications in parallel
+  await Promise.all([
+    sendTelegramMessage(
+      botToken, 
+      user1Id, 
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n🎁 Gift Partner: ${user2ReactionCount} gift\n${user2Stats}`,
+      buildChatKeyboard(user1IsPremium)
+    ),
+    sendTelegramMessage(
+      botToken, 
+      user2Id, 
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n🎁 Gift Partner: ${user1ReactionCount} gift\n${user1Stats}`,
+      buildChatKeyboard(user2IsPremium)
+    )
+  ]);
+}
+
+// LEGACY: Keep old function name as alias for backward compatibility
+async function searchPartnerWithQueueCheck(supabase: any, botToken: string, userId: number): Promise<boolean> {
+  return searchPartnerWithRPC(supabase, botToken, userId);
 }
 
 // Helper: Build target gender keyboard or premium offer based on user status
@@ -837,181 +789,8 @@ async function showTargetGenderPremiumOffer(supabase: any, botToken: string, use
   await sendPremiumOffer(supabase, botToken, userId, 'pilih target gender');
 }
 
-async function pairUsers(supabase: any, botToken: string, user1Id: number, user2Id: number): Promise<boolean> {
-  console.log(`🔗 pairUsers: Menghubungkan user ${user1Id} dengan ${user2Id}`);
-
-  // ==================================================================================
-  // TAHAP 1: LOCK USER 1 (KITA/PENCARI)
-  // ==================================================================================
-  const { data: u1, error: e1 } = await supabase
-    .from('telegram_users')
-    .update({ state: 'chatting', partner_id: user2Id })
-    .eq('id', user1Id)
-    .eq('state', 'waiting') // Guard: Pastikan User 1 masih waiting
-    .is('partner_id', null)
-    .select();
-
-  // 🚨 KEGAGALAN TAHAP 1
-  // Jika User 1 gagal di-lock (misal: dia menekan Stop saat proses berjalan),
-  // KITA HARUS MENGEMBALIKAN USER 2 KE ANTRIAN.
-  // Alasannya: User 2 sudah dihapus dari antrian oleh fungsi 'findAndLockPartner' sebelumnya.
-  if (e1 || !u1 || u1.length === 0) {
-    console.log(`❌ Gagal lock User 1 (${user1Id}). Mengembalikan User 2 (${user2Id}) ke antrian.`);
-    
-    // RESTORE USER 2 (PENTING AGAR TIDAK JADI ZOMBIE)
-    await supabase.from('waiting_queue').upsert({
-        user_id: user2Id,
-        joined_at: new Date().toISOString()
-    });
-    
-    return false; 
-  }
-
-  // ==================================================================================
-  // TAHAP 2: LOCK USER 2 (PARTNER/KANDIDAT)
-  // ==================================================================================
-  const { data: u2, error: e2 } = await supabase
-    .from('telegram_users')
-    .update({ state: 'chatting', partner_id: user1Id })
-    .eq('id', user2Id)
-    .eq('state', 'waiting') // Guard: Pastikan User 2 masih waiting
-    .is('partner_id', null)
-    .select();
-
-  // 🚨 KEGAGALAN TAHAP 2 (CRITICAL ROLLBACK)
-  // Jika User 2 gagal di-lock (misal: diambil orang lain di milidetik yang sama atau error DB),
-  // KITA HARUS MEMBATALKAN PERUBAHAN PADA USER 1 & MENGEMBALIKAN KEDUANYA KE ANTRIAN.
-  if (e2 || !u2 || u2.length === 0) {
-    console.log(`⚠️ Gagal lock User 2 (${user2Id}). Melakukan ROLLBACK User 1.`);
-    
-    // A. ROLLBACK STATE USER 1 (Kembalikan ke waiting)
-    await supabase
-      .from('telegram_users')
-      .update({ state: 'waiting', partner_id: null })
-      .eq('id', user1Id);
-    
-    // B. RESTORE USER 1 KE ANTRIAN (PENTING! AGAR TIDAK JADI ZOMBIE)
-    await supabase.from('waiting_queue').upsert({
-        user_id: user1Id,
-        joined_at: new Date().toISOString()
-    });
-      
-    // C. RESTORE USER 2 KE ANTRIAN (Agar bisa ditemukan orang lain)
-    await supabase.from('waiting_queue').upsert({
-        user_id: user2Id,
-        joined_at: new Date().toISOString()
-    });
-    
-    return false;
-  }
-
-  // 4. SUKSES! HAPUS KEDUANYA DARI ANTRIAN (Safe Zone)
-  // Kita hapus di sini karena status mereka sudah 'chatting'.
-  // Walaupun delete gagal (sangat jarang), tidak masalah karena status mereka sudah bukan 'waiting' lagi.
-  await supabase.from('waiting_queue').delete().in('user_id', [user1Id, user2Id]);
-
-  console.log(`✅ Pairing Sukses: ${user1Id} <-> ${user2Id}`);
-   // Get reaction counts for both users
-  const { data: user1Reactions } = await supabase
-    .from('user_reactions')
-    .select('emoji', { count: 'exact', head: true })
-    .eq('user_id', user1Id);
-
-  const { data: user2Reactions } = await supabase
-    .from('user_reactions')
-    .select('emoji', { count: 'exact', head: true })
-    .eq('user_id', user2Id);
-
-  const user1ReactionCount = user1Reactions?.length || 0;
-  const user2ReactionCount = user2Reactions?.length || 0;
-
-  // Get reaction stats for display
-  const { data: user1AllReactions } = await supabase
-    .from('user_reactions')
-    .select('emoji')
-    .eq('user_id', user1Id);
-
-  const { data: user2AllReactions } = await supabase
-    .from('user_reactions')
-    .select('emoji')
-    .eq('user_id', user2Id);
-
-  // Count each emoji type
-  const user1EmojiCounts = (user1AllReactions || []).reduce((acc: Record<string, number>, curr: any) => {
-    acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
-    return acc;
-  }, {});
-
-  const user2EmojiCounts = (user2AllReactions || []).reduce((acc: Record<string, number>, curr: any) => {
-    acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
-    return acc;
-  }, {});
-
-  const formatEmojiStats = (emojiCounts: Record<string, number>) => {
-    if (Object.keys(emojiCounts).length === 0) return 'Belum ada gift';
-    return Object.entries(emojiCounts)
-      .map(([emoji, count]) => `${emoji} x${count}`)
-      .join(' | ');
-  };
-
-  const user1Stats = formatEmojiStats(user1EmojiCounts);
-  const user2Stats = formatEmojiStats(user2EmojiCounts);
-
-  // Get premium status for both users
-  const { data: user1Data } = await supabase
-    .from('telegram_users')
-    .select('premium_until')
-    .eq('id', user1Id)
-    .single();
-
-  const { data: user2Data } = await supabase
-    .from('telegram_users')
-    .select('premium_until')
-    .eq('id', user2Id)
-    .single();
-
-  const user1IsPremium = user1Data?.premium_until && new Date(user1Data.premium_until) > new Date();
-  const user2IsPremium = user2Data?.premium_until && new Date(user2Data.premium_until) > new Date();
-
-  // Build chat action keyboard
-  const buildChatKeyboard = (isPremium: boolean) => {
-    const keyboard: any = {
-      inline_keyboard: [
-        [
-          { text: '🛑 Stop', callback_data: 'chat_stop' },
-          { text: '⏭️ Next', callback_data: 'chat_next' }
-        ],
-        [
-          { text: '🎯 Filter Gender', callback_data: 'change_target' },
-          { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-        ],
-        // --- TOMBOL GIFT DI SINI ---
-        [
-          { text: '🎁 Kirim Gift', callback_data: 'open_gift_menu' }
-        ]
-      ]
-    };
-    return keyboard;
-  };
-
-  // User1 receives info about partner (user2) with inline buttons
-  await sendTelegramMessage(
-    botToken, 
-    user1Id, 
-    `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n🎁 Gift Partner: ${user2ReactionCount} gift\n${user2Stats}`,
-    buildChatKeyboard(user1IsPremium)
-  );
-  
-  // User2 receives info about partner (user1) with inline buttons
-  await sendTelegramMessage(
-    botToken, 
-    user2Id, 
-    `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n🎁 Gift Partner: ${user1ReactionCount} gift\n${user1Stats}`,
-    buildChatKeyboard(user2IsPremium)
-  );
-  
-  return true;
-}
+// LEGACY: pairUsers - sekarang menggunakan RPC, fungsi ini hanya untuk backward compatibility
+// Tidak digunakan lagi karena logika sudah di database RPC find_and_pair_partner
 
 // Helper: Kirim promo yang status 'waiting_idle' ke user tertentu saat kembali idle
 // Helper: Send promo to single user (optimized) - MUST be defined before sendPendingPromoToUser
