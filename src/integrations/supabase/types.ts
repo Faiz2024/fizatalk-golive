@@ -402,6 +402,7 @@ export type Database = {
     }
     Functions: {
       cleanup_inactive_users: { Args: never; Returns: undefined }
+      find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
     }
     Enums: {
