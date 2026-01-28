@@ -470,6 +470,27 @@ export type Database = {
       cleanup_inactive_users: { Args: never; Returns: undefined }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
+      get_promo_eligible_users: {
+        Args: never
+        Returns: {
+          current_state: string
+          user_id: number
+        }[]
+      }
+      get_waiting_idle_promos: {
+        Args: { p_user_id: number }
+        Returns: {
+          expires_at: string
+          id: string
+          message_text: string
+          photo_url: string
+          promo_buttons: Json
+        }[]
+      }
+      mark_promo_sent: {
+        Args: { p_message_id: number; p_promo_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       user_state: "idle" | "waiting" | "chatting" | "awaiting_payment"
