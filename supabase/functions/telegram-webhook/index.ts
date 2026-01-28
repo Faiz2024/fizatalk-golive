@@ -1220,28 +1220,15 @@ async function sendPromoToUser(
   }
 }
 
-// Optimized: Send pending promo when user becomes idle
+// Optimized: Send pending promo when user becomes idle - USING RPC
 async function sendPendingPromoToUser(supabase: any, botToken: string, userId: number) {
-  // Get only first waiting_idle promo (limit 1 to reduce DB load)
-  const { data: pendingPromos } = await supabase
-    .from('promo_queue')
-    .select('id, message_text, photo_url, promo_buttons, expires_at')
-    .eq('user_id', userId)
-    .eq('status', 'waiting_idle')
-    .order('created_at', { ascending: true })
-    .limit(1);
+  // Get waiting_idle promos using RPC (more cost-effective)
+  const { data: pendingPromos, error } = await supabase.rpc('get_waiting_idle_promos', { p_user_id: userId });
 
-  if (!pendingPromos || pendingPromos.length === 0) return;
+  if (error || !pendingPromos || pendingPromos.length === 0) return;
 
   const promo = pendingPromos[0];
-  const now = new Date();
   
-  // Check if expired
-  if (new Date(promo.expires_at) < now) {
-    await supabase.from('promo_queue').delete().eq('id', promo.id);
-    return;
-  }
-
   // Send using optimized helper
   const result = await sendPromoToUser(
     botToken, 
@@ -1252,9 +1239,8 @@ async function sendPendingPromoToUser(supabase: any, botToken: string, userId: n
   );
 
   if (result.success && result.messageId) {
-    await supabase.from('promo_queue')
-      .update({ status: 'sent', sent_message_id: result.messageId })
-      .eq('id', promo.id);
+    // Mark as sent using RPC
+    await supabase.rpc('mark_promo_sent', { p_promo_id: promo.id, p_message_id: result.messageId });
     console.log(`✅ Promo (waiting_idle) terkirim ke user ${userId}`);
   } else if (result.blocked) {
     await supabase.from('promo_queue').update({ status: 'failed_blocked' }).eq('id', promo.id);
@@ -1634,10 +1620,10 @@ async function handleCleanupJob(req: Request, supabase: any, botToken: string, s
   });
 }
 
-// Parallel send with concurrency limit
+// Parallel send with concurrency limit - OPTIMIZED with pre-filtered users
 async function sendPromosBatch(
   botToken: string,
-  users: Array<{ id: string; user_id: number }>,
+  users: Array<{ id: string; user_id: number; current_state?: string }>,
   messageText: string,
   photoUrl: string | null,
   promoButtons: any,
@@ -1646,36 +1632,31 @@ async function sendPromosBatch(
   const CONCURRENCY = 25; // Send 25 at a time
   let sent = 0, waiting = 0, blocked = 0;
   
-  // Get all user states in single query
-  const userIds = users.map(u => u.user_id);
-  const { data: usersState } = await supabase
-    .from('telegram_users')
-    .select('id, state')
-    .in('id', userIds);
-  
-  const stateMap = new Map((usersState || []).map((u: any) => [u.id, u.state]));
-  
-  // Separate idle vs busy users
+  // Separate idle vs chatting users (state already provided from RPC)
   const idleUsers: typeof users = [];
-  const busyUsers: typeof users = [];
+  const chattingUsers: typeof users = [];
   
   for (const user of users) {
-    const state = stateMap.get(user.user_id);
-    if (state === 'idle') {
+    // If current_state is provided (from RPC), use it directly
+    if (user.current_state === 'idle') {
       idleUsers.push(user);
+    } else if (user.current_state === 'chatting') {
+      chattingUsers.push(user);
     } else {
-      busyUsers.push(user);
+      // Fallback: if no state provided, treat as idle
+      idleUsers.push(user);
     }
   }
   
-  // Mark busy users as waiting_idle (single batch update)
-  if (busyUsers.length > 0) {
-    const busyIds = busyUsers.map(u => u.id);
-    await supabase.from('promo_queue').update({ status: 'waiting_idle' }).in('id', busyIds);
-    waiting = busyUsers.length;
+  // Mark chatting users as waiting_idle (will be sent when they exit chat)
+  if (chattingUsers.length > 0) {
+    const chattingIds = chattingUsers.map(u => u.id);
+    await supabase.from('promo_queue').update({ status: 'waiting_idle' }).in('id', chattingIds);
+    waiting = chattingUsers.length;
+    console.log(`📋 ${chattingUsers.length} user sedang chatting, promo di-queue untuk nanti`);
   }
   
-  // Process idle users in parallel chunks
+  // Process idle users in parallel chunks - send immediately
   for (let i = 0; i < idleUsers.length; i += CONCURRENCY) {
     const chunk = idleUsers.slice(i, i + CONCURRENCY);
     
@@ -1703,13 +1684,10 @@ async function sendPromosBatch(
       }
     }
     
-    // Batch DB updates
+    // Batch DB updates using RPC for sent items
     if (sentUpdates.length > 0) {
-      // Update sent status with message_id
       for (const update of sentUpdates) {
-        await supabase.from('promo_queue')
-          .update({ status: 'sent', sent_message_id: update.messageId })
-          .eq('id', update.id);
+        await supabase.rpc('mark_promo_sent', { p_promo_id: update.id, p_message_id: update.messageId });
       }
     }
     
@@ -5164,65 +5142,65 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
             ]
           };
 
-          // 2. STREAMING LOGIC: Fetch & Insert secara bertahap (Memory Safe)
+          // 2. OPTIMIZED: Use RPC to get eligible users (HEMAT BIAYA CLOUD)
+          // RPC get_promo_eligible_users() mengembalikan:
+          // - User chatting (apapun last_active nya)
+          // - User idle yang aktif dalam 5 jam terakhir
+          // - Exclude premium users
+          
+          await sendTelegramMessage(botToken, userId, '🚀 Memulai proses antrean promo dengan RPC optimized... (Mohon tunggu)');
+
+          console.log('🚀 Memulai Promo dengan RPC get_promo_eligible_users (cost-optimized)...');
+          
+          // Call RPC to get eligible users in single query
+          const { data: eligibleUsers, error: rpcError } = await supabase.rpc('get_promo_eligible_users');
+          
+          if (rpcError) {
+            console.error('Error calling get_promo_eligible_users RPC:', rpcError);
+            await sendTelegramMessage(botToken, userId, `❌ Error RPC: ${rpcError.message}`);
+            return new Response('OK', { status: 200 });
+          }
+          
+          if (!eligibleUsers || eligibleUsers.length === 0) {
+            await sendTelegramMessage(botToken, userId, '📭 Tidak ada user eligible yang ditemukan.\n\n<i>Kriteria: User chatting ATAU user idle yang aktif dalam 5 jam terakhir (exclude premium)</i>');
+            return new Response('OK', { status: 200 });
+          }
+          
+          console.log(`📋 Found ${eligibleUsers.length} eligible users from RPC`);
+          
+          // Count stats
+          const idleCount = eligibleUsers.filter((u: any) => u.current_state === 'idle').length;
+          const chattingCount = eligibleUsers.filter((u: any) => u.current_state === 'chatting').length;
+          
+          // Batch insert to promo_queue (PAGE_SIZE = 1000 untuk menghindari timeout)
           const PAGE_SIZE = 1000;
-          let hasMore = true;
-          let offset = 0;
           let totalQueued = 0;
           
-          await sendTelegramMessage(botToken, userId, '🚀 Memulai proses antrean promo... (Mohon tunggu)');
-
-          console.log('🚀 Memulai Streaming Fetch & Insert untuk promo...');
-          
-          while (hasMore) {
-            // A. Fetch Batch User
-            const { data: pageUsers, error: fetchError } = await supabase
-              .from('telegram_users')
-              .select('id')
-              .or('premium_until.is.null,premium_until.lt.' + new Date().toISOString())
-              .order('id', { ascending: true })
-              .range(offset, offset + PAGE_SIZE - 1);
+          for (let i = 0; i < eligibleUsers.length; i += PAGE_SIZE) {
+            const batch = eligibleUsers.slice(i, i + PAGE_SIZE);
             
-            if (fetchError) {
-              console.error(`Error fetching users at offset ${offset}:`, fetchError);
-              break;
-            }
-            
-            if (!pageUsers || pageUsers.length === 0) {
-              hasMore = false;
-              break;
-            }
-
-            // B. Siapkan Data Batch Ini
-            const queueBatch = pageUsers.map((u: any) => ({
-                user_id: u.id,
-                message_text: promoMessage,
-                photo_url: promoFileId || null,
-                promo_buttons: promoKeyboard,
-                status: 'pending',
-                expires_at: expireDate.toISOString()
+            const queueBatch = batch.map((u: any) => ({
+              user_id: u.user_id,
+              message_text: promoMessage,
+              photo_url: promoFileId || null,
+              promo_buttons: promoKeyboard,
+              // Set status berdasarkan state: idle = pending (kirim langsung), chatting = waiting_idle
+              status: u.current_state === 'idle' ? 'pending' : 'waiting_idle',
+              expires_at: expireDate.toISOString()
             }));
-
-            // C. Langsung Insert Batch Ini ke DB (Tanpa simpan di RAM global)
+            
             const { error: insertError } = await supabase.from('promo_queue').insert(queueBatch);
-
+            
             if (insertError) {
-                console.error(`❌ Gagal insert batch offset ${offset}:`, insertError);
+              console.error(`❌ Gagal insert batch ${i}:`, insertError);
             } else {
-                totalQueued += queueBatch.length;
-                console.log(`✅ Queued batch: ${queueBatch.length} users (Total: ${totalQueued})`);
-            }
-
-            // D. Cek Pagination
-            if (pageUsers.length < PAGE_SIZE) {
-                hasMore = false;
-            } else {
-                offset += PAGE_SIZE;
+              totalQueued += queueBatch.length;
+              console.log(`✅ Queued batch: ${queueBatch.length} users (Total: ${totalQueued})`);
             }
           }
 
           if (totalQueued > 0) {
-            await sendTelegramMessage(botToken, userId, `✅ <b>Promo Dijadwalkan!</b>\n\n📊 Total Target: ${totalQueued} user\n⏳ Expired: Pukul ${timeStringWIB}\n🤖 pg_cron akan memproses dalam 1 menit...`);
+            await sendTelegramMessage(botToken, userId, `✅ <b>Promo Dijadwalkan!</b>\n\n📊 Total Target: ${totalQueued} user\n├ 📤 Idle (kirim langsung): ${idleCount}\n└ ⏳ Chatting (kirim saat keluar chat): ${chattingCount}\n\n⏳ Expired: Pukul ${timeStringWIB}\n🤖 pg_cron akan memproses dalam 1 menit...\n\n<i>💡 Optimasi: Hanya target user aktif dalam 5 jam terakhir</i>`);
             
             // pg_cron akan otomatis memproses promo_job setiap menit
 
