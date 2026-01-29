@@ -2719,7 +2719,7 @@ Deno.serve(async (req) => {
             await sendTelegramMessage(
               botToken, 
               partnerId, 
-              `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri rating untuk partner!`,
+              `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
               combinedPartnerKeyboard
             );
             
@@ -2771,7 +2771,8 @@ Deno.serve(async (req) => {
                   { text: '🔍 Cari Partner', callback_data: 'search_partner' }
                 ],
                 [
-                  { text: '🎯 Filter Gender', callback_data: 'change_target' }
+                  { text: '🎯 Filter Gender', callback_data: 'change_target' },
+                  { text: '📍 Filter Lokasi', callback_data: 'change_location' }
                 ]
               ]
             };
@@ -3372,7 +3373,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       // --- LOGIKA PEMBELIAN PREMIUM HARGA NORMAL (dari /target) ---
       if (callbackData === 'buy_premium_normal_7' || callbackData === 'buy_premium_normal_30') {
         const durationDays = callbackData === 'buy_premium_normal_7' ? 7 : 30;
-        const price = callbackData === 'buy_premium_normal_7' ? 20000 : 60000;
+        const price = callbackData === 'buy_premium_normal_7' ? 25000 : 60000;
         
         // Hapus pesan promo
         if (message) {
@@ -4054,8 +4055,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       return new Response('OK', { status: 200 });
     }
 
-    // Upsert user - hanya update username/first_name (tanpa last_active untuk hemat biaya cloud)
-    await simpleUpsertUser(supabase, userId, message.from.username, message.from.first_name);
+  
 
     // Photo received - log for debugging only
     if (message.photo && message.photo.length > 0) {
@@ -4584,29 +4584,8 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
               return new Response('OK', { status: 200 }); 
           }
         }
-        // ************************************************
-        // SPAM DETECTION SAAT CHATTING
-        // ************************************************
-        const messageToCheck = text || message.caption || '';
+       
         
-        if (messageToCheck.length > 0) {
-          const spamResult = await detectSpam(supabase, userId, messageToCheck);
-          
-          if (spamResult.isSpam) {
-            // User terdeteksi spam - blokir otomatis
-            await blockUserForSpam(
-              supabase,
-              botToken,
-              userId,
-              message.from.username,
-              message.from.first_name,
-              spamResult.reason,
-              messageToCheck
-            );
-            
-            return new Response('OK', { status: 200 });
-          }
-        }
 
            // === LOGIKA HANDLER REPLY / BALAS PESAN (UPDATED) ===
             
