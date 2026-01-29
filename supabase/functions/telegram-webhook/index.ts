@@ -2441,8 +2441,7 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHAT NEXT (INLINE BUTTON) ---
       if (callbackData === 'chat_next') {
-        // PENTING: Update last_active (hanya sekali sehari) karena user aktif menekan next
-        await smartUpsertUser(supabase, userId, query.from.username, query.from.first_name);
+        
 
         // CEK KEANGGOTAAN CHANNEL HANYA JIKA USER SUDAH TERDAFTAR > 1 MINGGU (hemat biaya cloud)
         const shouldCheckChannelNext = await shouldShowChannelJoin(supabase, userId);
@@ -2567,8 +2566,6 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHAT STOP (INLINE BUTTON) ---
       if (callbackData === 'chat_stop') {
-        // PENTING: Update last_active (hanya sekali sehari) karena user aktif menekan stop
-        await smartUpsertUser(supabase, userId, query.from.username, query.from.first_name);
         
         // Ambil state user terlebih dahulu
         const { data: stopUserData } = await supabase
@@ -4914,7 +4911,6 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
 ━━━━━━━━━━━━━━━━━━━━
 📦 <b>PREMIUM 5 BULAN</b>
 <s>Rp 300.000</s> → <b>HANYA Rp 10.000!</b>
-✨ <b>BONUS: 5.000 KOIN GRATIS!</b>
 ━━━━━━━━━━━━━━━━━━━━
 
 🎯 <b>KEUNTUNGAN PREMIUM:</b>
@@ -4929,11 +4925,11 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
 
           const promoKeyboard = {
             inline_keyboard: [
-              [{ text: '🔥 5 Bulan + 5000 Koin - Rp 10.000', callback_data: 'buy_premium_150' }],
-              [{ text: '💎 6 Bulan - Rp 25.000', callback_data: 'buy_premium_180' }],
-              [{ text: '📦 1 Bulan - Rp 5.000', callback_data: 'buy_premium_30' }],
-              [{ text: '📅 1 Minggu - Rp 2.000', callback_data: 'buy_premium_7' }],
-              [{ text: '⚡ 3 Hari - Rp 1.000', callback_data: 'buy_premium_3' }],
+              [{ text: '🔥 5 Bulan / Rp10.000', callback_data: 'buy_premium_150' }],
+              [{ text: '💎 6 Bulan / Rp 25.000', callback_data: 'buy_premium_180' }],
+              [{ text: '📦 1 Bulan / Rp 5.000', callback_data: 'buy_premium_30' }],
+              [{ text: '📅 1 Minggu / Rp 2.000', callback_data: 'buy_premium_7' }],
+              [{ text: '⚡ 3 Hari / Rp 1.000', callback_data: 'buy_premium_3' }],
               [{ text: '❌ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
             ]
           };
