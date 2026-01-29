@@ -4379,7 +4379,8 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
                    { text: '⏭️ Next', callback_data: 'chat_next' }
                  ],
                  [
-                   { text: '🎯 Filter Gender', callback_data: 'change_target' }
+                   { text: '🎯 Filter Gender', callback_data: 'change_target' },
+                   { text: '📍 Filter Lokasi', callback_data: 'change_location' }
                  ]
                ]
               };
@@ -4394,7 +4395,8 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
                    { text: '⏭️ Next', callback_data: 'chat_next' }
                  ],
                  [
-                   { text: '🎯 Filter Gender', callback_data: 'change_target' }
+                   { text: '🎯 Filter Gender', callback_data: 'change_target' },
+                   { text: '📍 Filter Lokasi', callback_data: 'change_location' }
                  ]
                ]
               };
@@ -4408,13 +4410,14 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
                     { text: '⏭️ Next', callback_data: 'chat_next' }
                   ],
                   [
-                    { text: '🎯 Filter Gender', callback_data: 'change_target' }
+                    { text: '🎯 Filter Gender', callback_data: 'change_target' },
+                    { text: '📍 Filter Lokasi', callback_data: 'change_location' }
                   ]
                 ]
               };
               await sendTelegramMessage(botToken, userId, '⚠️ Kamu sedang dalam chat.\n\nPilih aksi:', chattingKeyboard);
               isCommand = true;
-          } else if (text === '/target') {
+          } else if (text === '/filter') {
           // Cek apakah user premium
           const { data: userData } = await supabase
             .from('telegram_users')
@@ -4935,7 +4938,8 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                   { text: '🔍 Cari Partner', callback_data: 'search_partner' }
                 ],
                 [
-                  { text: '🎯 Filter Gender', callback_data: 'change_target' }
+                  { text: '🎯 Filter Gender', callback_data: 'change_target' },
+                  { text: '📍 Filter Lokasi', callback_data: 'change_location' }
                 ]
               ]
             };
@@ -4949,7 +4953,8 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                   { text: '🔍 Cari Partner', callback_data: 'search_partner' }
                 ],
                 [
-                  { text: '🎯 Filter Gender', callback_data: 'change_target' }
+                  { text: '🎯 Filter Gender', callback_data: 'change_target' },
+                  { text: '📍 Filter Lokasi', callback_data: 'change_location' }
                 ]
               ]
             };
