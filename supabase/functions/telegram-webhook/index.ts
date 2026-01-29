@@ -1013,31 +1013,42 @@ async function sendPromoToUser(
   }
 }
 
-// Optimized: Send pending promo when user becomes idle - USING RPC
-async function sendPendingPromoToUser(supabase: any, botToken: string, userId: number) {
-  // Get waiting_idle promos using RPC (more cost-effective)
-  const { data: pendingPromos, error } = await supabase.rpc('get_waiting_idle_promos', { p_user_id: userId });
-
-  if (error || !pendingPromos || pendingPromos.length === 0) return;
-
-  const promo = pendingPromos[0];
+// Helper Global untuk mengirim promo agar sinkron di semua fitur
+async function executePromoAction(supabase: any, botToken: string, userId: number) {
+  const promoFileId = await getPromoPremiumFileId(supabase);
   
-  // Send using optimized helper
-  const result = await sendPromoToUser(
-    botToken, 
-    userId, 
-    promo.message_text, 
-    promo.photo_url, 
-    promo.promo_buttons
-  );
+  const promoMessage = `🚨 <b>PROMO TERBATAS! HANYA 5 JAM!</b> 🚨
 
-  if (result.success && result.messageId) {
-    // Mark as sent using RPC
-    await supabase.rpc('mark_promo_sent', { p_promo_id: promo.id, p_message_id: result.messageId });
-    console.log(`✅ Promo (waiting_idle) terkirim ke user ${userId}`);
-  } else if (result.blocked) {
-    await supabase.from('promo_queue').update({ status: 'failed_blocked' }).eq('id', promo.id);
-  }
+⏰ <b>Berakhir dalam 5 jam dari sekarang!</b> - Jangan sampai kelewatan!
+
+🎁 <b>PENAWARAN EKSKLUSIF:</b>
+━━━━━━━━━━━━━━━━━━━━
+📦 <b>PREMIUM 5 BULAN</b>
+<s>Rp 300.000</s> → <b>HANYA Rp 10.000!</b>
+━━━━━━━━━━━━━━━━━━━━
+
+🎯 <b>KEUNTUNGAN PREMIUM:</b>
+• Pilih target gender chat
+• Pilih target lokasi chat  
+• ⭐ Badge Premium eksklusif
+• 🚀 Prioritas matching tercepat
+
+💥 <b>HEMAT 97%!</b> Kesempatan langka ini tidak akan terulang!
+
+⚡ <b>Ambil sekarang sebelum kehabisan!</b>`;
+
+  const promoKeyboard = {
+    inline_keyboard: [
+      [{ text: '🔥 5 Bulan / Rp10.000', callback_data: 'buy_premium_150' }],
+      [{ text: '💎 6 Bulan / Rp 25.000', callback_data: 'buy_premium_180' }],
+      [{ text: '📦 1 Bulan / Rp 5.000', callback_data: 'buy_premium_30' }],
+      [{ text: '📅 1 Minggu / Rp 2.000', callback_data: 'buy_premium_7' }],
+      [{ text: '⚡ 3 Hari / Rp 1.000', callback_data: 'buy_premium_3' }],
+      [{ text: '❌ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
+    ]
+  };
+
+  return await sendPromoToUser(botToken, userId, promoMessage, promoFileId, promoKeyboard);
 }
 
 async function endChat(supabase: any, botToken: string, userId: number): Promise<boolean> {
@@ -1142,53 +1153,20 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
     endChatKeyboard
   );
   
-  /// 6. Fungsi Helper untuk Mengirim Promo yang Sudah Ada
-  const executePromo = async (targetId: number) => {
-    const promoFileId = await getPromoPremiumFileId(supabase);
-    const promoMessage = `🚨 <b>PROMO TERBATAS! HANYA 5 JAM!</b> 🚨
-
-⏰ <b>Berakhir pukul ${timeStringWIB}</b> - Jangan sampai kelewatan!
-
-🎁 <b>PENAWARAN EKSKLUSIF:</b>
-━━━━━━━━━━━━━━━━━━━━
-📦 <b>PREMIUM 5 BULAN</b>
-<s>Rp 300.000</s> → <b>HANYA Rp 10.000!</b>
-━━━━━━━━━━━━━━━━━━━━
-
-🎯 <b>KEUNTUNGAN PREMIUM:</b>
-• Pilih target gender chat
-• Pilih target lokasi chat  
-• ⭐ Badge Premium eksklusif
-• 🚀 Prioritas matching tercepat
-
-💥 <b>HEMAT 97%!</b> Kesempatan langka ini tidak akan terulang!
-
-⚡ <b>Ambil sekarang sebelum kehabisan!</b>`;
-    const promoKeyboard = {
-      inline_keyboard: [
-              [{ text: '🔥 5 Bulan / Rp10.000', callback_data: 'buy_premium_150' }],
-              [{ text: '💎 6 Bulan / Rp 25.000', callback_data: 'buy_premium_180' }],
-              [{ text: '📦 1 Bulan / Rp 5.000', callback_data: 'buy_premium_30' }],
-              [{ text: '📅 1 Minggu / Rp 2.000', callback_data: 'buy_premium_7' }],
-              [{ text: '⚡ 3 Hari / Rp 1.000', callback_data: 'buy_premium_3' }],
-              [{ text: '❌ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
-            ]
-    };
-    await sendPromoToUser(botToken, targetId, promoMessage, promoFileId, promoKeyboard);
-  };
-
-  // Kirim ke user jika syarat terpenuhi
+  
+  // Kirim ke user jika syarat terpenuhi via RPC
   if (promoUser?.should_send) {
-    setTimeout(() => executePromo(userId), 1000);
+    await executePromoAction(supabase, botToken, userId);
   }
 
-  // Kirim ke partner jika syarat terpenuhi
+  // Kirim ke partner jika syarat terpenuhi via RPC
   if (promoPartner?.should_send) {
-    setTimeout(() => executePromo(partnerId), 2000); // Beri jeda sedikit agar serverless tidak timeout
+    await executePromoAction(supabase, botToken, partnerId);
   }
   
   return true;
 }
+
 
 // --- BACKGROUND JOB LOGIC (ESTAFET) - COST OPTIMIZED v2 ---
 
