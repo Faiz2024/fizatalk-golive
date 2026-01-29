@@ -510,9 +510,9 @@ async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null
 
   const caption = `💳 <b>${title}</b>
 
+💵 <b>Total Bayar: Rp ${totalAmount.toLocaleString('id-ID')}</b>
 💰 Harga: Rp ${price.toLocaleString('id-ID')}
 🔢 Kode Unik: ${uniqueCode}
-💵 <b>Total Bayar: Rp ${totalAmount.toLocaleString('id-ID')}</b>
 
 📱 <b>CARA PEMBAYARAN:</b>
 1️⃣ Screenshot/simpan gambar QRIS di atas
@@ -524,7 +524,8 @@ async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null
 
 📸 Kirim <b>foto bukti pembayaran</b> ke chat ini.
 
-⏰ Batas waktu: ${expiryMinutes} menit`;
+⏰ Batas waktu: ${expiryMinutes} menit
+⚠️ Harap hubungi Admin @FizaTalkCS jika mengalami kendala`;
 
   try {
     const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
@@ -616,13 +617,13 @@ async function getPromoPremiumFileId(supabase: any): Promise<string | null> {
 }
 
 // Helper function to build premium benefits text
-function getPremiumBenefitsText(): string {
-  return `✨ <b>KEUNTUNGAN PREMIUM:</b>
-• 🎯 Pilih target gender chat
-• 📍 Pilih target lokasi chat
-• ⭐ Badge Premium
-• 🚀 Prioritas matching`;
-}
+// function getPremiumBenefitsText(): string {
+//   return `✨ <b>KEUNTUNGAN PREMIUM:</b>
+// • 🎯 Pilih target gender chat
+// • 📍 Pilih target lokasi chat
+// • ⭐ Badge Premium
+// • 🚀 Prioritas matching`;
+// }
 
 // Helper function to build premium offer message for non-premium users
 function buildPremiumOfferMessage(featureName: string): string {
@@ -875,7 +876,6 @@ async function deleteTelegramMessage(botToken: string, chatId: number, messageId
   }
 }
 
-// FUNGSI LAMA forwardTelegramMessage DIHAPUS
 
 // ============================================
 // CHANNEL MEMBERSHIP CHECK
@@ -965,23 +965,23 @@ Setelah bergabung, tekan tombol "✅ Sudah Gabung" untuk melanjutkan.`;
 async function searchPartnerWithRPC(supabase: any, botToken: string, userId: number): Promise<boolean> {
   console.log(`🔍 searchPartnerWithRPC: Memulai pencarian untuk user ${userId}`);
   
-  try {
     // Panggil RPC function di database - semua logika matching dilakukan di sini
     const { data, error } = await supabase.rpc('find_and_pair_partner', {
       p_user_id: userId
-    });
+  // try {
+  //   });
     
-    if (error) {
-      console.error(`❌ RPC Error:`, error);
-      // Fallback: masukkan user ke antrian secara manual
-      await supabase.from('waiting_queue').upsert({
-        user_id: userId,
-        joined_at: new Date().toISOString()
-      });
-      await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
-      await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
-      return false;
-    }
+  //   if (error) {
+  //     console.error(`❌ RPC Error:`, error);
+  //     // Fallback: masukkan user ke antrian secara manual
+  //     await supabase.from('waiting_queue').upsert({
+  //       user_id: userId,
+  //       joined_at: new Date().toISOString()
+  //     });
+  //     await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
+  //     await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+  //     return false;
+  //   }
     
     console.log(`📦 RPC Result:`, data);
     
@@ -1010,48 +1010,22 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     await sendPairingNotifications(supabase, botToken, userId, partnerId);
     return true;
     
-  } catch (err) {
-    console.error(`❌ searchPartnerWithRPC exception:`, err);
-    // Fallback: masukkan user ke antrian
-    await supabase.from('waiting_queue').upsert({
-      user_id: userId,
-      joined_at: new Date().toISOString()
-    });
-    await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
-    await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
-    return false;
-  }
+  } // catch (err) {
+  //   console.error(`❌ searchPartnerWithRPC exception:`, err);
+  //   // Fallback: masukkan user ke antrian
+  //   await supabase.from('waiting_queue').upsert({
+  //     user_id: userId,
+  //     joined_at: new Date().toISOString()
+  //   });
+  //   await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
+  //   await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+  //   return false;
+  // }
 }
 
 // HELPER: Kirim notifikasi setelah pairing berhasil
 async function sendPairingNotifications(supabase: any, botToken: string, user1Id: number, user2Id: number): Promise<void> {
-  // Get reaction stats for both users
-  const [{ data: user1AllReactions }, { data: user2AllReactions }] = await Promise.all([
-    supabase.from('user_reactions').select('emoji').eq('user_id', user1Id),
-    supabase.from('user_reactions').select('emoji').eq('user_id', user2Id)
-  ]);
-
-  const user1ReactionCount = user1AllReactions?.length || 0;
-  const user2ReactionCount = user2AllReactions?.length || 0;
-
-  // Count each emoji type
-  const countEmojis = (reactions: any[]) => (reactions || []).reduce((acc: Record<string, number>, curr: any) => {
-    acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
-    return acc;
-  }, {});
-
-  const user1EmojiCounts = countEmojis(user1AllReactions);
-  const user2EmojiCounts = countEmojis(user2AllReactions);
-
-  const formatEmojiStats = (emojiCounts: Record<string, number>) => {
-    if (Object.keys(emojiCounts).length === 0) return 'Belum ada gift';
-    return Object.entries(emojiCounts)
-      .map(([emoji, count]) => `${emoji} x${count}`)
-      .join(' | ');
-  };
-
-  const user1Stats = formatEmojiStats(user1EmojiCounts);
-  const user2Stats = formatEmojiStats(user2EmojiCounts);
+  
 
   // Get premium status for both users
   const [{ data: user1Data }, { data: user2Data }] = await Promise.all([
