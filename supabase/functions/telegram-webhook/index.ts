@@ -110,40 +110,6 @@ async function setBotSetting(supabase: any, key: string, value: string, updatedB
   return !error;
 }
 
-// ============================================
-// SPAM DETECTION & AUTO-BLOCK SYSTEM
-// ============================================
-
-// Daftar kata sapaan awal yang dikecualikan dari deteksi spam
-const EXCLUDED_GREETINGS = [
-  'ce', 'co', 'cwek', 'cwok', 'cewek', 'cowok',
-  'hai', 'halo', 'hi', 'hello', 'hey',
-  'pagi', 'siang', 'sore', 'malam',
-  'selamat pagi', 'selamat siang', 'selamat sore', 'selamat malam',
-  'mba', 'mas', 'kak', 'bang', 'bro', 'sis',
-  'hy', 'haloo', 'halloo', 'haiii', 'hyy',
-  'assalamualaikum', 'assalamu alaikum', 'waalaikumsalam',
-  'p', 'pp', 'gas', 'yuk', 'ayo',
-  'wkwk', 'wkwkwk', 'haha', 'hahaha', 'hihi', 'hehe',
-  'ok', 'oke', 'sip', 'siap', 'ya', 'iya', 'gak', 'tidak',
-  'makasih', 'terima kasih', 'thanks', 'thx', 'ty',
-  'lagi apa', 'lg apa', 'lagi ngapain', 'lg ngapain',
-  'dari mana', 'darimana', 'dimana', 'di mana',
-  'umur berapa', 'umur brp', 'berapa umur', 'brp umur',
-  'asl', 'asl?', 'mau kenalan', 'kenalan yuk'
-];
-
-// Minimum karakter untuk dianggap copy-paste spam (pesan panjang)
-const MIN_SPAM_CHARS = 50;
-
-// Konfigurasi deteksi pesan pendek berulang
-const SHORT_MESSAGE_MAX_CHARS = 49; // Pesan di bawah ini dianggap pendek
-const SHORT_MESSAGE_SPAM_THRESHOLD = 4; // Berapa kali pesan pendek sama untuk dianggap spam
-const SHORT_MESSAGE_INTERVAL_MINUTES = 15; // Dalam interval waktu berapa menit
-
-// Konfigurasi deteksi username tag spam
-const USERNAME_TAG_THRESHOLD = 3; // Minimal berapa kali kirim username tag untuk dianggap spam
-const USERNAME_TAG_INTERVAL_MINUTES = 10; // Dalam interval waktu berapa menit
 
 // HELPER: Cek apakah user sudah diblokir
 async function isUserBlocked(supabase: any, userId: number): Promise<boolean> {
@@ -157,163 +123,12 @@ async function isUserBlocked(supabase: any, userId: number): Promise<boolean> {
   return !!data;
 }
 
-// HELPER: Generate simple hash for message comparison
-function simpleHash(text: string): string {
-  // Normalize: lowercase, remove extra spaces, remove special chars
-  const normalized = text.toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[^\w\s]/g, '')
-    .trim();
-  
-  // Simple hash using first 100 chars + length
-  return `${normalized.substring(0, 100)}_${normalized.length}`;
-}
-
-// HELPER: Cek apakah pesan adalah sapaan awal yang dikecualikan
-function isExcludedGreeting(text: string): boolean {
-  const normalized = text.toLowerCase().trim();
-  
-  // Jika pesan kurang dari 20 karakter, cek apakah sapaan
-  if (normalized.length <= 20) {
-    for (const greeting of EXCLUDED_GREETINGS) {
-      if (normalized === greeting || normalized.startsWith(greeting + ' ') || normalized.endsWith(' ' + greeting)) {
-        return true;
-      }
-    }
-  }
-  
-  return false;
-}
 
 // HELPER: Deteksi spam dalam pesan
 interface SpamDetectionResult {
   isSpam: boolean;
   reason: string;
   detectionType: 'username_tag' | 'copy_paste' | 'repeated_message' | null;
-}
-
-async function detectSpam(supabase: any, userId: number, text: string): Promise<SpamDetectionResult> {
-  // Cek apakah autoblock diaktifkan
-  const autoBlockEnabled = await getBotSetting(supabase, 'autoblock_enabled');
-  if (autoBlockEnabled === 'off') {
-    // Autoblock dinonaktifkan, skip semua deteksi spam (hemat biaya cloud)
-    return { isSpam: false, reason: '', detectionType: null };
-  }
-  
-  // Skip jika teks kosong atau terlalu pendek
-  if (!text || text.length < 10) {
-    return { isSpam: false, reason: '', detectionType: null };
-  }
-  
-  // Skip jika sapaan awal
-  if (isExcludedGreeting(text)) {
-    return { isSpam: false, reason: '', detectionType: null };
-  }
-  
-  // 1. Deteksi tag username (@username) - hanya spam jika berulang dalam interval waktu tertentu
-  const usernamePattern = /@[a-zA-Z0-9_]{3,}/g;
-  const usernameMatches = text.match(usernamePattern);
-  
-  if (usernameMatches && usernameMatches.length > 0) {
-    const intervalStart = new Date(Date.now() - USERNAME_TAG_INTERVAL_MINUTES * 60 * 1000).toISOString();
-    
-    // Cek berapa kali user mengirim pesan dengan username tag dalam interval terakhir
-    const { count: tagCount } = await supabase
-      .from('spam_detection')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('detection_type', 'username_tag')
-      .gte('detected_at', intervalStart);
-    
-    // Simpan record untuk tracking
-    await supabase.from('spam_detection').insert({
-      user_id: userId,
-      message_hash: `tag_${usernameMatches.join('_')}`,
-      message_preview: text.substring(0, 200),
-      detection_type: 'username_tag'
-    });
-    
-    // Hanya blokir jika sudah melebihi threshold (sudah kirim tag berulang kali)
-    if (tagCount && tagCount >= USERNAME_TAG_THRESHOLD - 1) {
-      return {
-        isSpam: true,
-        reason: `Mengirim tag username berulang kali (${(tagCount || 0) + 1}x dalam ${USERNAME_TAG_INTERVAL_MINUTES} menit): ${usernameMatches.join(', ')}`,
-        detectionType: 'username_tag'
-      };
-    }
-    
-    // Belum spam, tapi sudah di-track
-    console.log(`📝 Username tag tracked for user ${userId}: ${usernameMatches.join(', ')} (${(tagCount || 0) + 1}/${USERNAME_TAG_THRESHOLD})`);
-  }
-  
-  // 2. Deteksi copy-paste (pesan panjang yang berulang) - langsung blokir jika dikirim 2x
-  if (text.length >= MIN_SPAM_CHARS) {
-    const messageHash = simpleHash(text);
-    
-    // Cek apakah pesan dengan hash serupa sudah pernah dikirim
-    const { data: existingSpam } = await supabase
-      .from('spam_detection')
-      .select('id, detected_at')
-      .eq('user_id', userId)
-      .eq('message_hash', messageHash)
-      .gte('detected_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // 24 jam terakhir
-      .maybeSingle();
-    
-    if (existingSpam) {
-      return {
-        isSpam: true,
-        reason: `Copy-paste pesan panjang (${text.length} karakter) yang sudah pernah dikirim`,
-        detectionType: 'copy_paste'
-      };
-    }
-    
-    // Simpan hash pesan untuk tracking
-    await supabase.from('spam_detection').insert({
-      user_id: userId,
-      message_hash: messageHash,
-      message_preview: text.substring(0, 200),
-      detection_type: 'tracking'
-    });
-  }
-  
-  // 3. Deteksi pesan pendek yang di-copy paste berulang kali (bukan sapaan umum)
-  if (text.length >= 10 && text.length <= SHORT_MESSAGE_MAX_CHARS) {
-    const messageHash = simpleHash(text);
-    const intervalStart = new Date(Date.now() - SHORT_MESSAGE_INTERVAL_MINUTES * 60 * 1000).toISOString();
-    
-    // Cek berapa kali pesan yang sama persis dikirim dalam interval waktu tertentu
-    const { count: repeatCount } = await supabase
-      .from('spam_detection')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('message_hash', messageHash)
-      .eq('detection_type', 'short_repeat')
-      .gte('detected_at', intervalStart);
-    
-    // Simpan record untuk tracking
-    await supabase.from('spam_detection').insert({
-      user_id: userId,
-      message_hash: messageHash,
-      message_preview: text.substring(0, 200),
-      detection_type: 'short_repeat'
-    });
-    
-    // Blokir jika sudah melebihi threshold
-    if (repeatCount && repeatCount >= SHORT_MESSAGE_SPAM_THRESHOLD - 1) {
-      return {
-        isSpam: true,
-        reason: `Copy-paste pesan pendek berulang kali (${(repeatCount || 0) + 1}x dalam ${SHORT_MESSAGE_INTERVAL_MINUTES} menit): "${text.substring(0, 50)}"`,
-        detectionType: 'repeated_message'
-      };
-    }
-    
-    // Log tracking
-    if (repeatCount && repeatCount >= 1) {
-      console.log(`📝 Short message tracked for user ${userId}: "${text.substring(0, 30)}..." (${(repeatCount || 0) + 1}/${SHORT_MESSAGE_SPAM_THRESHOLD})`);
-    }
-  }
-  
-  return { isSpam: false, reason: '', detectionType: null };
 }
 
 // HELPER: Blokir user dan kirim notifikasi
@@ -616,14 +431,14 @@ async function getPromoPremiumFileId(supabase: any): Promise<string | null> {
   return await getBotSetting(supabase, 'promo_premium_file_id');
 }
 
-// Helper function to build premium benefits text
-// function getPremiumBenefitsText(): string {
-//   return `✨ <b>KEUNTUNGAN PREMIUM:</b>
-// • 🎯 Pilih target gender chat
-// • 📍 Pilih target lokasi chat
-// • ⭐ Badge Premium
-// • 🚀 Prioritas matching`;
-// }
+Helper function to build premium benefits text
+function getPremiumBenefitsText(): string {
+  return `✨ <b>KEUNTUNGAN PREMIUM:</b>
+• 🎯 Pilih target gender chat
+• 📍 Pilih target lokasi chat
+• ⭐ Badge Premium
+• 🚀 Prioritas matching`;
+}
 
 // Helper function to build premium offer message for non-premium users
 function buildPremiumOfferMessage(featureName: string): string {
