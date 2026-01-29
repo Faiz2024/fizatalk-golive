@@ -431,7 +431,7 @@ async function getPromoPremiumFileId(supabase: any): Promise<string | null> {
   return await getBotSetting(supabase, 'promo_premium_file_id');
 }
 
-Helper function to build premium benefits text
+// Helper function to build premium benefits text
 function getPremiumBenefitsText(): string {
   return `✨ <b>KEUNTUNGAN PREMIUM:</b>
 • 🎯 Pilih target gender chat
