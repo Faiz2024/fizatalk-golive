@@ -408,34 +408,48 @@ async function blockUserForSpam(
   console.log(`🚫 User ${userId} (${username || firstName}) blocked for spam: ${reason}`);
 }
 
-// HELPER: Simple upsert user - only update username/first_name, NEVER update last_active (maximum cost savings)
+// HELPER: Simple upsert user - uses RPC for maximum cost savings
+// Only updates username/first_name, NEVER update last_active
 async function simpleUpsertUser(
   supabase: any, 
   userId: number, 
   username: string | undefined, 
   firstName: string | undefined
 ): Promise<void> {
-  await supabase.from('telegram_users').upsert({
-    id: userId,
-    username: username,
-    first_name: firstName
-  }, { onConflict: 'id' });
+  // Use RPC for optimized upsert (skips update if data unchanged)
+  await supabase.rpc('upsert_user_optimized', {
+    p_user_id: userId,
+    p_username: username || null,
+    p_first_name: firstName || null,
+    p_update_last_active: false
+  });
 }
 
-// HELPER: Smart upsert user - update last_active (only called on "Cari Partner" button)
+// HELPER: Smart upsert user - update last_active ONLY ONCE PER DAY
+// Called on "Cari Partner", "Next", or "Stop" buttons
 async function smartUpsertUser(
   supabase: any, 
   userId: number, 
   username: string | undefined, 
   firstName: string | undefined
 ): Promise<void> {
-  const now = new Date();
-  await supabase.from('telegram_users').upsert({
-    id: userId,
-    username: username,
-    first_name: firstName,
-    last_active: now.toISOString()
-  }, { onConflict: 'id' });
+  // Use RPC for optimized upsert with daily last_active update
+  await supabase.rpc('upsert_user_optimized', {
+    p_user_id: userId,
+    p_username: username || null,
+    p_first_name: firstName || null,
+    p_update_last_active: true // Only updates if last_active is not today
+  });
+}
+
+// HELPER: Check if user should see channel join message (registered > 1 week)
+async function shouldShowChannelJoin(supabase: any, userId: number): Promise<boolean> {
+  const { data, error } = await supabase.rpc('should_show_channel_join', { p_user_id: userId });
+  if (error) {
+    console.error('shouldShowChannelJoin error:', error);
+    return true; // Default to showing channel check on error
+  }
+  return data === true;
 }
 
 // HELPER: Kirim foto QRIS dengan instruksi pembayaran
@@ -2570,13 +2584,16 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
 
-        // CEK KEANGGOTAAN CHANNEL SEBELUM MENCARI PARTNER
-        const { isMember: isChannelMember, botNotAdmin: botNotAdminSearch } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
-        
-        if (!isChannelMember) {
-          await answerCallbackQuery(botToken, query.id, '⚠️ Gabung channel dulu!');
-          await sendJoinChannelMessage(botToken, userId, botNotAdminSearch);
-          return new Response('OK', { status: 200 });
+        // CEK KEANGGOTAAN CHANNEL HANYA JIKA USER SUDAH TERDAFTAR > 1 MINGGU (hemat biaya cloud)
+        const shouldCheckChannel = await shouldShowChannelJoin(supabase, userId);
+        if (shouldCheckChannel) {
+          const { isMember: isChannelMember, botNotAdmin: botNotAdminSearch } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
+          
+          if (!isChannelMember) {
+            await answerCallbackQuery(botToken, query.id, '⚠️ Gabung channel dulu!');
+            await sendJoinChannelMessage(botToken, userId, botNotAdminSearch);
+            return new Response('OK', { status: 200 });
+          }
         }
 
         // User idle - langsung cari partner dengan logika baru
@@ -2635,16 +2652,19 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHAT NEXT (INLINE BUTTON) ---
       if (callbackData === 'chat_next') {
-        // PENTING: Pastikan user ada di database sebelum proses (tanpa update last_active untuk hemat biaya)
-        await simpleUpsertUser(supabase, userId, query.from.username, query.from.first_name);
+        // PENTING: Update last_active (hanya sekali sehari) karena user aktif menekan next
+        await smartUpsertUser(supabase, userId, query.from.username, query.from.first_name);
 
-        // CEK KEANGGOTAAN CHANNEL SEBELUM NEXT
-        const { isMember: isChannelMemberNext, botNotAdmin: botNotAdminNext } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
-        
-        if (!isChannelMemberNext) {
-          await answerCallbackQuery(botToken, query.id, '⚠️ Gabung channel dulu!');
-          await sendJoinChannelMessage(botToken, userId, botNotAdminNext);
-          return new Response('OK', { status: 200 });
+        // CEK KEANGGOTAAN CHANNEL HANYA JIKA USER SUDAH TERDAFTAR > 1 MINGGU (hemat biaya cloud)
+        const shouldCheckChannelNext = await shouldShowChannelJoin(supabase, userId);
+        if (shouldCheckChannelNext) {
+          const { isMember: isChannelMemberNext, botNotAdmin: botNotAdminNext } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
+          
+          if (!isChannelMemberNext) {
+            await answerCallbackQuery(botToken, query.id, '⚠️ Gabung channel dulu!');
+            await sendJoinChannelMessage(botToken, userId, botNotAdminNext);
+            return new Response('OK', { status: 200 });
+          }
         }
 
         // Cek state user saat ini
@@ -2758,6 +2778,9 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHAT STOP (INLINE BUTTON) ---
       if (callbackData === 'chat_stop') {
+        // PENTING: Update last_active (hanya sekali sehari) karena user aktif menekan stop
+        await smartUpsertUser(supabase, userId, query.from.username, query.from.first_name);
+        
         // Ambil state user terlebih dahulu
         const { data: stopUserData } = await supabase
           .from('telegram_users')

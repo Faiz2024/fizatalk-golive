@@ -491,6 +491,23 @@ export type Database = {
         Args: { p_message_id: number; p_promo_id: string }
         Returns: undefined
       }
+      should_show_channel_join: {
+        Args: { p_user_id: number }
+        Returns: boolean
+      }
+      update_last_active_daily: {
+        Args: { p_user_id: number }
+        Returns: boolean
+      }
+      upsert_user_optimized: {
+        Args: {
+          p_first_name?: string
+          p_update_last_active?: boolean
+          p_user_id: number
+          p_username?: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       user_state: "idle" | "waiting" | "chatting" | "awaiting_payment"
