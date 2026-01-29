@@ -783,20 +783,20 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     // Panggil RPC function di database - semua logika matching dilakukan di sini
     const { data, error } = await supabase.rpc('find_and_pair_partner', {
       p_user_id: userId
-  // try {
-  //   });
+  
+    });
     
-  //   if (error) {
-  //     console.error(`❌ RPC Error:`, error);
-  //     // Fallback: masukkan user ke antrian secara manual
-  //     await supabase.from('waiting_queue').upsert({
-  //       user_id: userId,
-  //       joined_at: new Date().toISOString()
-  //     });
-  //     await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
-  //     await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
-  //     return false;
-  //   }
+    if (error) {
+      console.error(`❌ RPC Error:`, error);
+      // Fallback: masukkan user ke antrian secara manual
+      await supabase.from('waiting_queue').upsert({
+        user_id: userId,
+        joined_at: new Date().toISOString()
+      });
+      await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
+      await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+      return false;
+    }
     
     console.log(`📦 RPC Result:`, data);
     
@@ -825,18 +825,8 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     await sendPairingNotifications(supabase, botToken, userId, partnerId);
     return true;
     
-  } // catch (err) {
-  //   console.error(`❌ searchPartnerWithRPC exception:`, err);
-  //   // Fallback: masukkan user ke antrian
-  //   await supabase.from('waiting_queue').upsert({
-  //     user_id: userId,
-  //     joined_at: new Date().toISOString()
-  //   });
-  //   await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
-  //   await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
-  //   return false;
-  // }
-}
+  } 
+
 
 // HELPER: Kirim notifikasi setelah pairing berhasil
 async function sendPairingNotifications(supabase: any, botToken: string, user1Id: number, user2Id: number): Promise<void> {
