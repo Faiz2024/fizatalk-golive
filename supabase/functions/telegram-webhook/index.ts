@@ -3500,21 +3500,6 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
     const userId = message.from.id;
     const text = message.text; 
 
-    // ************************************************
-    // CEK APAKAH USER SUDAH DIBLOKIR
-    // ************************************************
-    const userIsBlocked = await isUserBlocked(supabase, userId);
-    if (userIsBlocked) {
-      // User diblokir, kirim pesan dan abaikan
-      await sendTelegramMessage(
-        botToken,
-        userId,
-        '🚫 <b>Akun Anda Diblokir</b>\n\nAnda tidak dapat menggunakan layanan ini karena terdeteksi aktivitas mencurigakan.\n\n📞 Hubungi admin jika ini adalah kekeliruan: @FizatalkCS'
-      );
-      return new Response('OK', { status: 200 });
-    }
-
-  
 
     // Photo received - log for debugging only
     if (message.photo && message.photo.length > 0) {
@@ -3789,44 +3774,6 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
     if (currentUser?.state === 'chatting' && currentUser?.partner_id && message.message_id) {
         const partnerId = currentUser.partner_id as number;
         
-        // === VALIDASI TAMBAHAN: Cek apakah partner masih connected ===
-        const { data: partnerCheck } = await supabase
-            .from('telegram_users')
-            .select('state, partner_id')
-            .eq('id', partnerId)
-            .single();
-        
-        // Jika partner sudah tidak connected ke kita, reset state dan beri notifikasi
-        if (!partnerCheck || partnerCheck.state !== 'chatting' || partnerCheck.partner_id !== userId) {
-            console.log(`⚠️ Partner ${partnerId} sudah tidak connected ke user ${userId}`);
-            
-            // Reset state user
-            await supabase
-                .from('telegram_users')
-                .update({ state: 'idle', partner_id: null })
-                .eq('id', userId);
-            
-            // Beri notifikasi dan menu untuk cari partner baru
-            const endKeyboard = {
-                inline_keyboard: [
-                    [{ text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }],
-                    [
-                        { text: '🎯 Filter Gender', callback_data: 'change_target' },
-                        { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-                    ]
-                ]
-            };
-            
-            await sendTelegramMessage(
-                botToken,
-                userId,
-                '⚠️ <b>Sesi chat sudah berakhir.</b>\n\nPartner sudah keluar dari chat. Pilih aksi:',
-                endKeyboard
-            );
-            
-            return new Response('OK', { status: 200 });
-        }
-        
         let isCommand = false;
 
         // 1. Cek dan Proses Command (Prioritas Utama saat chatting)
@@ -4012,7 +3959,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
               // Logika /reward saat chatting
               const rewardKeyboard = {
                   inline_keyboard: [
-                      [{ text: '💸 Cek Reward & Daftar', url: 'https://fizatalk-reward.app' }]
+                      [{ text: '💸 Cek Reward & Daftar', url: '' }]
                   ]
               };
               await sendTelegramMessage(
