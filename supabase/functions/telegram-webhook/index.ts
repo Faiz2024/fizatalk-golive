@@ -87,6 +87,37 @@ const TELEGRAM_API = 'https://api.telegram.org/bot';
 // Channel yang wajib di-join sebelum bisa menggunakan fitur next/search
 const REQUIRED_CHANNEL = '@FizaTalkCh';
 
+// ============================================
+// HELPER: Format waktu ke zona WIB (UTC+7)
+// ============================================
+function formatDateWIB(date: Date): string {
+  return date.toLocaleDateString('id-ID', { 
+    timeZone: 'Asia/Jakarta',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+}
+
+function formatDateTimeWIB(date: Date): string {
+  return date.toLocaleString('id-ID', { 
+    timeZone: 'Asia/Jakarta',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) + ' WIB';
+}
+
+function formatTimeWIB(date: Date): string {
+  return date.toLocaleTimeString('id-ID', { 
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) + ' WIB';
+}
+
 // HELPER: Get bot setting from database
 async function getBotSetting(supabase: any, key: string): Promise<string | null> {
   const { data } = await supabase
@@ -216,7 +247,7 @@ async function blockUserForSpam(
     await sendTelegramMessage(
       botToken,
       parseInt(csChatId),
-      `🚨 <b>USER DIBLOKIR OTOMATIS</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n\n⚠️ <b>Alasan:</b>\n${reason}\n\n💬 <b>Pesan yang menyebabkan blokir:</b>\n<code>${blockedMessage.substring(0, 300)}${blockedMessage.length > 300 ? '...' : ''}</code>\n\n⏰ Waktu: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`
+      `🚨 <b>USER DIBLOKIR OTOMATIS</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n\n⚠️ <b>Alasan:</b>\n${reason}\n\n💬 <b>Pesan yang menyebabkan blokir:</b>\n<code>${blockedMessage.substring(0, 300)}${blockedMessage.length > 300 ? '...' : ''}</code>\n\n⏰ Waktu: ${formatDateTimeWIB(new Date())}`
     );
   }
   
@@ -2476,7 +2507,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           await sendTelegramMessage(
             botToken,
             userId,
-            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${new Date(userData.premium_until).toLocaleDateString('id-ID')}\n\nGunakan /target untuk memilih gender chat!`
+            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${formatDateWIB(new Date(userData.premium_until))}\n\nGunakan /target untuk memilih gender chat!`
           );
           return new Response('OK', { status: 200 });
         }
@@ -2569,7 +2600,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           await sendTelegramMessage(
             botToken,
             userId,
-            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${new Date(userData.premium_until).toLocaleDateString('id-ID')}\n\nGunakan /target untuk memilih gender chat!`
+            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${formatDateWIB(new Date(userData.premium_until))}\n\nGunakan /target untuk memilih gender chat!`
           );
           return new Response('OK', { status: 200 });
         }
@@ -2662,7 +2693,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           await sendTelegramMessage(
             botToken,
             userId,
-            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${new Date(userData.premium_until).toLocaleDateString('id-ID')}\n\nGunakan /target untuk memilih gender chat!`
+            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${formatDateWIB(new Date(userData.premium_until))}\n\nGunakan /target untuk memilih gender chat!`
           );
           return new Response('OK', { status: 200 });
         }
@@ -2755,7 +2786,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           await sendTelegramMessage(
             botToken,
             userId,
-            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${new Date(userData.premium_until).toLocaleDateString('id-ID')}\n\nGunakan /target untuk memilih gender chat!`
+            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${formatDateWIB(new Date(userData.premium_until))}\n\nGunakan /target untuk memilih gender chat!`
           );
           return new Response('OK', { status: 200 });
         }
@@ -2848,7 +2879,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           await sendTelegramMessage(
             botToken,
             userId,
-            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${new Date(userData.premium_until).toLocaleDateString('id-ID')}\n\nGunakan /target untuk memilih gender chat!`
+            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${formatDateWIB(new Date(userData.premium_until))}\n\nGunakan /target untuk memilih gender chat!`
           );
           return new Response('OK', { status: 200 });
         }
@@ -2941,7 +2972,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           await sendTelegramMessage(
             botToken,
             userId,
-            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${new Date(userData.premium_until).toLocaleDateString('id-ID')}\n\nGunakan /target untuk memilih gender chat!`
+            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${formatDateWIB(new Date(userData.premium_until))}\n\nGunakan /target untuk memilih gender chat!`
           );
           return new Response('OK', { status: 200 });
         }
@@ -4582,9 +4613,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
 
           const expireDate = new Date();
           expireDate.setHours(expireDate.getHours() + 5); // Promo 5 jam
-          const timeStringWIB = expireDate.toLocaleTimeString('id-ID', { 
-              timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' 
-          }) + ' WIB';
+          const timeStringWIB = formatTimeWIB(expireDate);
 
           const promoMessage = `🚨 <b>PROMO TERBATAS! HANYA 5 JAM!</b> 🚨
 
@@ -5236,14 +5265,14 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
             await sendTelegramMessage(
               botToken,
               premiumRequest.user_id,
-              `🎉 <b>SELAMAT! KAMU SEKARANG PREMIUM!</b>\n\n✨ Premium aktif selama ${premiumRequest.duration_days} hari\n📅 Berlaku hingga: ${premiumEndDate.toLocaleDateString('id-ID')}\n\n🎯 Gunakan /target untuk memilih gender chat!\n\nTerima kasih telah bergabung dengan Fizatalk Premium! 💎`
+              `🎉 <b>SELAMAT! KAMU SEKARANG PREMIUM!</b>\n\n✨ Premium aktif selama ${premiumRequest.duration_days} hari\n📅 Berlaku hingga: ${formatDateWIB(premiumEndDate)}\n\n🎯 Gunakan /target untuk memilih gender chat!\n\nTerima kasih telah bergabung dengan Fizatalk Premium! 💎`
             );
 
             // Notify admin
             await sendTelegramMessage(
               botToken,
               userId,
-              `✅ Premium <code>${requestId}</code> telah diapprove.\n\nUser ${premiumRequest.user_id} sekarang Premium hingga ${premiumEndDate.toLocaleDateString('id-ID')}.`
+              `✅ Premium <code>${requestId}</code> telah diapprove.\n\nUser ${premiumRequest.user_id} sekarang Premium hingga ${formatDateWIB(premiumEndDate)}.`
             );
           } else {
             // Reject premium request
