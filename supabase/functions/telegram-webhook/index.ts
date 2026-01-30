@@ -831,18 +831,64 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
 // HELPER: Kirim notifikasi setelah pairing berhasil
 async function sendPairingNotifications(supabase: any, botToken: string, user1Id: number, user2Id: number): Promise<void> {
   
-  // Get premium status and reaction counts for both users in parallel
-  const [
-    { data: user1Data }, 
-    { data: user2Data },
-    { count: user1ReactionCount },
-    { count: user2ReactionCount }
-  ] = await Promise.all([
-    supabase.from('telegram_users').select('premium_until, gender, location').eq('id', user1Id).single(),
-    supabase.from('telegram_users').select('premium_until, gender, location').eq('id', user2Id).single(),
-    supabase.from('user_reactions').select('*', { count: 'exact', head: true }).eq('user_id', user1Id),
-    supabase.from('user_reactions').select('*', { count: 'exact', head: true }).eq('user_id', user2Id)
-  ]);
+   // Get reaction counts for both users
+  const { data: user1Reactions } = await supabase
+    .from('user_reactions')
+    .select('emoji', { count: 'exact', head: true })
+    .eq('user_id', user1Id);
+
+  const { data: user2Reactions } = await supabase
+    .from('user_reactions')
+    .select('emoji', { count: 'exact', head: true })
+    .eq('user_id', user2Id);
+
+  const user1ReactionCount = user1Reactions?.length || 0;
+  const user2ReactionCount = user2Reactions?.length || 0;
+
+  // Get reaction stats for display
+  const { data: user1AllReactions } = await supabase
+    .from('user_reactions')
+    .select('emoji')
+    .eq('user_id', user1Id);
+
+  const { data: user2AllReactions } = await supabase
+    .from('user_reactions')
+    .select('emoji')
+    .eq('user_id', user2Id);
+
+  // Count each emoji type
+  const user1EmojiCounts = (user1AllReactions || []).reduce((acc: Record<string, number>, curr: any) => {
+    acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
+    return acc;
+  }, {});
+
+  const user2EmojiCounts = (user2AllReactions || []).reduce((acc: Record<string, number>, curr: any) => {
+    acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
+    return acc;
+  }, {});
+
+  const formatEmojiStats = (emojiCounts: Record<string, number>) => {
+    if (Object.keys(emojiCounts).length === 0) return 'Belum ada gift';
+    return Object.entries(emojiCounts)
+      .map(([emoji, count]) => `${emoji} x${count}`)
+      .join(' | ');
+  };
+
+  const user1Stats = formatEmojiStats(user1EmojiCounts);
+  const user2Stats = formatEmojiStats(user2EmojiCounts);
+
+  // Get premium status for both users
+  const { data: user1Data } = await supabase
+    .from('telegram_users')
+    .select('premium_until')
+    .eq('id', user1Id)
+    .single();
+
+  const { data: user2Data } = await supabase
+    .from('telegram_users')
+    .select('premium_until')
+    .eq('id', user2Id)
+    .single();
 
   const user1IsPremium = user1Data?.premium_until && new Date(user1Data.premium_until) > new Date();
   const user2IsPremium = user2Data?.premium_until && new Date(user2Data.premium_until) > new Date();
