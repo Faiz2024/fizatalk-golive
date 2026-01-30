@@ -2227,17 +2227,16 @@ Deno.serve(async (req) => {
           // Kirim pesan ke user yang menekan next
           await sendTelegramMessage(botToken, userId, '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>');
           
-          // Kirim promo ke User jika syarat terpenuhi
           if (promoUser?.should_send) {
-            // Kita gunakan AWAIT agar promo terkirim SEBELUM pesan "Partner Ditemukan" muncul
+            // JIKA DAPAT PROMO: Tampilkan promo dan BERHENTI (jangan cari partner dulu)
             await executePromoAction(supabase, botToken, userId);
-          }
-
-          // Start searching again dengan logika baru
-          // Cek antrian dulu, jika tidak ada yang cocok baru masuk antrian
-          await searchPartnerWithQueueCheck(supabase, botToken, userId);
-
-          return new Response('OK', { status: 200 });
+            // User harus klik "Abaikan & Lanjut Cari Partner" (dismiss_promo_search) untuk lanjut
+            return new Response('OK', { status: 200 });
+          } else {
+            // JIKA TIDAK DAPAT PROMO: Langsung cari partner seperti biasa
+            await searchPartnerWithQueueCheck(supabase, botToken, userId);
+            return new Response('OK', { status: 200 });
+          };
         }
 
         // Jika user tidak dalam chat (idle), langsung cari partner dengan logika baru
