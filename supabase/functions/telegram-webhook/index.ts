@@ -831,15 +831,28 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
 // HELPER: Kirim notifikasi setelah pairing berhasil
 async function sendPairingNotifications(supabase: any, botToken: string, user1Id: number, user2Id: number): Promise<void> {
   
-
-  // Get premium status for both users
-  const [{ data: user1Data }, { data: user2Data }] = await Promise.all([
-    supabase.from('telegram_users').select('premium_until').eq('id', user1Id).single(),
-    supabase.from('telegram_users').select('premium_until').eq('id', user2Id).single()
+  // Get premium status and reaction counts for both users in parallel
+  const [
+    { data: user1Data }, 
+    { data: user2Data },
+    { count: user1ReactionCount },
+    { count: user2ReactionCount }
+  ] = await Promise.all([
+    supabase.from('telegram_users').select('premium_until, gender, location').eq('id', user1Id).single(),
+    supabase.from('telegram_users').select('premium_until, gender, location').eq('id', user2Id).single(),
+    supabase.from('user_reactions').select('*', { count: 'exact', head: true }).eq('user_id', user1Id),
+    supabase.from('user_reactions').select('*', { count: 'exact', head: true }).eq('user_id', user2Id)
   ]);
 
   const user1IsPremium = user1Data?.premium_until && new Date(user1Data.premium_until) > new Date();
   const user2IsPremium = user2Data?.premium_until && new Date(user2Data.premium_until) > new Date();
+  
+  // Build stats strings for each user
+  const formatGender = (g: string | null) => g === 'cowok' ? '👦 Cowok' : g === 'cewek' ? '👧 Cewek' : '❓ Tidak diketahui';
+  const formatLocation = (l: string | null) => l ? `📍 ${l}` : '📍 Tidak diketahui';
+  
+  const user1Stats = `${formatGender(user1Data?.gender)} | ${formatLocation(user1Data?.location)}`;
+  const user2Stats = `${formatGender(user2Data?.gender)} | ${formatLocation(user2Data?.location)}`;
 
   // Build chat action keyboard
   const buildChatKeyboard = (isPremium: boolean) => ({
@@ -863,13 +876,13 @@ async function sendPairingNotifications(supabase: any, botToken: string, user1Id
     sendTelegramMessage(
       botToken, 
       user1Id, 
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n🎁 Gift Partner: ${user2ReactionCount} gift\n${user2Stats}`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n🎁 Gift Partner: ${user2ReactionCount || 0} gift\n${user2Stats}`,
       buildChatKeyboard(user1IsPremium)
     ),
     sendTelegramMessage(
       botToken, 
       user2Id, 
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n🎁 Gift Partner: ${user1ReactionCount} gift\n${user1Stats}`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n🎁 Gift Partner: ${user1ReactionCount || 0} gift\n${user1Stats}`,
       buildChatKeyboard(user2IsPremium)
     )
   ]);
