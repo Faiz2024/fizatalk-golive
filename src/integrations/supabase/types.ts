@@ -325,12 +325,14 @@ export type Database = {
       }
       telegram_users: {
         Row: {
+          chat_end_count: number | null
           coins: number
           created_at: string
           first_name: string | null
           gender: string | null
           id: number
           last_active: string
+          last_promo_sent_at: string | null
           location: string | null
           partner_id: number | null
           premium_until: string | null
@@ -340,12 +342,14 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          chat_end_count?: number | null
           coins?: number
           created_at?: string
           first_name?: string | null
           gender?: string | null
           id: number
           last_active?: string
+          last_promo_sent_at?: string | null
           location?: string | null
           partner_id?: number | null
           premium_until?: string | null
@@ -355,12 +359,14 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          chat_end_count?: number | null
           coins?: number
           created_at?: string
           first_name?: string | null
           gender?: string | null
           id?: number
           last_active?: string
+          last_promo_sent_at?: string | null
           location?: string | null
           partner_id?: number | null
           premium_until?: string | null
@@ -486,6 +492,10 @@ export type Database = {
           photo_url: string
           promo_buttons: Json
         }[]
+      }
+      handle_end_chat_promo_logic: {
+        Args: { p_user_id: number }
+        Returns: Json
       }
       mark_promo_sent: {
         Args: { p_message_id: number; p_promo_id: string }
