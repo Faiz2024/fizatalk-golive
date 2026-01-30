@@ -893,13 +893,6 @@ async function sendPairingNotifications(supabase: any, botToken: string, user1Id
   const user1IsPremium = user1Data?.premium_until && new Date(user1Data.premium_until) > new Date();
   const user2IsPremium = user2Data?.premium_until && new Date(user2Data.premium_until) > new Date();
   
-  // Build stats strings for each user
-  const formatGender = (g: string | null) => g === 'cowok' ? '👦 Cowok' : g === 'cewek' ? '👧 Cewek' : '❓ Tidak diketahui';
-  const formatLocation = (l: string | null) => l ? `📍 ${l}` : '📍 Tidak diketahui';
-  
-  const user1Stats = `${formatGender(user1Data?.gender)} | ${formatLocation(user1Data?.location)}`;
-  const user2Stats = `${formatGender(user2Data?.gender)} | ${formatLocation(user2Data?.location)}`;
-
   // Build chat action keyboard
   const buildChatKeyboard = (isPremium: boolean) => ({
     inline_keyboard: [
