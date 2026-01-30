@@ -1044,7 +1044,7 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
       [{ text: '📦 1 Bulan / Rp 5.000', callback_data: 'buy_premium_30' }],
       [{ text: '📅 1 Minggu / Rp 2.000', callback_data: 'buy_premium_7' }],
       [{ text: '⚡ 3 Hari / Rp 1.000', callback_data: 'buy_premium_3' }],
-      [{ text: '❌ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
+      [{ text: '🔍 Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
     ]
   };
 
