@@ -1134,6 +1134,25 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
   return await sendPromoToUser(botToken, userId, promoMessage, promoFileId, promoKeyboard);
 }
 
+// HELPER: Build end chat keyboard with rating buttons
+function buildEndChatKeyboard(partnerId: number): any {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🚨 Spam', callback_data: `rate_spam_${partnerId}` },
+        { text: '🔞 Sange', callback_data: `rate_sange_${partnerId}` },
+        { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
+      ],
+      [
+        { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
+      ],
+      [
+        { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${partnerId}` }
+      ]
+    ]
+  };
+}
+
 async function endChat(supabase: any, botToken: string, userId: number): Promise<boolean> {
   console.log(`🔚 endChat: User ${userId} mengakhiri chat`);
   
@@ -1190,17 +1209,8 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   if (partnerResetResult && partnerResetResult.length > 0) {
     console.log(`✅ Partner ${partnerId} berhasil di-reset, kirim notifikasi`);
     
-    // Build combined keyboard with reactions + Cari Partner + Filters + Reconnect
-    const combinedPartnerKeyboard = {
-      inline_keyboard: [
-        [
-          { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
-        ],
-        [
-          { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${userId}` }
-        ]
-      ]
-    };
+    // Build keyboard with rating buttons for partner (to rate userId)
+    const combinedPartnerKeyboard = buildEndChatKeyboard(userId);
 
     await sendTelegramMessage(
       botToken, 
@@ -1217,22 +1227,13 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   // Remove from queue if in queue
   await supabase.from('waiting_queue').delete().eq('user_id', userId);
 
-  // Build end chat keyboard for the user who ended with reconnect option
-  const endChatKeyboard = {
-    inline_keyboard: [
-        [
-          { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
-        ],
-        [
-          { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${userId}` }
-        ]
-    ]
-  };
+  // Build end chat keyboard for the user who ended (to rate partnerId)
+  const endChatKeyboard = buildEndChatKeyboard(partnerId);
 
   await sendTelegramMessage(
     botToken, 
     userId, 
-    `👋 Anda mengakhiri chat. Pilih aksi:`,
+    `👋 Anda mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri rating untuk partner!`,
     endChatKeyboard
   );
   
@@ -2140,6 +2141,43 @@ Deno.serve(async (req) => {
           }
         }
 
+        // CEK REPUTASI USER (PENALTY POINTS) - Tampilkan peringatan jika diperlukan
+        const { data: reputationData } = await supabase.rpc('get_user_reputation', { p_user_id: userId });
+        
+        if (reputationData?.status === 'banned') {
+          // User sudah dibanned via penalty system
+          await answerCallbackQuery(botToken, query.id, '🚫 Akun diblokir!', true);
+          
+          const blockedKeyboard = {
+            inline_keyboard: [
+              [{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]
+            ]
+          };
+          
+          await sendTelegramMessage(
+            botToken,
+            userId,
+            `🚫 <b>Akun Diblokir</b>\n\n${reputationData.message}\n\n📞 Hubungi admin: @FizatalkCS`,
+            blockedKeyboard
+          );
+          return new Response('OK', { status: 200 });
+        }
+        
+        // Tampilkan peringatan reputasi jika status warning atau critical
+        if (reputationData?.status === 'critical') {
+          await sendTelegramMessage(
+            botToken,
+            userId,
+            `🔞 <b>Reputasi: Kritis</b>\n\n${reputationData.message}\n\n📊 Poin Penalti: ${reputationData.penalty_points}/100`
+          );
+        } else if (reputationData?.status === 'warning') {
+          await sendTelegramMessage(
+            botToken,
+            userId,
+            `⚠️ <b>Reputasi: Peringatan</b>\n\n${reputationData.message}\n\n📊 Poin Penalti: ${reputationData.penalty_points}/100`
+          );
+        }
+
         // User idle - langsung cari partner dengan logika baru
         await answerCallbackQuery(botToken, query.id, '🔍 Mencari partner...');
         
@@ -2279,22 +2317,13 @@ Deno.serve(async (req) => {
 
           // Jika berhasil reset partner, kirim notifikasi
           if (partnerResetResult && partnerResetResult.length > 0) {
-            const combinedPartnerKeyboard = {
-              inline_keyboard: [
-        
-                [
-                  { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
-                ],
-                [
-                  { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${userId}` }
-                ]
-              ]
-            };
+            // Use buildEndChatKeyboard for rating buttons (partner rates userId)
+            const combinedPartnerKeyboard = buildEndChatKeyboard(userId);
 
             await sendTelegramMessage(
               botToken, 
               partnerId, 
-              `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
+              `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri rating untuk partner!`,
               combinedPartnerKeyboard
             );
             
@@ -2456,6 +2485,102 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           }
         );
 
+        return new Response('OK', { status: 200 });
+      }
+
+      // --- LOGIKA RATING PARTNER (SPAM/SANGE/ASIK) ---
+      if (callbackData.startsWith('rate_')) {
+        const parts = callbackData.split('_');
+        const rateType = parts[1]; // spam, sange, atau asik
+        const reportedId = parseInt(parts[2]);
+        
+        if (!reportedId || isNaN(reportedId)) {
+          await answerCallbackQuery(botToken, query.id, '❌ Data tidak valid');
+          return new Response('OK', { status: 200 });
+        }
+        
+        // Panggil RPC untuk submit report (hemat biaya cloud)
+        const { data: reportResult, error: reportError } = await supabase.rpc('submit_partner_report', {
+          p_reporter_id: userId,
+          p_reported_id: reportedId,
+          p_report_type: rateType
+        });
+        
+        if (reportError) {
+          console.error('submit_partner_report error:', reportError);
+          await answerCallbackQuery(botToken, query.id, '❌ Gagal mengirim rating');
+          return new Response('OK', { status: 200 });
+        }
+        
+        // Handle hasil RPC
+        if (!reportResult?.success) {
+          if (reportResult?.error === 'already_reported') {
+            await answerCallbackQuery(botToken, query.id, '⚠️ Kamu sudah memberi rating ke partner ini!', true);
+          } else if (reportResult?.error === 'rate_limit_exceeded') {
+            await answerCallbackQuery(botToken, query.id, '⚠️ Batas 3 rating per jam tercapai!', true);
+          } else {
+            await answerCallbackQuery(botToken, query.id, '❌ Gagal mengirim rating');
+          }
+          return new Response('OK', { status: 200 });
+        }
+        
+        // Berhasil mengirim rating
+        let ratingEmoji = '';
+        let ratingLabel = '';
+        if (rateType === 'spam') {
+          ratingEmoji = '🚨';
+          ratingLabel = 'Spam';
+        } else if (rateType === 'sange') {
+          ratingEmoji = '🔞';
+          ratingLabel = 'Sange';
+        } else if (rateType === 'asik') {
+          ratingEmoji = '😎';
+          ratingLabel = 'Asik';
+        }
+        
+        await answerCallbackQuery(botToken, query.id, `✅ Rating ${ratingEmoji} ${ratingLabel} terkirim!`);
+        
+        // Update pesan dengan menghapus tombol rating
+        if (message) {
+          const updatedKeyboard = {
+            inline_keyboard: [
+              [
+                { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
+              ],
+              [
+                { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${reportedId}` }
+              ]
+            ]
+          };
+          
+          try {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message.chat.id,
+                message_id: message.message_id,
+                reply_markup: updatedKeyboard
+              })
+            });
+          } catch (e) {
+            console.error('Failed to edit rating message:', e);
+          }
+        }
+        
+        // Jika user di-ban karena penalty >= 100, kirim notifikasi
+        if (reportResult?.is_banned) {
+          // Kirim notifikasi ke admin
+          const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+          if (csChatId) {
+            await sendTelegramMessage(
+              botToken,
+              parseInt(csChatId),
+              `🚨 <b>USER DIBLOKIR OTOMATIS (PENALTY 100+)</b>\n\n🆔 User ID: <code>${reportedId}</code>\n⚠️ Alasan: Terlalu banyak laporan negatif dari pengguna lain\n📊 Penalty: ${reportResult.new_penalty} poin\n\n⏰ Waktu: ${formatDateTimeWIB(new Date())}`
+            );
+          }
+        }
+        
         return new Response('OK', { status: 200 });
       }
 

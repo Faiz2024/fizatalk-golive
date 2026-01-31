@@ -101,6 +101,33 @@ export type Database = {
         }
         Relationships: []
       }
+      partner_reports: {
+        Row: {
+          created_at: string | null
+          id: string
+          penalty_change: number
+          report_type: string
+          reported_id: number
+          reporter_id: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          penalty_change: number
+          report_type: string
+          reported_id: number
+          reporter_id: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          penalty_change?: number
+          report_type?: string
+          reported_id?: number
+          reporter_id?: number
+        }
+        Relationships: []
+      }
       payment_methods: {
         Row: {
           account_name: string | null
@@ -335,6 +362,7 @@ export type Database = {
           last_promo_sent_at: string | null
           location: string | null
           partner_id: number | null
+          penalty_points: number | null
           premium_until: string | null
           state: Database["public"]["Enums"]["user_state"]
           target_gender: string | null
@@ -352,6 +380,7 @@ export type Database = {
           last_promo_sent_at?: string | null
           location?: string | null
           partner_id?: number | null
+          penalty_points?: number | null
           premium_until?: string | null
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
@@ -369,6 +398,7 @@ export type Database = {
           last_promo_sent_at?: string | null
           location?: string | null
           partner_id?: number | null
+          penalty_points?: number | null
           premium_until?: string | null
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
@@ -473,6 +503,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_daily_penalty_decay: { Args: never; Returns: number }
       cleanup_inactive_users: { Args: never; Returns: undefined }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
@@ -483,6 +514,7 @@ export type Database = {
           user_id: number
         }[]
       }
+      get_user_reputation: { Args: { p_user_id: number }; Returns: Json }
       get_waiting_idle_promos: {
         Args: { p_user_id: number }
         Returns: {
@@ -504,6 +536,14 @@ export type Database = {
       should_show_channel_join: {
         Args: { p_user_id: number }
         Returns: boolean
+      }
+      submit_partner_report: {
+        Args: {
+          p_report_type: string
+          p_reported_id: number
+          p_reporter_id: number
+        }
+        Returns: Json
       }
       update_last_active_daily: {
         Args: { p_user_id: number }
