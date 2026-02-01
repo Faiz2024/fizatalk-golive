@@ -807,7 +807,172 @@ Setelah bergabung, tekan tombol "✅ Sudah Gabung" untuk melanjutkan.`;
 // Menggunakan database RPC untuk mengurangi round-trip
 // ============================================
 
-// HELPER: Panggil RPC find_and_pair_partner dan kirim notifikasi jika berhasil
+// Helper: Build end chat keyboard with rating buttons
+function buildEndChatKeyboard(partnerId: number): any {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🚨 Spam', callback_data: `rate_spam_${partnerId}` },
+        { text: '🔞 Sange', callback_data: `rate_sange_${partnerId}` },
+        { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
+      ],
+      [
+        { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
+      ],
+      [
+        { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${partnerId}` }
+      ]
+    ]
+  };
+}
+
+// ============================================
+// UNIFIED RPC: search_or_next_partner
+// Menggabungkan semua logika search & next dalam satu RPC
+// ============================================
+
+interface SearchOrNextResult {
+  success: boolean;
+  matched?: boolean;
+  partner_id?: number;
+  error?: string;
+  action?: string;
+  chat_ended?: boolean;
+  old_partner_id?: number;
+  old_partner_promo?: { should_send: boolean };
+  reputation?: {
+    status: string;
+    message: string | null;
+    penalty_points: number;
+  };
+}
+
+// HELPER: Kirim pesan peringatan reputasi
+async function sendReputationWarning(botToken: string, userId: number, reputation: SearchOrNextResult['reputation']): Promise<void> {
+  if (!reputation || !reputation.message) return;
+  
+  if (reputation.status === 'critical') {
+    await sendTelegramMessage(
+      botToken,
+      userId,
+      `🔞 <b>Reputasi: Kritis</b>\n\n${reputation.message}\n\n📊 Poin Penalti: ${reputation.penalty_points}/100`
+    );
+  } else if (reputation.status === 'warning') {
+    await sendTelegramMessage(
+      botToken,
+      userId,
+      `⚠️ <b>Reputasi: Peringatan</b>\n\n${reputation.message}\n\n📊 Poin Penalti: ${reputation.penalty_points}/100`
+    );
+  }
+}
+
+// UNIFIED FUNCTION: Panggil RPC search_or_next_partner
+// Menangani search partner baru ATAU next (akhiri chat dan cari baru)
+async function searchOrNextPartnerWithRPC(
+  supabase: any, 
+  botToken: string, 
+  userId: number, 
+  isNext: boolean = false
+): Promise<{ success: boolean; handled: boolean; result?: SearchOrNextResult }> {
+  console.log(`🔍 searchOrNextPartnerWithRPC: ${isNext ? 'NEXT' : 'SEARCH'} untuk user ${userId}`);
+  
+  // Panggil RPC unified function
+  const { data, error } = await supabase.rpc('search_or_next_partner', {
+    p_user_id: userId,
+    p_is_next: isNext
+  });
+  
+  if (error) {
+    console.error(`❌ RPC Error:`, error);
+    // Fallback: masukkan user ke antrian secara manual
+    await supabase.from('waiting_queue').upsert({
+      user_id: userId,
+      joined_at: new Date().toISOString()
+    });
+    await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
+    await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+    return { success: false, handled: true };
+  }
+  
+  console.log(`📦 RPC Result:`, data);
+  
+  const result = data as SearchOrNextResult;
+  
+  // Handle jika user banned
+  if (!result.success && result.error === 'user_banned') {
+    const blockedKeyboard = {
+      inline_keyboard: [
+        [{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]
+      ]
+    };
+    await sendTelegramMessage(
+      botToken,
+      userId,
+      `🚫 <b>Akun Diblokir</b>\n\n${result.reputation?.message || 'Akun Anda telah diblokir.'}\n\n📞 Hubungi admin: @FizatalkCS`,
+      blockedKeyboard
+    );
+    return { success: false, handled: true, result };
+  }
+  
+  // Handle jika sudah di antrian
+  if (!result.success && result.error === 'already_in_queue') {
+    await sendTelegramMessage(botToken, userId, '⏳ Kamu sedang dalam antrian menunggu partner.\n\nMohon tunggu sebentar!');
+    return { success: false, handled: true, result };
+  }
+  
+  // Handle error lain
+  if (!result.success) {
+    console.log(`⚠️ RPC tidak sukses: ${result.error}`);
+    if (result.error === 'user_not_found') {
+      await sendTelegramMessage(botToken, userId, '⚠️ Silakan tekan /start untuk memulai.');
+    }
+    return { success: false, handled: true, result };
+  }
+  
+  // ========== HANDLE NOTIFIKASI KE PARTNER LAMA (JIKA NEXT) ==========
+  if (result.chat_ended && result.old_partner_id) {
+    // Kirim notifikasi ke partner lama dengan tombol rating
+    const combinedPartnerKeyboard = buildEndChatKeyboard(userId);
+    await sendTelegramMessage(
+      botToken, 
+      result.old_partner_id, 
+      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri rating untuk partner!`,
+      combinedPartnerKeyboard
+    );
+    
+    // Kirim promo ke partner lama jika syarat terpenuhi
+    if (result.old_partner_promo?.should_send) {
+      await executePromoAction(supabase, botToken, result.old_partner_id);
+    }
+  }
+  
+  // ========== RETURN RESULT UNTUK DIPROSES DI CALLER ==========
+  return { success: true, handled: false, result };
+}
+
+// HELPER: Proses hasil RPC dan kirim notifikasi
+async function handleSearchOrNextResult(
+  supabase: any,
+  botToken: string,
+  userId: number,
+  result: SearchOrNextResult
+): Promise<void> {
+  if (!result.matched) {
+    // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
+    console.log(`📥 User ${userId} masuk antrian via RPC`);
+    await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+    return;
+  }
+  
+  // Partner ditemukan! Kirim notifikasi ke kedua user
+  const partnerId = result.partner_id!;
+  console.log(`✅ Partner ditemukan via RPC: ${userId} <-> ${partnerId}`);
+  
+  // Kirim notifikasi pairing berhasil
+  await sendPairingNotifications(supabase, botToken, userId, partnerId);
+}
+
+// HELPER: Panggil RPC find_and_pair_partner dan kirim notifikasi jika berhasil (LEGACY)
 async function searchPartnerWithRPC(supabase: any, botToken: string, userId: number): Promise<boolean> {
   console.log(`🔍 searchPartnerWithRPC: Memulai pencarian untuk user ${userId}`);
   
@@ -1134,24 +1299,7 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
   return await sendPromoToUser(botToken, userId, promoMessage, promoFileId, promoKeyboard);
 }
 
-// HELPER: Build end chat keyboard with rating buttons
-function buildEndChatKeyboard(partnerId: number): any {
-  return {
-    inline_keyboard: [
-      [
-        { text: '🚨 Spam', callback_data: `rate_spam_${partnerId}` },
-        { text: '🔞 Sange', callback_data: `rate_sange_${partnerId}` },
-        { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
-      ],
-      [
-        { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
-      ],
-      [
-        { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${partnerId}` }
-      ]
-    ]
-  };
-}
+// NOTE: buildEndChatKeyboard sudah didefinisikan di atas (line ~811)
 
 async function endChat(supabase: any, botToken: string, userId: number): Promise<boolean> {
   console.log(`🔚 endChat: User ${userId} mengakhiri chat`);
@@ -2141,48 +2289,24 @@ Deno.serve(async (req) => {
           }
         }
 
-        // CEK REPUTASI USER (PENALTY POINTS) - Tampilkan peringatan jika diperlukan
-        const { data: reputationData } = await supabase.rpc('get_user_reputation', { p_user_id: userId });
+        // User idle - langsung cari partner dengan RPC unified
+        await answerCallbackQuery(botToken, query.id, '🔍 Mencari partner...');
         
-        if (reputationData?.status === 'banned') {
-          // User sudah dibanned via penalty system
-          await answerCallbackQuery(botToken, query.id, '🚫 Akun diblokir!', true);
-          
-          const blockedKeyboard = {
-            inline_keyboard: [
-              [{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]
-            ]
-          };
-          
-          await sendTelegramMessage(
-            botToken,
-            userId,
-            `🚫 <b>Akun Diblokir</b>\n\n${reputationData.message}\n\n📞 Hubungi admin: @FizatalkCS`,
-            blockedKeyboard
-          );
+        // Panggil RPC unified dengan p_is_next = false
+        const { success, handled, result } = await searchOrNextPartnerWithRPC(supabase, botToken, userId, false);
+        
+        if (handled) {
+          // RPC sudah menangani semua notifikasi (banned, error, dll)
           return new Response('OK', { status: 200 });
         }
         
-        // Tampilkan peringatan reputasi jika status warning atau critical
-        if (reputationData?.status === 'critical') {
-          await sendTelegramMessage(
-            botToken,
-            userId,
-            `🔞 <b>Reputasi: Kritis</b>\n\n${reputationData.message}\n\n📊 Poin Penalti: ${reputationData.penalty_points}/100`
-          );
-        } else if (reputationData?.status === 'warning') {
-          await sendTelegramMessage(
-            botToken,
-            userId,
-            `⚠️ <b>Reputasi: Peringatan</b>\n\n${reputationData.message}\n\n📊 Poin Penalti: ${reputationData.penalty_points}/100`
-          );
+        if (success && result) {
+          // Kirim peringatan reputasi
+          await sendReputationWarning(botToken, userId, result.reputation);
+          
+          // Handle hasil pencarian partner
+          await handleSearchOrNextResult(supabase, botToken, userId, result);
         }
-
-        // User idle - langsung cari partner dengan logika baru
-        await answerCallbackQuery(botToken, query.id, '🔍 Mencari partner...');
-        
-        // Cek antrian dulu, jika tidak ada yang cocok baru masuk antrian
-        await searchPartnerWithQueueCheck(supabase, botToken, userId);
 
         return new Response('OK', { status: 200 });
       }
@@ -2232,10 +2356,9 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA CHAT NEXT (INLINE BUTTON) ---
+      // --- LOGIKA CHAT NEXT (INLINE BUTTON) - MENGGUNAKAN RPC UNIFIED ---
       if (callbackData === 'chat_next') {
         
-
         // CEK KEANGGOTAAN CHANNEL HANYA JIKA USER SUDAH TERDAFTAR > 1 MINGGU (hemat biaya cloud)
         const shouldCheckChannelNext = await shouldShowChannelJoin(supabase, userId);
         if (shouldCheckChannelNext) {
@@ -2248,114 +2371,38 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Cek state user saat ini
-        const { data: userData } = await supabase
-          .from('telegram_users')
-          .select('state, partner_id')
-          .eq('id', userId)
-          .single();
-
-        // Jika sedang dalam antrian (waiting), tampilkan pemberitahuan dan opsi stop
-        if (userData?.state === 'waiting') {
-          const { data: queueData } = await supabase
-          .from('waiting_queue')
-          .select('user_id')
-          .eq('user_id', userId)
-          .single();
-    
-          if (!queueData) {
-            // DITEMUKAN ZOMBIE! Perbaiki statusnya.
-            console.log(`🧟 Zombie User Detected: ${userId}. Resetting state to idle.`);
-            await supabase
-              .from('telegram_users')
-              .update({ state: 'idle' }) // Paksa jadi idle dulu
-              .eq('id', userId);
-              
-            // Lanjut ke logika pencarian di bawah seolah-olah dia user normal...
-          } else {
-                await answerCallbackQuery(botToken, query.id, '⏳ Sedang dalam antrian...');
-                await sendTelegramMessage(botToken, userId, '⏳ Kamu sedang dalam antrian menunggu partner.\n\nMohon tunggu sebentar!');
-                return new Response('OK', { status: 200 });
-              }
+        await answerCallbackQuery(botToken, query.id, '⏭️ Mencari partner baru...');
+        
+        // Kirim pesan awal
+        await sendTelegramMessage(botToken, userId, '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>');
+        
+        // Panggil RPC unified dengan p_is_next = true
+        // RPC menangani: akhiri chat, reset partner, cek reputasi, cari partner baru
+        const { success, handled, result } = await searchOrNextPartnerWithRPC(supabase, botToken, userId, true);
+        
+        if (handled) {
+          // RPC sudah menangani semua notifikasi (banned, error, dll)
+          return new Response('OK', { status: 200 });
         }
-
-        // Jika sedang chatting, akhiri chat dan langsung cari partner baru
-        if (userData?.state === 'chatting' && userData?.partner_id) {
-          await answerCallbackQuery(botToken, query.id, '⏭️Mencari partner baru...');
+        
+        if (success && result) {
+          // Kirim peringatan reputasi SETELAH pesan "Mengakhiri chat..."
+          await sendReputationWarning(botToken, userId, result.reputation);
           
-          const partnerId = userData.partner_id;
-
-          // === ATOMIC RESET: Reset user HANYA jika masih punya partner yang sama ===
-          const { data: resetResult, error: resetError } = await supabase
-            .from('telegram_users')
-            .update({ state: 'idle', partner_id: null })
-            .eq('id', userId)
-            .eq('partner_id', partnerId)
-            .select();
-          
-          // Jika tidak ada row yang di-update, chat sudah berakhir
-          if (resetError || !resetResult || resetResult.length === 0) {
-            console.log(`⚠️ Chat sudah berakhir untuk user ${userId}`);
-            // Langsung cari partner baru dengan logika baru
-            await searchPartnerWithQueueCheck(supabase, botToken, userId);
-            return new Response('OK', { status: 200 });
-          }
-
-          // Reset partner dengan atomic check
-          const { data: partnerResetResult } = await supabase
-            .from('telegram_users')
-            .update({ state: 'idle', partner_id: null })
-            .eq('id', partnerId)
-            .eq('partner_id', userId)
-            .select();
-          
-            // 4. CEK PROMO VIA RPC (User & Partner)
-          // Menjalankan pengecekan 5x end chat & interval 24 jam
-          const { data: promoUser } = await supabase.rpc('handle_end_chat_promo_logic', { p_user_id: userId });
-          const { data: promoPartner } = await supabase.rpc('handle_end_chat_promo_logic', { p_user_id: partnerId });
-
-
-          // Jika berhasil reset partner, kirim notifikasi
-          if (partnerResetResult && partnerResetResult.length > 0) {
-            // Use buildEndChatKeyboard for rating buttons (partner rates userId)
-            const combinedPartnerKeyboard = buildEndChatKeyboard(userId);
-
-            await sendTelegramMessage(
-              botToken, 
-              partnerId, 
-              `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri rating untuk partner!`,
-              combinedPartnerKeyboard
-            );
+          // Cek apakah user dapat promo
+          if (result.chat_ended) {
+            const { data: promoUser } = await supabase.rpc('handle_end_chat_promo_logic', { p_user_id: userId });
             
-            // Kirim promo ke Partner jika syarat terpenuhi
-            if (promoPartner?.should_send) {
-              await executePromoAction(supabase, botToken, partnerId);
+            if (promoUser?.should_send) {
+              // JIKA DAPAT PROMO: Tampilkan promo dan BERHENTI
+              await executePromoAction(supabase, botToken, userId);
+              return new Response('OK', { status: 200 });
             }
           }
-
-          // Remove from queue
-          await supabase.from('waiting_queue').delete().eq('user_id', userId);
-
-          // Kirim pesan ke user yang menekan next
-          await sendTelegramMessage(botToken, userId, '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>');
           
-          if (promoUser?.should_send) {
-            // JIKA DAPAT PROMO: Tampilkan promo dan BERHENTI (jangan cari partner dulu)
-            await executePromoAction(supabase, botToken, userId);
-            // User harus klik "Abaikan & Lanjut Cari Partner" (dismiss_promo_search) untuk lanjut
-            return new Response('OK', { status: 200 });
-          } else {
-            // JIKA TIDAK DAPAT PROMO: Langsung cari partner seperti biasa
-            await searchPartnerWithQueueCheck(supabase, botToken, userId);
-            return new Response('OK', { status: 200 });
-          };
+          // Handle hasil pencarian partner
+          await handleSearchOrNextResult(supabase, botToken, userId, result);
         }
-
-        // Jika user tidak dalam chat (idle), langsung cari partner dengan logika baru
-        await answerCallbackQuery(botToken, query.id, '🔍 Mencari partner...');
-        
-        // Cek antrian dulu, jika tidak ada yang cocok baru masuk antrian
-        await searchPartnerWithQueueCheck(supabase, botToken, userId);
 
         return new Response('OK', { status: 200 });
       }

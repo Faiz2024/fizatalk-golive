@@ -533,6 +533,10 @@ export type Database = {
         Args: { p_message_id: number; p_promo_id: string }
         Returns: undefined
       }
+      search_or_next_partner: {
+        Args: { p_is_next?: boolean; p_user_id: number }
+        Returns: Json
+      }
       should_show_channel_join: {
         Args: { p_user_id: number }
         Returns: boolean
