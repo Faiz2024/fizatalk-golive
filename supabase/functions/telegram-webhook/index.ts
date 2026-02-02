@@ -155,104 +155,6 @@ async function isUserBlocked(supabase: any, userId: number): Promise<boolean> {
 }
 
 
-// HELPER: Deteksi spam dalam pesan
-interface SpamDetectionResult {
-  isSpam: boolean;
-  reason: string;
-  detectionType: 'username_tag' | 'copy_paste' | 'repeated_message' | null;
-}
-
-// HELPER: Blokir user dan kirim notifikasi
-async function blockUserForSpam(
-  supabase: any,
-  botToken: string,
-  userId: number,
-  username: string | undefined,
-  firstName: string | undefined,
-  reason: string,
-  blockedMessage: string
-): Promise<void> {
-  // 1. Insert ke tabel blocked_users
-  await supabase.from('blocked_users').upsert({
-    user_id: userId,
-    username: username,
-    first_name: firstName,
-    reason: reason,
-    blocked_message: blockedMessage.substring(0, 500), // Limit panjang pesan
-    blocked_at: new Date().toISOString(),
-    is_active: true
-  }, { onConflict: 'user_id' });
-  
-  // 2. Hapus dari waiting_queue jika ada
-  await supabase.from('waiting_queue').delete().eq('user_id', userId);
-  
-  // 3. Disconnect dari partner jika sedang chatting
-  const { data: userData } = await supabase
-    .from('telegram_users')
-    .select('partner_id, state')
-    .eq('id', userId)
-    .single();
-  
-  if (userData?.partner_id && userData?.state === 'chatting') {
-    const partnerId = userData.partner_id;
-    
-    // Reset partner
-    await supabase
-      .from('telegram_users')
-      .update({ state: 'idle', partner_id: null })
-      .eq('id', partnerId);
-    
-    // Notifikasi partner
-    const endKeyboard = {
-      inline_keyboard: [
-        [{ text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }]
-      ]
-    };
-    
-    await sendTelegramMessage(
-      botToken,
-      partnerId,
-      '⚠️ <b>Partner telah keluar dari chat.</b>\n\nPilih aksi untuk melanjutkan:',
-      endKeyboard
-    );
-  }
-  
-  // 4. Reset state user yang diblokir
-  await supabase
-    .from('telegram_users')
-    .update({ state: 'idle', partner_id: null })
-    .eq('id', userId);
-  
-  // 5. Kirim pesan ke user yang diblokir (TANPA menyebutkan alasan untuk mencegah user mengakali sistem)
-  const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
-  
-  // Keyboard dengan opsi bayar denda
-  const blockedKeyboard = {
-    inline_keyboard: [
-      [{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]
-    ]
-  };
-  
-  await sendTelegramMessage(
-    botToken,
-    userId,
-    `🚫 <b>Akun Anda Diblokir</b>\n\nAnda telah diblokir dari menggunakan layanan ini karena melanggar ketentuan penggunaan.\n\n💰 <b>Opsi Buka Blokir:</b>\nBayar denda Rp10.000 untuk membuka blokir akun.\n\n📞 Atau hubungi admin: @FizatalkCS`,
-    blockedKeyboard
-  );
-  
-  // 6. Kirim notifikasi ke admin
-  if (csChatId) {
-    const userName = username ? `@${username}` : firstName || 'Unknown';
-    
-    await sendTelegramMessage(
-      botToken,
-      parseInt(csChatId),
-      `🚨 <b>USER DIBLOKIR OTOMATIS</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n\n⚠️ <b>Alasan:</b>\n${reason}\n\n💬 <b>Pesan yang menyebabkan blokir:</b>\n<code>${blockedMessage.substring(0, 300)}${blockedMessage.length > 300 ? '...' : ''}</code>\n\n⏰ Waktu: ${formatDateTimeWIB(new Date())}`
-    );
-  }
-  
-  console.log(`🚫 User ${userId} (${username || firstName}) blocked for spam: ${reason}`);
-}
 
 // HELPER: Simple upsert user - uses RPC for maximum cost savings
 // Only updates username/first_name, NEVER update last_active
@@ -356,9 +258,8 @@ async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null
 
   const caption = `💳 <b>${title}</b>
 
-💵 <b>Total Bayar: Rp ${totalAmount.toLocaleString('id-ID')}</b>
-💰 Harga: Rp ${price.toLocaleString('id-ID')}
-🔢 Kode Unik: ${uniqueCode}
+  💰 Harga: Rp ${price.toLocaleString('id-ID')}+${uniqueCode} (Kode Unik)
+  💵 <b>Total Bayar: Rp ${totalAmount.toLocaleString('id-ID')}</b>
 
 📱 <b>CARA PEMBAYARAN:</b>
 1️⃣ Screenshot/simpan gambar QRIS di atas
@@ -2275,7 +2176,7 @@ Deno.serve(async (req) => {
             };
             await sendTelegramMessage(
               botToken, userId,
-              '👋 <b>Sebelum mulai, pilih gender kamu dulu ya:</b>',
+              '👋 <b>Sebelum mulai, silahkan pilih jenis kelamin kamu:</b>',
               genderKeyboard
             );
             return new Response('OK', { status: 200 });
@@ -2366,8 +2267,6 @@ Deno.serve(async (req) => {
       if (callbackData === 'chat_next') {
         await answerCallbackQuery(botToken, query.id, '⏭️ Mencari partner baru...');
         
-        // Kirim pesan awal "Mengakhiri chat..." TANPA tombol rating dulu
-        // (tombol rating akan dikirim ke partner lama oleh RPC handler)
         const reportKeyboard = {
           inline_keyboard: [
             [ 
@@ -2700,7 +2599,6 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       if (callbackData === 'buy_premium_150') {
         const durationDays = 150; // 5 bulan
         const price = 10000;
-        const bonusCoins = 5000;
         
         // Hapus pesan promo
         if (message) {
@@ -2768,7 +2666,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           supabase,
           botToken,
           chatId: userId,
-          title: `PREMIUM 5 BULAN + BONUS ${bonusCoins} KOIN (PROMO SPESIAL)`,
+          title: `PREMIUM 5 BULAN (PROMO SPESIAL)`,
           price,
           uniqueCode,
           totalAmount,
