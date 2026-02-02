@@ -818,8 +818,7 @@ function buildEndChatKeyboard(partnerId: number): any {
         { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${partnerId}` }
       ],
       [
-        { text: '🚨 Spam', callback_data: `rate_spam_${partnerId}` },
-        { text: '🔞 Sange', callback_data: `rate_sange_${partnerId}` },
+        { text: '🚩 Laporkan', callback_data: 'report_user'},
         { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
       ]
     ]
@@ -859,17 +858,17 @@ async function sendReputationWarning(botToken: string, userId: number, reputatio
     await sendTelegramMessage(
       botToken,
       userId,
-      `🔞 <b>Reputasi: Kritis</b>\n\n${reputation.message}\n\n🚫 DAFTAR PELANGGARAN KERAS:
+      `🔍 Mencari partner untuk kamu...\n\n🔞 <b>Status: Kritis</b>\n\n${reputation.message}\n\n🚫 DAFTAR PELANGGARAN KERAS:
 
-NSFW / Sange: Chat seks, meminta pap, atau pembahasan vulgar.
+<b>NSFW / Sange:</b> Chat seks, meminta pap, atau pembahasan vulgar.
 
-Spam: Mengirim pesan berulang, promosi, iklan, atau link.
+<b>Spam:</b> Mengirim pesan berulang, promosi, iklan, atau link.
 
-Toxic: Kasar, menghina SARA, atau bullying.
+<b>Toxic:</b> Kasar, menghina SARA, atau bullying.
 
-Troll: Skip chat terus-menerus tanpa interaksi.
+<b>Troll:</b> Skip chat terus-menerus tanpa interaksi.
 
-Cara lepas dari peringatan dan menghindari blokir:
+<b>Cara lepas dari peringatan dan menghindari blokir:</b>
 1️⃣ Hentikan semua perilaku di atas segera.
 2️⃣ Berinteraksi dengan partner secara sopan dan ramah.
 3️⃣ Dapatkan feedback positif dari partner.`
@@ -879,7 +878,14 @@ Cara lepas dari peringatan dan menghindari blokir:
     await sendTelegramMessage(
       botToken,
       userId,
-      `⚠️ <b>Reputasi: Peringatan</b>\n\n${reputation.message}\n\nAnda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda.`
+      `🔍 Mencari partner untuk kamu...\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message}\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.`
+    );
+  } else {
+    // Untuk status lain, kirim pesan netral
+    await sendTelegramMessage(
+      botToken,
+      userId,
+      `🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!`
     );
   }
 }
@@ -917,7 +923,8 @@ async function comprehensiveSearchAction(
       joined_at: new Date().toISOString()
     });
     await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
-    await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+    // Kirim peringatan reputasi
+    await sendReputationWarning(botToken, userId, result.reputation);
     return { success: false, handled: true };
   }
   
@@ -988,7 +995,8 @@ async function handleComprehensiveSearchResult(
   if (!result.matched) {
     // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
     console.log(`📥 User ${userId} masuk antrian via RPC`);
-    await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+    // Kirim peringatan reputasi
+    await sendReputationWarning(botToken, userId, result.reputation);
     return;
   }
   
@@ -1018,7 +1026,8 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
         joined_at: new Date().toISOString()
       });
       await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
-      await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+      // Kirim peringatan reputasi
+      await sendReputationWarning(botToken, userId, result.reputation);
       return false;
     }
     
@@ -1037,7 +1046,8 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     if (!data.matched) {
       // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
       console.log(`📥 User ${userId} masuk antrian via RPC`);
-      await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
+      // Kirim peringatan reputasi
+      await sendReputationWarning(botToken, userId, result.reputation);
       return false;
     }
     
@@ -2300,9 +2310,6 @@ Deno.serve(async (req) => {
             }
           }
           
-          // Kirim peringatan reputasi
-          await sendReputationWarning(botToken, userId, result.reputation);
-          
           // Handle hasil pencarian partner
           await handleComprehensiveSearchResult(supabase, botToken, userId, result);
         }
@@ -2361,7 +2368,16 @@ Deno.serve(async (req) => {
         
         // Kirim pesan awal "Mengakhiri chat..." TANPA tombol rating dulu
         // (tombol rating akan dikirim ke partner lama oleh RPC handler)
-        await sendTelegramMessage(botToken, userId, '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>');
+        const reportKeyboard = {
+          inline_keyboard: [
+            [ 
+              { text: '🚩 Laporkan', callback_data: 'report_user'},
+              { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
+            ]
+          ]
+        };
+        // Kirim peringatan reputasi
+        await sendReputationWarning(botToken, userId, result.reputation);
         
         // SATU PANGGILAN RPC: handles upsert, blocked check, end chat, reputation, search
         const { success, handled, result } = await comprehensiveSearchAction(
@@ -2385,8 +2401,6 @@ Deno.serve(async (req) => {
             }
           }
           
-          // Kirim peringatan reputasi SETELAH pesan "Mengakhiri chat..."
-          await sendReputationWarning(botToken, userId, result.reputation);
           
           // Cek apakah user dapat promo
           if (result.chat_ended) {
@@ -2535,6 +2549,34 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       }
 
       // --- LOGIKA RATING PARTNER (SPAM/SANGE/ASIK) ---
+      if (callbackData === 'report_user') {
+        // Tampilkan pilihan rating: Spam, Sange
+        const reportKeyboard = {
+          inline_keyboard: [
+            [
+              { text: '🚨 Spam', callback_data: `rate_spam_${partnerId}` },
+              { text: '🔞 Sange', callback_data: `rate_sange_${partnerId}` }
+            ]
+          ]
+        };
+        await answerCallbackQuery(botToken, query.id);
+        try {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message?.chat.id,
+                message_id: message?.message_id,
+                reply_markup: reportKeyboard
+              })
+            });
+        } catch (e) {
+          console.error('Failed to edit message for report options:', e);
+        }
+        return new Response('OK', { status: 200 });
+      }
+
+          
       if (callbackData.startsWith('rate_')) {
         const parts = callbackData.split('_');
         const rateType = parts[1]; // spam, sange, atau asik
