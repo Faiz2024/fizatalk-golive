@@ -812,15 +812,15 @@ function buildEndChatKeyboard(partnerId: number): any {
   return {
     inline_keyboard: [
       [
-        { text: '🚨 Spam', callback_data: `rate_spam_${partnerId}` },
-        { text: '🔞 Sange', callback_data: `rate_sange_${partnerId}` },
-        { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
-      ],
-      [
         { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
       ],
       [
         { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${partnerId}` }
+      ],
+      [
+        { text: '🚨 Spam', callback_data: `rate_spam_${partnerId}` },
+        { text: '🔞 Sange', callback_data: `rate_sange_${partnerId}` },
+        { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
       ]
     ]
   };
@@ -855,13 +855,27 @@ async function sendReputationWarning(botToken: string, userId: number, reputatio
     await sendTelegramMessage(
       botToken,
       userId,
-      `🔞 <b>Reputasi: Kritis</b>\n\n${reputation.message}\n\n📊 Poin Penalti: ${reputation.penalty_points}/100`
+      `🔞 <b>Reputasi: Kritis</b>\n\n${reputation.message}\n\n🚫 DAFTAR PELANGGARAN KERAS:
+
+NSFW / Sange: Chat seks, meminta pap, atau pembahasan vulgar.
+
+Spam: Mengirim pesan berulang, promosi, iklan, atau link.
+
+Toxic: Kasar, menghina SARA, atau bullying.
+
+Troll: Skip chat terus-menerus tanpa interaksi.
+
+Cara lepas dari peringatan dan menghindari blokir:
+1️⃣ Hentikan semua perilaku di atas segera.
+2️⃣ Berinteraksi dengan partner secara sopan dan ramah.
+3️⃣ Dapatkan feedback positif dari partner.`
+
     );
   } else if (reputation.status === 'warning') {
     await sendTelegramMessage(
       botToken,
       userId,
-      `⚠️ <b>Reputasi: Peringatan</b>\n\n${reputation.message}\n\n📊 Poin Penalti: ${reputation.penalty_points}/100`
+      `⚠️ <b>Reputasi: Peringatan</b>\n\n${reputation.message}\n\nAnda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda.`
     );
   }
 }
@@ -936,7 +950,7 @@ async function searchOrNextPartnerWithRPC(
     await sendTelegramMessage(
       botToken, 
       result.old_partner_id, 
-      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri rating untuk partner!`,
+      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner atau laporkan!`,
       combinedPartnerKeyboard
     );
     
@@ -1363,7 +1377,7 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
     await sendTelegramMessage(
       botToken, 
       partnerId, 
-      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri rating untuk partner!`,
+      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner atau laporkan!`,
       combinedPartnerKeyboard
     );
     
@@ -2374,7 +2388,16 @@ Deno.serve(async (req) => {
         await answerCallbackQuery(botToken, query.id, '⏭️ Mencari partner baru...');
         
         // Kirim pesan awal
-        await sendTelegramMessage(botToken, userId, '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>');
+        const reportKeyboard = { 
+          inline_keyboard: [
+            [
+              { text: '🚨 Spam', callback_data: `rate_spam_${partnerId}` },
+              { text: '🔞 Sange', callback_data: `rate_sange_${partnerId}` },
+              { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
+            ]
+          ]
+        };
+        await sendTelegramMessage(botToken, userId, '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>', reportKeyboard);
         
         // Panggil RPC unified dengan p_is_next = true
         // RPC menangani: akhiri chat, reset partner, cek reputasi, cari partner baru
@@ -3621,123 +3644,8 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
 
         return new Response('OK', { status: 200 });
       }
-
-      // --- LOGIKA RATING: PERUBAHAN UTAMA UNTUK MENAMBAH KOIN PARTNER ---
-      if (callbackData.startsWith('rate_')) {
-        const RATING_COST = 10;
-        const PARTNER_SHARE_RATE = 0.8;
-        const PARTNER_COIN_EARNED = RATING_COST * PARTNER_SHARE_RATE; // 8 koin
-
-        const [, ratedUserIdStr, emoji] = callbackData.split('_');
-        const ratedUserId = parseInt(ratedUserIdStr);
-        
-        // 1. Ambil saldo user pemberi rating
-        const { data: raterData } = await supabase
-          .from('telegram_users')
-          .select('coins')
-          .eq('id', userId)
-          .single();
-
-        const currentRaterCoins = raterData?.coins || 0;
-
-        // 2. Cek koin pemberi rating
-        if (currentRaterCoins < RATING_COST) {
-          // Logika koin tidak cukup tetap sama
-          await answerCallbackQuery(botToken, query.id, '❌ Koin tidak cukup!');
-          
-          if (message) {
-            const url = `${TELEGRAM_API}${botToken}/editMessageText`;
-            await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: message.chat.id,
-                message_id: message.message_id,
-                text: `⚠️ Partner mengakhiri chat. Gunakan /start untuk mencari partner baru!\n\n❌ Koin tidak cukup untuk memberi rating!\n\n💰 Saldo kamu: ${currentRaterCoins} koin\n💎 Dibutuhkan: ${RATING_COST} koin\n\nGunakan /topup [jumlah] untuk top-up koin.\nContoh: /topup 1000`
-              })
-            });
-          }
-          
-          return new Response('OK', { status: 200 });
-        }
-
-        // 3. Potong koin pemberi rating
-        const newRaterBalance = currentRaterCoins - RATING_COST;
-        await supabase
-          .from('telegram_users')
-          .update({ coins: newRaterBalance })
-          .eq('id', userId);
-
-        // Record transaction (potongan)
-        await supabase.from('coin_transactions').insert({
-          user_id: userId,
-          amount: -RATING_COST,
-          type: 'rating_given', // Diubah menjadi rating_given
-          description: `Rating ${emoji} untuk partner`
-        });
-        
-        // --- LOGIKA PENAMBAHAN KOIN PARTNER (RATED USER) ---
-
-        // 4. Ambil saldo partner (rated user)
-        const { data: partnerData } = await supabase
-            .from('telegram_users')
-            .select('coins')
-            .eq('id', ratedUserId)
-            .single();
-
-        const currentPartnerCoins = partnerData?.coins || 0;
-        
-        // 5. Tambah koin partner (80%)
-        const PARTNER_COIN_EARNED_INT = Math.floor(PARTNER_COIN_EARNED); // Pastikan koin yang ditambahkan adalah integer
-        const newPartnerBalance = currentPartnerCoins + PARTNER_COIN_EARNED_INT;
-        await supabase
-            .from('telegram_users')
-            .update({ coins: newPartnerBalance })
-            .eq('id', ratedUserId);
-
-        // Record transaction (penambahan)
-        await supabase.from('coin_transactions').insert({
-            user_id: ratedUserId,
-            amount: PARTNER_COIN_EARNED_INT,
-            type: 'rating_received', // Ditambah rating_received
-            description: `Menerima rating ${emoji} (+${PARTNER_COIN_EARNED_INT} koin)`
-        });
-        
-        // Simpan emoji rating ke user_reactions
-        await supabase.from('user_reactions').insert({
-          user_id: ratedUserId,      // User yang MENERIMA rating
-          from_user_id: userId,       // User yang MEMBERI rating
-          emoji: emoji
-        });
-        
-        // 6. Kirim notifikasi ke partner (rated user)
-        await sendTelegramMessage(
-            botToken,
-            ratedUserId,
-            `🎉 Anda mendapat rating ${emoji} dari partner chat Anda! (+${PARTNER_COIN_EARNED_INT} koin)\n\n💰 Saldo Anda: ${newPartnerBalance} koin`
-        );
-
-        // 7. Selesaikan callback query
-        await answerCallbackQuery(botToken, query.id, `Rating ${emoji} dikirim! (-${RATING_COST} koin)`);
-        
-        // Update message to remove keyboard
-        if (message) {
-          const url = `${TELEGRAM_API}${botToken}/editMessageText`;
-          await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: message.chat.id,
-              message_id: message.message_id,
-              text: `⚠️ Partner mengakhiri chat. Gunakan /start untuk mencari partner baru!\n\n✅ Rating ${emoji} telah dikirim! (-${RATING_COST} koin)\n💰 Saldo: ${newRaterBalance} koin`
-            })
-          });
-        }
-
-        return new Response('OK', { status: 200 });
-      }
     }
-    // --- END LOGIKA RATING & CALLBACK ---
+    // --- END LOGIKA CALLBACK ---
 
     // Handle message reactions
     if (update.message_reaction) {
