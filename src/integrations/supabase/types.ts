@@ -505,6 +505,15 @@ export type Database = {
     Functions: {
       apply_daily_penalty_decay: { Args: never; Returns: number }
       cleanup_inactive_users: { Args: never; Returns: undefined }
+      comprehensive_search_action: {
+        Args: {
+          p_first_name?: string
+          p_is_next?: boolean
+          p_user_id: number
+          p_username?: string
+        }
+        Returns: Json
+      }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
       get_promo_eligible_users: {
