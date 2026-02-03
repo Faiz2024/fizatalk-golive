@@ -751,15 +751,24 @@ interface ComprehensiveSearchResult {
   };
 }
 
-// HELPER: Kirim pesan peringatan reputasi
-async function sendReputationWarning(botToken: string, userId: number, reputation: ComprehensiveSearchResult['reputation']): Promise<void> {
-  if (!reputation || !reputation.message) return;
+// HELPER: Build pesan pencarian dengan peringatan reputasi (jika ada)
+// Menggabungkan pesan "Mencari partner" dengan peringatan reputasi dalam 1 pesan
+function buildSearchMessageWithReputation(reputation?: ComprehensiveSearchResult['reputation'], isNext: boolean = false): string {
+  const baseAction = isNext ? '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>' : '🔍 Mencari partner untuk kamu...';
   
+  // Jika tidak ada reputation atau penalty di bawah 40, tampilkan pesan normal
+  if (!reputation || reputation.penalty_points < 40) {
+    return `${baseAction}\n\nMohon tunggu sebentar!`;
+  }
+  
+  // Penalty 40-69: Status Peringatan
+  if (reputation.status === 'warning') {
+    return `${baseAction}\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message || 'Anda mendapat beberapa laporan negatif dari pengguna lain.'}\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.`;
+  }
+  
+  // Penalty 70-99: Status Kritis
   if (reputation.status === 'critical') {
-    await sendTelegramMessage(
-      botToken,
-      userId,
-      `🔍 Mencari partner untuk kamu...\n\n🔞 <b>Status: Kritis</b>\n\n${reputation.message}\n\n🚫 DAFTAR PELANGGARAN KERAS:
+    return `${baseAction}\n\n🔞 <b>Status: Kritis</b>\n\n${reputation.message || 'Akun Anda dalam kondisi kritis.'}\n\n🚫 DAFTAR PELANGGARAN KERAS:
 
 <b>NSFW / Sange:</b> Chat seks, meminta pap, atau pembahasan vulgar.
 
@@ -772,23 +781,17 @@ async function sendReputationWarning(botToken: string, userId: number, reputatio
 <b>Cara lepas dari peringatan dan menghindari blokir:</b>
 1️⃣ Hentikan semua perilaku di atas segera.
 2️⃣ Berinteraksi dengan partner secara sopan dan ramah.
-3️⃣ Dapatkan feedback positif dari partner.`
-
-    );
-  } else if (reputation.status === 'warning') {
-    await sendTelegramMessage(
-      botToken,
-      userId,
-      `🔍 Mencari partner untuk kamu...\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message}\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.`
-    );
-  } else {
-    // Untuk status lain, kirim pesan netral
-    await sendTelegramMessage(
-      botToken,
-      userId,
-      `🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!`
-    );
+3️⃣ Dapatkan feedback positif dari partner.`;
   }
+  
+  // Default fallback
+  return `${baseAction}\n\nMohon tunggu sebentar!`;
+}
+
+// HELPER: Kirim pesan pencarian dengan reputasi (1 pesan gabungan)
+async function sendSearchingMessage(botToken: string, userId: number, reputation?: ComprehensiveSearchResult['reputation'], isNext: boolean = false): Promise<void> {
+  const message = buildSearchMessageWithReputation(reputation, isNext);
+  await sendTelegramMessage(botToken, userId, message);
 }
 
 // ============================================
@@ -951,8 +954,8 @@ async function handleComprehensiveSearchResult(
   if (!result.matched) {
     // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
     console.log(`📥 User ${userId} masuk antrian via RPC`);
-    // Kirim peringatan reputasi
-    await sendReputationWarning(botToken, userId, result.reputation);
+    // Kirim pesan mencari dengan reputasi (1 pesan gabungan)
+    await sendSearchingMessage(botToken, userId, result.reputation, false);
     return;
   }
   
@@ -1000,10 +1003,8 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     if (!data.matched) {
       // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
       console.log(`📥 User ${userId} masuk antrian via RPC`);
-      // Kirim peringatan reputasi jika ada
-      if (data.reputation) {
-        await sendReputationWarning(botToken, userId, data.reputation);
-      }
+      // Kirim pesan mencari dengan reputasi (1 pesan gabungan)
+      await sendSearchingMessage(botToken, userId, data.reputation, false);
       return false;
     }
     
@@ -2346,10 +2347,8 @@ Deno.serve(async (req) => {
         }
         
         if (success && searchResult) {
-          // Kirim peringatan reputasi jika ada
-          if (searchResult.reputation) {
-            await sendReputationWarning(botToken, userId, searchResult.reputation);
-          }
+          // Kirim pesan mencari dengan reputasi (1 pesan gabungan) - untuk tombol Next
+          await sendSearchingMessage(botToken, userId, searchResult.reputation, true);
           
           // Cek channel join HANYA jika should_check_channel = true
           if (searchResult.should_check_channel) {
