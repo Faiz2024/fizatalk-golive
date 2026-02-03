@@ -797,6 +797,60 @@ async function sendReputationWarning(botToken: string, userId: number, reputatio
 // ============================================
 
 // UNIFIED FUNCTION: Panggil RPC comprehensive_search_action
+// ============================================
+// IN-MEMORY CACHE SYSTEM (Cost Optimization)
+// ============================================
+// Cache untuk menyimpan data user yang sedang chatting
+// Key: userId, Value: { partnerId, state, cachedAt }
+// Cache berlaku selama 5 menit untuk mengurangi panggilan supabase
+const userChatCache = new Map<number, {
+  partnerId: number | null;
+  state: string;
+  cachedAt: number;
+}>();
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit cache lifetime
+
+// Helper: Cek apakah cache masih valid
+function isCacheValid(cachedAt: number): boolean {
+  return Date.now() - cachedAt < CACHE_TTL_MS;
+}
+
+// Helper: Get cached user data atau null jika expired/tidak ada
+function getCachedUserData(userId: number): { partnerId: number | null; state: string } | null {
+  const cached = userChatCache.get(userId);
+  if (cached && isCacheValid(cached.cachedAt)) {
+    return { partnerId: cached.partnerId, state: cached.state };
+  }
+  // Hapus cache yang expired
+  if (cached) {
+    userChatCache.delete(userId);
+  }
+  return null;
+}
+
+// Helper: Set cache untuk user
+function setCachedUserData(userId: number, partnerId: number | null, state: string): void {
+  userChatCache.set(userId, {
+    partnerId,
+    state,
+    cachedAt: Date.now()
+  });
+}
+
+// Helper: Invalidate cache untuk user (panggil saat state berubah)
+function invalidateUserCache(userId: number): void {
+  userChatCache.delete(userId);
+}
+
+// Helper: Invalidate cache untuk pasangan (panggil saat chat berakhir)
+function invalidatePairCache(userId: number, partnerId: number | null): void {
+  userChatCache.delete(userId);
+  if (partnerId) {
+    userChatCache.delete(partnerId);
+  }
+}
+
 // Satu panggilan menangani SEMUA: upsert, channel check, state, reputation, search
 async function comprehensiveSearchAction(
   supabase: any, 
@@ -807,6 +861,9 @@ async function comprehensiveSearchAction(
   isNext: boolean = false
 ): Promise<{ success: boolean; handled: boolean; result?: ComprehensiveSearchResult }> {
   console.log(`🔍 comprehensiveSearchAction: ${isNext ? 'NEXT' : 'SEARCH'} untuk user ${userId}`);
+  
+  // Invalidate cache karena state akan berubah
+  invalidateUserCache(userId);
   
   // SINGLE RPC CALL - handles everything!
   const { data, error } = await supabase.rpc('comprehensive_search_action', {
@@ -824,8 +881,6 @@ async function comprehensiveSearchAction(
       joined_at: new Date().toISOString()
     });
     await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
-    // Kirim peringatan reputasi
-    await sendReputationWarning(botToken, userId, result.reputation);
     return { success: false, handled: true };
   }
   
@@ -927,8 +982,6 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
         joined_at: new Date().toISOString()
       });
       await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
-      // Kirim peringatan reputasi
-      await sendReputationWarning(botToken, userId, result.reputation);
       return false;
     }
     
@@ -947,24 +1000,31 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     if (!data.matched) {
       // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
       console.log(`📥 User ${userId} masuk antrian via RPC`);
-      // Kirim peringatan reputasi
-      await sendReputationWarning(botToken, userId, result.reputation);
+      // Kirim peringatan reputasi jika ada
+      if (data.reputation) {
+        await sendReputationWarning(botToken, userId, data.reputation);
+      }
       return false;
     }
     
     // Partner ditemukan! Kirim notifikasi ke kedua user
-    const partnerId = data.partner_id;
-    console.log(`✅ Partner ditemukan via RPC: ${userId} <-> ${partnerId}`);
+    const matchedPartnerId = data.partner_id;
+    console.log(`✅ Partner ditemukan via RPC: ${userId} <-> ${matchedPartnerId}`);
     
     // Kirim notifikasi pairing berhasil
-    await sendPairingNotifications(supabase, botToken, userId, partnerId);
+    await sendPairingNotifications(supabase, botToken, userId, matchedPartnerId);
     return true;
     
-  } 
+  }
 
 
 // HELPER: Kirim notifikasi setelah pairing berhasil
 async function sendPairingNotifications(supabase: any, botToken: string, user1Id: number, user2Id: number): Promise<void> {
+  
+  // UPDATE CACHE untuk kedua user dengan data chatting baru
+  setCachedUserData(user1Id, user2Id, 'chatting');
+  setCachedUserData(user2Id, user1Id, 'chatting');
+  console.log(`📦 Cache SET (pair): User ${user1Id} <-> ${user2Id} now chatting`);
   
    // Get reaction counts for both users
   const { data: user1Reactions } = await supabase
@@ -1259,6 +1319,9 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
     console.log(`⚠️ User ${userId} tidak dalam chat (state: ${userState}, partner: ${partnerId})`);
     return false;
   }
+  
+  // INVALIDATE CACHE untuk kedua user sebelum update
+  invalidatePairCache(userId, partnerId);
 
   // === ATOMIC RESET: Reset user HANYA jika masih punya partner yang sama ===
   // Ini mencegah double processing
@@ -2267,19 +2330,11 @@ Deno.serve(async (req) => {
       if (callbackData === 'chat_next') {
         await answerCallbackQuery(botToken, query.id, '⏭️ Mencari partner baru...');
         
-        const reportKeyboard = {
-          inline_keyboard: [
-            [ 
-              { text: '🚩 Laporkan', callback_data: 'report_user'},
-              { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
-            ]
-          ]
-        };
-        // Kirim peringatan reputasi
-        await sendReputationWarning(botToken, userId, result.reputation);
+        // Invalidate cache karena state akan berubah
+        invalidateUserCache(userId);
         
         // SATU PANGGILAN RPC: handles upsert, blocked check, end chat, reputation, search
-        const { success, handled, result } = await comprehensiveSearchAction(
+        const { success, handled, result: searchResult } = await comprehensiveSearchAction(
           supabase, botToken, userId,
           query.from.username, query.from.first_name,
           true // isNext = true
@@ -2290,9 +2345,14 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
         
-        if (success && result) {
+        if (success && searchResult) {
+          // Kirim peringatan reputasi jika ada
+          if (searchResult.reputation) {
+            await sendReputationWarning(botToken, userId, searchResult.reputation);
+          }
+          
           // Cek channel join HANYA jika should_check_channel = true
-          if (result.should_check_channel) {
+          if (searchResult.should_check_channel) {
             const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
             if (!isMember) {
               await sendJoinChannelMessage(botToken, userId, botNotAdmin);
@@ -2300,9 +2360,8 @@ Deno.serve(async (req) => {
             }
           }
           
-          
           // Cek apakah user dapat promo
-          if (result.chat_ended) {
+          if (searchResult.chat_ended) {
             const { data: promoUser } = await supabase.rpc('handle_end_chat_promo_logic', { p_user_id: userId });
             
             if (promoUser?.should_send) {
@@ -2313,7 +2372,7 @@ Deno.serve(async (req) => {
           }
           
           // Handle hasil pencarian partner
-          await handleComprehensiveSearchResult(supabase, botToken, userId, result);
+          await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult);
         }
 
         return new Response('OK', { status: 200 });
@@ -2449,12 +2508,34 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
 
       // --- LOGIKA RATING PARTNER (SPAM/SANGE/ASIK) ---
       if (callbackData === 'report_user') {
+        // Ambil partner_id dari pesan sebelumnya jika ada, atau dari database
+        let reportPartnerId: number | null = null;
+        
+        // Coba ambil dari cache dulu
+        const cachedData = getCachedUserData(userId);
+        if (cachedData?.partnerId) {
+          reportPartnerId = cachedData.partnerId;
+        } else {
+          // Fallback ke database
+          const { data: userData } = await supabase
+            .from('telegram_users')
+            .select('partner_id')
+            .eq('id', userId)
+            .single();
+          reportPartnerId = userData?.partner_id || null;
+        }
+        
+        if (!reportPartnerId) {
+          await answerCallbackQuery(botToken, query.id, '❌ Partner tidak ditemukan');
+          return new Response('OK', { status: 200 });
+        }
+        
         // Tampilkan pilihan rating: Spam, Sange
         const reportKeyboard = {
           inline_keyboard: [
             [
-              { text: '🚨 Spam', callback_data: `rate_spam_${partnerId}` },
-              { text: '🔞 Sange', callback_data: `rate_sange_${partnerId}` }
+              { text: '🚨 Spam', callback_data: `rate_spam_${reportPartnerId}` },
+              { text: '🔞 Sange', callback_data: `rate_sange_${reportPartnerId}` }
             ]
           ]
         };
@@ -3623,12 +3704,31 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       console.log('📸 Photo received from user', userId);
     }
 
-    // Get current user state
-    const { data: currentUser } = await supabase
-      .from('telegram_users')
-      .select('state, partner_id')
-      .eq('id', userId)
-      .single();
+    // Get current user state - dengan CACHING untuk hemat biaya cloud
+    // Cek cache dulu sebelum query ke database
+    let currentUser: { state: string; partner_id: number | null } | null = null;
+    const cachedUserData = getCachedUserData(userId);
+    
+    if (cachedUserData && cachedUserData.state === 'chatting') {
+      // Gunakan data dari cache untuk user yang sedang chatting
+      currentUser = { state: cachedUserData.state, partner_id: cachedUserData.partnerId };
+      console.log(`📦 Cache HIT: User ${userId} state=${currentUser.state} partner=${currentUser.partner_id}`);
+    } else {
+      // Cache miss atau state bukan chatting - query database
+      const { data: dbUser } = await supabase
+        .from('telegram_users')
+        .select('state, partner_id')
+        .eq('id', userId)
+        .single();
+      
+      currentUser = dbUser;
+      
+      // Simpan ke cache jika user sedang chatting
+      if (currentUser?.state === 'chatting' && currentUser?.partner_id) {
+        setCachedUserData(userId, currentUser.partner_id, currentUser.state);
+        console.log(`📦 Cache SET: User ${userId} state=${currentUser.state} partner=${currentUser.partner_id}`);
+      }
+    }
 
     // ************************************************
     // LOGIKA GUARD: Hanya Terima Foto dan Command /stop saat Awaiting Payment

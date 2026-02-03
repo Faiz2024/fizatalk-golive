@@ -125,6 +125,49 @@ await supabase.rpc('upsert_user_optimized', {
 | Channel check API | Every search | Users > 1 week | ~70% |
 | Promo user filter | In-memory | Database RPC | ~80% |
 | User upsert | Always write | Conditional | ~60% |
+| Message handling | DB query every msg | Cache-first | ~80% |
+
+## 6. In-Memory Cache System (NEW!)
+
+### Overview
+Sistem cache in-memory untuk menyimpan data user yang sedang chatting, mengurangi panggilan database saat mengirim pesan.
+
+### How It Works
+```typescript
+// Cache key: userId
+// Cache value: { partnerId, state, cachedAt }
+// TTL: 5 menit
+
+// 1. Saat user mengirim pesan dalam chat:
+const cached = getCachedUserData(userId);
+if (cached && cached.state === 'chatting') {
+  // Gunakan data dari cache - TIDAK ADA DB CALL
+  const partnerId = cached.partnerId;
+}
+
+// 2. Saat pairing berhasil:
+setCachedUserData(user1Id, user2Id, 'chatting');
+setCachedUserData(user2Id, user1Id, 'chatting');
+
+// 3. Saat chat berakhir:
+invalidatePairCache(userId, partnerId);
+```
+
+### Cache Invalidation Points
+- `endChat()` - Invalidate kedua user saat chat berakhir
+- `chat_next` - Invalidate sebelum mencari partner baru
+- `chat_stop` - Invalidate saat user stop
+- Automatic expiry setelah 5 menit (TTL)
+
+### Cost Savings
+**Sebelum:** Setiap pesan chat = 1 database SELECT query
+**Sesudah:** Pesan chat selama 5 menit = 1 database SELECT (di awal)
+
+**Contoh:**
+- User A dan B chatting 10 menit, kirim 50 pesan
+- **Sebelum:** 50 SELECT queries = ~Rp 50
+- **Sesudah:** 2 SELECT queries = ~Rp 2
+- **Savings: 96%**
 
 ## Best Practices
 
@@ -143,3 +186,8 @@ await supabase.rpc('upsert_user_optimized', {
 4. **Background Jobs**
    - Process in batches with limits
    - Use pg_cron for scheduled tasks
+
+5. **In-Memory Caching**
+   - Cache data untuk operasi frekuensi tinggi (chat messages)
+   - Invalidate cache saat state berubah
+   - Gunakan TTL untuk mencegah stale data
