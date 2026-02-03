@@ -719,7 +719,7 @@ function buildEndChatKeyboard(partnerId: number): any {
         { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${partnerId}` }
       ],
       [
-        { text: '🚩 Laporkan', callback_data: 'report_user'},
+        { text: '🚩 Laporkan', callback_data: `report_user_${partnerId}`},
         { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
       ]
     ]
@@ -2538,8 +2538,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       }
 
       // --- LOGIKA RATING PARTNER (SPAM/SANGE/ASIK) ---
-      if (callbackData === 'report_user') {
-        // Ambil partner_id dari pesan sebelumnya jika ada, atau dari database
+      if (callbackData.startsWith('report_user')) {        // Ambil partner_id dari pesan sebelumnya jika ada, atau dari database
         let reportPartnerId: number | null = null;
         
         // Coba ambil dari cache dulu
