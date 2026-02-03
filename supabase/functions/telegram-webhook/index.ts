@@ -753,11 +753,20 @@ interface ComprehensiveSearchResult {
 
 // HELPER: Build pesan pencarian dengan peringatan reputasi (jika ada)
 // Menggabungkan pesan "Mencari partner" dengan peringatan reputasi dalam 1 pesan
-function buildSearchMessageWithReputation(reputation?: ComprehensiveSearchResult['reputation'], isNext: boolean = false): string {
+// skipIfLowPenalty: jika true dan penalty < 40, return null (tidak perlu kirim pesan)
+function buildSearchMessageWithReputation(
+  reputation?: ComprehensiveSearchResult['reputation'], 
+  isNext: boolean = false,
+  skipIfLowPenalty: boolean = false
+): string | null {
   const baseAction = isNext ? '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>' : '🔍 Mencari partner untuk kamu...';
   
-  // Jika tidak ada reputation atau penalty di bawah 40, tampilkan pesan normal
+  // Jika tidak ada reputation atau penalty di bawah 40
   if (!reputation || reputation.penalty_points < 40) {
+    // Jika skipIfLowPenalty = true, tidak perlu kirim pesan
+    if (skipIfLowPenalty) {
+      return null;
+    }
     return `${baseAction}\n\nMohon tunggu sebentar!`;
   }
   
@@ -784,14 +793,23 @@ function buildSearchMessageWithReputation(reputation?: ComprehensiveSearchResult
 3️⃣ Dapatkan feedback positif dari partner.`;
   }
   
-  // Default fallback
+  // Default fallback - masih tampilkan jika penalty >= 40 tapi status tidak dikenali
   return `${baseAction}\n\nMohon tunggu sebentar!`;
 }
 
 // HELPER: Kirim pesan pencarian dengan reputasi (1 pesan gabungan)
-async function sendSearchingMessage(botToken: string, userId: number, reputation?: ComprehensiveSearchResult['reputation'], isNext: boolean = false): Promise<void> {
-  const message = buildSearchMessageWithReputation(reputation, isNext);
-  await sendTelegramMessage(botToken, userId, message);
+// skipIfLowPenalty: jika true dan penalty < 40, tidak kirim pesan sama sekali
+async function sendSearchingMessage(
+  botToken: string, 
+  userId: number, 
+  reputation?: ComprehensiveSearchResult['reputation'], 
+  isNext: boolean = false,
+  skipIfLowPenalty: boolean = false
+): Promise<void> {
+  const message = buildSearchMessageWithReputation(reputation, isNext, skipIfLowPenalty);
+  if (message) {
+    await sendTelegramMessage(botToken, userId, message);
+  }
 }
 
 // ============================================
@@ -945,23 +963,36 @@ async function comprehensiveSearchAction(
 }
 
 // HELPER: Proses hasil RPC dan kirim notifikasi
+// isNext: true jika dari tombol Next, false jika dari tombol Cari Partner
 async function handleComprehensiveSearchResult(
   supabase: any,
   botToken: string,
   userId: number,
-  result: ComprehensiveSearchResult
+  result: ComprehensiveSearchResult,
+  isNext: boolean = false
 ): Promise<void> {
+  const penaltyPoints = result.reputation?.penalty_points || 0;
+  
   if (!result.matched) {
     // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
     console.log(`📥 User ${userId} masuk antrian via RPC`);
-    // Kirim pesan mencari dengan reputasi (1 pesan gabungan)
-    await sendSearchingMessage(botToken, userId, result.reputation, false);
+    
+    // Untuk tombol Next: selalu tampilkan pesan "Mengakhiri chat..." (dengan peringatan jika >= 40)
+    // Untuk tombol Cari Partner: tampilkan pesan mencari (dengan peringatan jika >= 40)
+    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false);
     return;
   }
   
-  // Partner ditemukan! Kirim notifikasi ke kedua user
+  // Partner ditemukan!
   const partnerId = result.partner_id!;
   console.log(`✅ Partner ditemukan via RPC: ${userId} <-> ${partnerId}`);
+  
+  // Jika penalty >= 40: TETAP tampilkan pesan pencarian + peringatan walaupun langsung dapat partner
+  // skipIfLowPenalty = true: jika penalty < 40 dan matched, lewati pesan pencarian
+  if (penaltyPoints >= 40) {
+    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false);
+  }
+  // Jika penalty < 40 dan matched: langsung ke notifikasi pairing (lewati pesan pencarian)
   
   // Kirim notifikasi pairing berhasil
   await sendPairingNotifications(supabase, botToken, userId, partnerId);
@@ -2275,8 +2306,8 @@ Deno.serve(async (req) => {
             }
           }
           
-          // Handle hasil pencarian partner
-          await handleComprehensiveSearchResult(supabase, botToken, userId, result);
+          // Handle hasil pencarian partner (isNext = false untuk tombol Cari Partner)
+          await handleComprehensiveSearchResult(supabase, botToken, userId, result, false);
         }
 
         return new Response('OK', { status: 200 });
@@ -2347,13 +2378,12 @@ Deno.serve(async (req) => {
         }
         
         if (success && searchResult) {
-          // Kirim pesan mencari dengan reputasi (1 pesan gabungan) - untuk tombol Next
-          await sendSearchingMessage(botToken, userId, searchResult.reputation, true);
-          
           // Cek channel join HANYA jika should_check_channel = true
           if (searchResult.should_check_channel) {
             const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
             if (!isMember) {
+              // Untuk tombol Next: tetap tampilkan pesan "Mengakhiri chat..." dengan peringatan jika >= 40
+              await sendSearchingMessage(botToken, userId, searchResult.reputation, true, false);
               await sendJoinChannelMessage(botToken, userId, botNotAdmin);
               return new Response('OK', { status: 200 });
             }
@@ -2364,14 +2394,16 @@ Deno.serve(async (req) => {
             const { data: promoUser } = await supabase.rpc('handle_end_chat_promo_logic', { p_user_id: userId });
             
             if (promoUser?.should_send) {
+              // Untuk tombol Next: tetap tampilkan pesan "Mengakhiri chat..." dengan peringatan jika >= 40
+              await sendSearchingMessage(botToken, userId, searchResult.reputation, true, false);
               // JIKA DAPAT PROMO: Tampilkan promo dan BERHENTI
               await executePromoAction(supabase, botToken, userId);
               return new Response('OK', { status: 200 });
             }
           }
           
-          // Handle hasil pencarian partner
-          await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult);
+          // Handle hasil pencarian partner (isNext = true untuk tombol Next)
+          await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true);
         }
 
         return new Response('OK', { status: 200 });
