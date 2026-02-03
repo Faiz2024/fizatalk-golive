@@ -881,6 +881,7 @@ async function comprehensiveSearchAction(
       joined_at: new Date().toISOString()
     });
     await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
+    await sendReputationWarning(botToken, userId, result.reputation);
     return { success: false, handled: true };
   }
   
@@ -982,6 +983,7 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
         joined_at: new Date().toISOString()
       });
       await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
+      await sendReputationWarning(botToken, userId, result.reputation);
       return false;
     }
     
@@ -1000,10 +1002,7 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     if (!data.matched) {
       // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
       console.log(`📥 User ${userId} masuk antrian via RPC`);
-      // Kirim peringatan reputasi jika ada
-      if (data.reputation) {
-        await sendReputationWarning(botToken, userId, data.reputation);
-      }
+      await sendReputationWarning(botToken, userId, result.reputation);
       return false;
     }
     
@@ -2339,6 +2338,16 @@ Deno.serve(async (req) => {
           query.from.username, query.from.first_name,
           true // isNext = true
         );
+        const reportKeyboard = {
+          inline_keyboard: [
+            [ 
+              { text: '🚩 Laporkan', callback_data: 'report_user'},
+              { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
+            ]
+          ]
+        };
+        // Kirim peringatan reputasi
+        await sendReputationWarning(botToken, userId, result.reputation);
         
         if (handled) {
           // RPC sudah menangani notifikasi (banned, blocked, error)
@@ -2346,10 +2355,6 @@ Deno.serve(async (req) => {
         }
         
         if (success && searchResult) {
-          // Kirim peringatan reputasi jika ada
-          if (searchResult.reputation) {
-            await sendReputationWarning(botToken, userId, searchResult.reputation);
-          }
           
           // Cek channel join HANYA jika should_check_channel = true
           if (searchResult.should_check_channel) {
