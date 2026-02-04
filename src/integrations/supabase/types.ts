@@ -287,69 +287,6 @@ export type Database = {
           },
         ]
       }
-      promo_queue: {
-        Row: {
-          created_at: string | null
-          expires_at: string
-          id: string
-          message_text: string
-          photo_url: string | null
-          promo_buttons: Json | null
-          sent_message_id: number | null
-          status: string
-          user_id: number
-        }
-        Insert: {
-          created_at?: string | null
-          expires_at: string
-          id?: string
-          message_text: string
-          photo_url?: string | null
-          promo_buttons?: Json | null
-          sent_message_id?: number | null
-          status?: string
-          user_id: number
-        }
-        Update: {
-          created_at?: string | null
-          expires_at?: string
-          id?: string
-          message_text?: string
-          photo_url?: string | null
-          promo_buttons?: Json | null
-          sent_message_id?: number | null
-          status?: string
-          user_id?: number
-        }
-        Relationships: []
-      }
-      spam_detection: {
-        Row: {
-          detected_at: string | null
-          detection_type: string
-          id: string
-          message_hash: string
-          message_preview: string | null
-          user_id: number
-        }
-        Insert: {
-          detected_at?: string | null
-          detection_type: string
-          id?: string
-          message_hash: string
-          message_preview?: string | null
-          user_id: number
-        }
-        Update: {
-          detected_at?: string | null
-          detection_type?: string
-          id?: string
-          message_hash?: string
-          message_preview?: string | null
-          user_id?: number
-        }
-        Relationships: []
-      }
       telegram_users: {
         Row: {
           chat_end_count: number | null
@@ -450,30 +387,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      user_reactions: {
-        Row: {
-          created_at: string
-          emoji: string
-          from_user_id: number
-          id: string
-          user_id: number
-        }
-        Insert: {
-          created_at?: string
-          emoji: string
-          from_user_id: number
-          id?: string
-          user_id: number
-        }
-        Update: {
-          created_at?: string
-          emoji?: string
-          from_user_id?: number
-          id?: string
-          user_id?: number
-        }
-        Relationships: []
       }
       waiting_queue: {
         Row: {
