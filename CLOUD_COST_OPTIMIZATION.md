@@ -169,6 +169,35 @@ invalidatePairCache(userId, partnerId);
 - **Sesudah:** 2 SELECT queries = ~Rp 2
 - **Savings: 96%**
 
+## 7. Consolidated RPC Functions (NEW!)
+
+### Overview
+Semua operasi state change dikonsolidasi ke dalam RPC functions untuk mengurangi round-trip database.
+
+### New RPC Functions
+| RPC Function | Purpose | Replaces |
+|--------------|---------|----------|
+| `end_chat_comprehensive` | End chat + promo check + queue cleanup | 6 separate queries |
+| `update_user_gender` | Update gender + check location | 2 queries |
+| `update_user_location` | Update location | 1 query |
+| `update_target_gender` | Update target gender (premium) | 1 query |
+| `update_target_location` | Update target location (premium) | 1 query |
+| `set_user_payment_state` | Set awaiting_payment state | 1 query |
+| `reset_payment_state` | Reset from payment to idle/chatting | 2 queries |
+| `cancel_topup_transaction` | Cancel topup + reset state | 3 queries |
+| `cancel_premium_transaction` | Cancel premium + reset state | 3 queries |
+| `cancel_fine_transaction` | Cancel fine + reset state | 2 queries |
+
+### Cost Savings
+**Sebelum:** End chat operation = 6+ database calls
+**Sesudah:** End chat operation = 1 RPC call
+
+**Contoh:**
+- User menekan Stop → endChat()
+- **Sebelum:** SELECT user, UPDATE user, SELECT promo, SELECT promo partner, UPDATE partner, DELETE queue = 6 calls
+- **Sesudah:** RPC end_chat_comprehensive() = 1 call
+- **Savings: 83%**
+
 ## Best Practices
 
 1. **Minimize Database Writes**
@@ -191,3 +220,8 @@ invalidatePairCache(userId, partnerId);
    - Cache data untuk operasi frekuensi tinggi (chat messages)
    - Invalidate cache saat state berubah
    - Gunakan TTL untuk mencegah stale data
+
+6. **Consolidated Updates (NEW!)**
+   - Semua perubahan state dalam satu RPC call
+   - Hindari await supabase.from(...).update(...) setelah RPC
+   - Gunakan RPC yang return informasi yang diperlukan

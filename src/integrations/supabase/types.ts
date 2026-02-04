@@ -417,6 +417,9 @@ export type Database = {
     }
     Functions: {
       apply_daily_penalty_decay: { Args: never; Returns: number }
+      cancel_fine_transaction: { Args: { p_user_id: number }; Returns: Json }
+      cancel_premium_transaction: { Args: { p_user_id: number }; Returns: Json }
+      cancel_topup_transaction: { Args: { p_user_id: number }; Returns: Json }
       cleanup_inactive_users: { Args: never; Returns: undefined }
       comprehensive_search_action: {
         Args: {
@@ -427,6 +430,7 @@ export type Database = {
         }
         Returns: Json
       }
+      end_chat_comprehensive: { Args: { p_user_id: number }; Returns: Json }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
       get_promo_eligible_users: {
@@ -455,10 +459,12 @@ export type Database = {
         Args: { p_message_id: number; p_promo_id: string }
         Returns: undefined
       }
+      reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
       search_or_next_partner: {
         Args: { p_is_next?: boolean; p_user_id: number }
         Returns: Json
       }
+      set_user_payment_state: { Args: { p_user_id: number }; Returns: Json }
       should_show_channel_join: {
         Args: { p_user_id: number }
         Returns: boolean
@@ -474,6 +480,22 @@ export type Database = {
       update_last_active_daily: {
         Args: { p_user_id: number }
         Returns: boolean
+      }
+      update_target_gender: {
+        Args: { p_target_gender: string; p_user_id: number }
+        Returns: Json
+      }
+      update_target_location: {
+        Args: { p_target_location: string; p_user_id: number }
+        Returns: Json
+      }
+      update_user_gender: {
+        Args: { p_gender: string; p_user_id: number }
+        Returns: Json
+      }
+      update_user_location: {
+        Args: { p_location: string; p_user_id: number }
+        Returns: Json
       }
       upsert_user_optimized: {
         Args: {

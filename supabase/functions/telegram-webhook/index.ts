@@ -1332,86 +1332,68 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 
 // NOTE: buildEndChatKeyboard sudah didefinisikan di atas (line ~811)
 
+// Interface untuk hasil RPC end_chat_comprehensive
+interface EndChatResult {
+  success: boolean;
+  error?: string;
+  partner_id: number | null;
+  partner_reset?: boolean;
+  user_promo?: { should_send: boolean };
+  partner_promo?: { should_send: boolean };
+}
+
 async function endChat(supabase: any, botToken: string, userId: number): Promise<boolean> {
   console.log(`🔚 endChat: User ${userId} mengakhiri chat`);
   
-  // === ATOMIC CHECK: Ambil partner_id DAN reset user dalam satu operasi ===
-  // Ini mencegah race condition dimana kedua user mengakhiri bersamaan
-  const { data: user } = await supabase
-    .from('telegram_users')
-    .select('partner_id, state')
-    .eq('id', userId)
-    .single();
-
-  const partnerId = user?.partner_id;
-  const userState = user?.state;
+  // INVALIDATE CACHE sebelum RPC call
+  const cachedData = getCachedUserData(userId);
+  if (cachedData?.partnerId) {
+    invalidatePairCache(userId, cachedData.partnerId);
+  } else {
+    invalidateUserCache(userId);
+  }
   
-  // Jika user tidak dalam state chatting atau tidak punya partner, skip
-  if (userState !== 'chatting' || !partnerId) {
-    console.log(`⚠️ User ${userId} tidak dalam chat (state: ${userState}, partner: ${partnerId})`);
+  // SATU PANGGILAN RPC - handles semua operasi end chat!
+  const { data, error } = await supabase.rpc('end_chat_comprehensive', {
+    p_user_id: userId
+  });
+  
+  if (error) {
+    console.error('❌ end_chat_comprehensive RPC error:', error);
     return false;
   }
   
-  // INVALIDATE CACHE untuk kedua user sebelum update
-  invalidatePairCache(userId, partnerId);
-
-  // === ATOMIC RESET: Reset user HANYA jika masih punya partner yang sama ===
-  // Ini mencegah double processing
-  const { data: resetResult, error: resetError } = await supabase
-    .from('telegram_users')
-    .update({ state: 'idle', partner_id: null })
-    .eq('id', userId)
-    .eq('partner_id', partnerId)  // Kondisi tambahan untuk atomic check
-    .select();
+  const result = data as EndChatResult;
   
-  // Jika tidak ada row yang di-update, berarti sudah di-proses oleh partner
-  if (resetError || !resetResult || resetResult.length === 0) {
-    console.log(`⚠️ User ${userId} sudah di-reset oleh partner`);
+  if (!result.success) {
+    console.log(`⚠️ endChat gagal: ${result.error}`);
     return false;
   }
   
-  console.log(`✅ User ${userId} berhasil di-reset`);
-
-  // 4. Logika Promo (Hemat Biaya via RPC)
-  // Cek untuk User Utama
-  const { data: promoUser } = await supabase.rpc('handle_end_chat_promo_logic', { p_user_id: userId });
-  // Cek untuk Partner
-  const { data: promoPartner } = await supabase.rpc('handle_end_chat_promo_logic', { p_user_id: partnerId });
-
-  // === Reset partner ===
-  // Cek dulu apakah partner masih punya kita sebagai partner
-  const { data: partnerResetResult } = await supabase
-    .from('telegram_users')
-    .update({ state: 'idle', partner_id: null })
-    .eq('id', partnerId)
-    .eq('partner_id', userId)  // Hanya reset jika partner masih connected ke kita
-    .select();
+  const partnerId = result.partner_id!;
   
-  // Jika berhasil reset partner, kirim notifikasi ke partner
-  if (partnerResetResult && partnerResetResult.length > 0) {
+  // Invalidate cache untuk partner juga
+  invalidateUserCache(partnerId);
+  
+  console.log(`✅ User ${userId} berhasil di-reset via RPC`);
+  
+  // Kirim notifikasi ke partner jika berhasil di-reset
+  if (result.partner_reset) {
     console.log(`✅ Partner ${partnerId} berhasil di-reset, kirim notifikasi`);
     
-    // Build keyboard with rating buttons for partner (to rate userId)
     const combinedPartnerKeyboard = buildEndChatKeyboard(userId);
-
     await sendTelegramMessage(
       botToken, 
       partnerId, 
       `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner atau laporkan!`,
       combinedPartnerKeyboard
     );
-    
-    
   } else {
-    console.log(`⚠️ Partner ${partnerId} sudah di-reset sebelumnya (atau state berubah)`);
+    console.log(`⚠️ Partner ${partnerId} sudah di-reset sebelumnya`);
   }
-
-  // Remove from queue if in queue
-  await supabase.from('waiting_queue').delete().eq('user_id', userId);
-
-  // Build end chat keyboard for the user who ended (to rate partnerId)
+  
+  // Kirim notifikasi ke user yang mengakhiri
   const endChatKeyboard = buildEndChatKeyboard(partnerId);
-
   await sendTelegramMessage(
     botToken, 
     userId, 
@@ -1419,14 +1401,13 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
     endChatKeyboard
   );
   
-  
-  // Kirim ke user jika syarat terpenuhi via RPC
-  if (promoUser?.should_send) {
+  // Kirim promo ke user jika syarat terpenuhi (dari RPC)
+  if (result.user_promo?.should_send) {
     await executePromoAction(supabase, botToken, userId);
   }
-
-  // Kirim ke partner jika syarat terpenuhi via RPC
-  if (promoPartner?.should_send) {
+  
+  // Kirim promo ke partner jika syarat terpenuhi (dari RPC)
+  if (result.partner_promo?.should_send) {
     await executePromoAction(supabase, botToken, partnerId);
   }
   
@@ -1626,37 +1607,22 @@ Deno.serve(async (req) => {
         }
       }
 
-      // --- LOGIKA PEMBATALAN TOP-UP DARI INLINE BUTTON ---
+      // --- LOGIKA PEMBATALAN TOP-UP DARI INLINE BUTTON (SATU RPC) ---
       if (callbackData === 'cancel_topup') {
-          // Batalkan topup request pending
-          await supabase
-              .from('topup_requests')
-              .update({ status: 'cancelled' })
-              .eq('user_id', userId)
-              .eq('status', 'pending');
-          
-          // Reset state user ke CHATTING atau IDLE
-          const { data: userBeforeCancel } = await supabase
-            .from('telegram_users')
-            .select('partner_id')
-            .eq('id', userId)
-            .single();
-
-          const newState = userBeforeCancel?.partner_id ? 'chatting' : 'idle';
-          
-          await supabase
-              .from('telegram_users')
-              .update({ state: newState })
-              .eq('id', userId);
+          // SATU RPC: Batalkan topup + reset state
+          const { data: cancelResult } = await supabase.rpc('cancel_topup_transaction', {
+            p_user_id: userId
+          });
 
           await answerCallbackQuery(botToken, query.id, '🚫 Transaksi dibatalkan!');
           
-          // Hapus pesan QRIS (bukan edit)
+          // Hapus pesan QRIS
           if (message) {
               await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
           }
           
           // Kirim pesan konfirmasi pembatalan
+          const newState = cancelResult?.new_state || 'idle';
           const nextActionText = newState === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Anda dapat memulai chat baru dengan /start.';
           await sendTelegramMessage(
             botToken,
@@ -1667,7 +1633,7 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA BAYAR DENDA (BUKA BLOKIR) ---
+      // --- LOGIKA BAYAR DENDA (BUKA BLOKIR) - SATU RPC ---
       if (callbackData === 'pay_fine') {
         await answerCallbackQuery(botToken, query.id);
         
@@ -1688,11 +1654,8 @@ Deno.serve(async (req) => {
           admin_notes: 'FINE_PAYMENT' // Mark sebagai pembayaran denda
         });
         
-        // Update state user ke awaiting_payment
-        await supabase
-          .from('telegram_users')
-          .update({ state: 'awaiting_payment' })
-          .eq('id', userId);
+        // SATU RPC: Update state user ke awaiting_payment
+        await supabase.rpc('set_user_payment_state', { p_user_id: userId });
         
         // Kirim QRIS pembayaran
         await sendQRISPayment({
@@ -1721,21 +1684,10 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA PEMBATALAN DENDA DARI INLINE BUTTON ---
+      // --- LOGIKA PEMBATALAN DENDA DARI INLINE BUTTON (SATU RPC) ---
       if (callbackData === 'cancel_fine') {
-        // Batalkan pending transaction dengan notes FINE_PAYMENT
-        await supabase
-          .from('pending_transactions')
-          .update({ status: 'cancelled' })
-          .eq('user_id', userId)
-          .eq('status', 'pending')
-          .eq('admin_notes', 'FINE_PAYMENT');
-        
-        // Reset state user ke idle (tetap blocked)
-        await supabase
-          .from('telegram_users')
-          .update({ state: 'idle' })
-          .eq('id', userId);
+        // SATU RPC: Batalkan fine + reset state
+        await supabase.rpc('cancel_fine_transaction', { p_user_id: userId });
 
         await answerCallbackQuery(botToken, query.id, '🚫 Pembayaran denda dibatalkan!');
         
@@ -1761,7 +1713,7 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA PEMILIHAN GENDER (DARI /START - PERTAMA KALI) ---
+      // --- LOGIKA PEMILIHAN GENDER (DARI /START - PERTAMA KALI) - SATU RPC ---
       if (callbackData === 'gender_cowok' || callbackData === 'gender_cewek') {
         const selectedGender = callbackData === 'gender_cowok' ? 'cowok' : 'cewek';
         
@@ -1770,24 +1722,17 @@ Deno.serve(async (req) => {
           await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
         }
 
-        // Update gender user
-        await supabase
-          .from('telegram_users')
-          .update({ gender: selectedGender })
-          .eq('id', userId);
+        // SATU RPC: Update gender dan cek apakah perlu set lokasi
+        const { data: genderResult } = await supabase.rpc('update_user_gender', {
+          p_user_id: userId,
+          p_gender: selectedGender
+        });
 
         await answerCallbackQuery(botToken, query.id, `✅ Gender diset: ${selectedGender === 'cowok' ? 'Cowok 👦' : 'Cewek 👧'}`);
 
-        // Cek apakah user sudah set lokasi
-        const { data: userLocationCheck } = await supabase
-          .from('telegram_users')
-          .select('location')
-          .eq('id', userId)
-          .single();
-
-        // Jika belum set lokasi, minta set lokasi dulu
-        if (!userLocationCheck?.location) {
-          // Buat keyboard lokasi (4 kolom per baris)
+        // Cek dari RPC apakah perlu set lokasi
+        if (genderResult?.needs_location) {
+          // Buat keyboard lokasi (3 kolom per baris)
           const locationButtons = [];
           for (let i = 0; i < LOCATION_LIST.length; i += 3) {
             const row = [];
@@ -1818,7 +1763,7 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA PEMILIHAN LOKASI AWAL (DARI /START - PERTAMA KALI) ---
+      // --- LOGIKA PEMILIHAN LOKASI AWAL (DARI /START - PERTAMA KALI) - SATU RPC ---
       if (callbackData.startsWith('init_loc_')) {
         const selectedLocation = callbackData.replace('init_loc_', '');
         
@@ -1827,11 +1772,11 @@ Deno.serve(async (req) => {
           await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
         }
 
-        // Update location user
-        await supabase
-          .from('telegram_users')
-          .update({ location: selectedLocation })
-          .eq('id', userId);
+        // SATU RPC: Update location user
+        await supabase.rpc('update_user_location', {
+          p_user_id: userId,
+          p_location: selectedLocation
+        });
 
         await answerCallbackQuery(botToken, query.id, `✅ Lokasi diset: ${selectedLocation}`);
 
@@ -1849,15 +1794,15 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA PEMILIHAN TARGET GENDER (PREMIUM) ---
+      // --- LOGIKA PEMILIHAN TARGET GENDER (PREMIUM) - SATU RPC ---
       if (callbackData === 'target_cowok' || callbackData === 'target_cewek' || callbackData === 'target_semua') {
         const targetGender = callbackData === 'target_cowok' ? 'cowok' : callbackData === 'target_cewek' ? 'cewek' : 'semua';
         
-        // Update target_gender user tanpa hapus pesan
-        await supabase
-          .from('telegram_users')
-          .update({ target_gender: targetGender })
-          .eq('id', userId);
+        // SATU RPC: Update target_gender user
+        await supabase.rpc('update_target_gender', {
+          p_user_id: userId,
+          p_target_gender: targetGender
+        });
 
         const targetLabel = targetGender === 'cowok' ? 'Cowok 👦' : targetGender === 'cewek' ? 'Cewek 👧' : 'Semua 👥';
         await answerCallbackQuery(botToken, query.id, `✅ Target gender: ${targetLabel}`);
@@ -1865,15 +1810,15 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA PEMILIHAN TARGET LOKASI (PREMIUM) ---
+      // --- LOGIKA PEMILIHAN TARGET LOKASI (PREMIUM) - SATU RPC ---
       if (callbackData.startsWith('target_loc_')) {
         const targetLocation = callbackData.replace('target_loc_', '');
         
-        // Update target_location user tanpa hapus pesan
-        await supabase
-          .from('telegram_users')
-          .update({ target_location: targetLocation })
-          .eq('id', userId);
+        // SATU RPC: Update target_location user
+        await supabase.rpc('update_target_location', {
+          p_user_id: userId,
+          p_target_location: targetLocation
+        });
 
         const targetLabel = targetLocation === 'semua' ? 'Semua 🌏' : `📍 ${targetLocation}`;
         await answerCallbackQuery(botToken, query.id, `✅ Target lokasi: ${targetLabel}`);
@@ -1928,7 +1873,7 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // Handler untuk set_loc_* (dari /lokasi command - TANPA auto-search partner)
+      // Handler untuk set_loc_* (dari /lokasi command - TANPA auto-search partner) - SATU RPC
       if (callbackData.startsWith('set_loc_')) {
         const selectedLocation = callbackData.replace('set_loc_', '');
         
@@ -1937,11 +1882,11 @@ Deno.serve(async (req) => {
           await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
         }
 
-        // Update location user
-        await supabase
-          .from('telegram_users')
-          .update({ location: selectedLocation })
-          .eq('id', userId);
+        // SATU RPC: Update location user
+        await supabase.rpc('update_user_location', {
+          p_user_id: userId,
+          p_location: selectedLocation
+        });
 
         await answerCallbackQuery(botToken, query.id, `✅ Lokasi diset: ${selectedLocation}`);
         
@@ -2149,7 +2094,7 @@ Deno.serve(async (req) => {
       }
 
       // ============================================================
-      // 4. HANDLER PROSES TOP UP (Buat Invoice)
+      // 4. HANDLER PROSES TOP UP (Buat Invoice) - SATU RPC
       // ============================================================
       if (callbackData.startsWith('init_topup_')) {
         const amount = parseInt(callbackData.replace('init_topup_', ''));
@@ -2167,10 +2112,8 @@ Deno.serve(async (req) => {
         const uniqueCode = Math.floor(Math.random() * 999) + 1;
         const totalPrice = (amount * COIN_PRICE) + uniqueCode;
 
-        
-
-        // Set state ke awaiting_payment
-        await supabase.from('telegram_users').update({ state: 'awaiting_payment' }).eq('id', userId);
+        // SATU RPC: Set state ke awaiting_payment
+        await supabase.rpc('set_user_payment_state', { p_user_id: userId });
 
         // Hapus menu Top Up
         if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
@@ -3265,28 +3208,10 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
         }
         return new Response('OK', { status: 200 });
       }
-      // --- LOGIKA PEMBATALAN PREMIUM ---
+      // --- LOGIKA PEMBATALAN PREMIUM (SATU RPC) ---
       if (callbackData === 'cancel_premium') {
-        // Batalkan premium request pending
-        await supabase
-          .from('premium_requests')
-          .update({ status: 'cancelled' })
-          .eq('user_id', userId)
-          .eq('status', 'pending');
-        
-        // Reset state user
-        const { data: userBeforeCancel } = await supabase
-          .from('telegram_users')
-          .select('partner_id')
-          .eq('id', userId)
-          .single();
-
-        const newState = userBeforeCancel?.partner_id ? 'chatting' : 'idle';
-        
-        await supabase
-          .from('telegram_users')
-          .update({ state: newState })
-          .eq('id', userId);
+        // SATU RPC: Batalkan premium + reset state
+        await supabase.rpc('cancel_premium_transaction', { p_user_id: userId });
 
         await answerCallbackQuery(botToken, query.id, '🚫 Transaksi dibatalkan!');
         
