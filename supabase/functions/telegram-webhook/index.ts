@@ -258,7 +258,8 @@ async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null
 
   const caption = `💳 <b>${title}</b>
 
-  💰 Harga: Rp ${price.toLocaleString('id-ID')}+${uniqueCode} (Kode Unik)
+  💰 Harga: Rp ${price.toLocaleString('id-ID')}
+  🔢 Kode Unik: ${uniqueCode}
   💵 <b>Total Bayar: Rp ${totalAmount.toLocaleString('id-ID')}</b>
 
 📱 <b>CARA PEMBAYARAN:</b>
@@ -2481,24 +2482,11 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       }
 
       // --- LOGIKA RATING PARTNER (SPAM/SANGE/ASIK) ---
-      if (callbackData.startsWith('report_user')) {        // Ambil partner_id dari pesan sebelumnya jika ada, atau dari database
-        let reportPartnerId: number | null = null;
+      if (callbackData.startsWith('report_user_')) {        // Ambil partner_id dari pesan sebelumnya jika ada, atau dari database
         
-        // Coba ambil dari cache dulu
-        const cachedData = getCachedUserData(userId);
-        if (cachedData?.partnerId) {
-          reportPartnerId = cachedData.partnerId;
-        } else {
-          // Fallback ke database
-          const { data: userData } = await supabase
-            .from('telegram_users')
-            .select('partner_id')
-            .eq('id', userId)
-            .single();
-          reportPartnerId = userData?.partner_id || null;
-        }
-        
-        if (!reportPartnerId) {
+        const reportPartnerId = parseInt(callbackData.replace('report_user_', ''));
+  
+        if (!reportPartnerId || isNaN(reportPartnerId)) {
           await answerCallbackQuery(botToken, query.id, '❌ Partner tidak ditemukan');
           return new Response('OK', { status: 200 });
         }
