@@ -768,8 +768,8 @@ function buildSearchMessageWithReputation(
     if (skipIfLowPenalty) {
       return null;
     }
-    return `${baseAction}\n\nMohon tunggu sebentar!`;
-  }
+    return `${baseAction}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}`; 
+   }
   
   // Penalty 40-69: Status Peringatan
   if (reputation.status === 'warning') {
@@ -805,11 +805,12 @@ async function sendSearchingMessage(
   userId: number, 
   reputation?: ComprehensiveSearchResult['reputation'], 
   isNext: boolean = false,
-  skipIfLowPenalty: boolean = false
+  skipIfLowPenalty: boolean = false,
+  replyMarkup?: any // Tambahkan parameter ini
 ): Promise<void> {
   const message = buildSearchMessageWithReputation(reputation, isNext, skipIfLowPenalty);
   if (message) {
-    await sendTelegramMessage(botToken, userId, message);
+    await sendTelegramMessage(botToken, userId, message, replyMarkup);
   }
 }
 
@@ -949,7 +950,7 @@ async function comprehensiveSearchAction(
     await sendTelegramMessage(
       botToken, 
       result.old_partner_id, 
-      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner atau laporkan!`,
+      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
       combinedPartnerKeyboard
     );
     
@@ -973,6 +974,19 @@ async function handleComprehensiveSearchResult(
   isNext: boolean = false
 ): Promise<void> {
   const penaltyPoints = result.reputation?.penalty_points || 0;
+
+  // Buat keyboard "Laporkan" & "Asik" jika user menekan Next dan penalti < 40
+  let endChatKeyboard = undefined;
+  if (isNext && result.old_partner_id && penaltyPoints < 40) {
+    endChatKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '🚩 Laporkan', callback_data: `report_user_${result.old_partner_id}` },
+          { text: '😎 Asik', callback_data: `rate_asik_${result.old_partner_id}` }
+        ]
+      ]
+    };
+  }
   
   if (!result.matched) {
     // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
@@ -980,7 +994,7 @@ async function handleComprehensiveSearchResult(
     
     // Untuk tombol Next: selalu tampilkan pesan "Mengakhiri chat..." (dengan peringatan jika >= 40)
     // Untuk tombol Cari Partner: tampilkan pesan mencari (dengan peringatan jika >= 40)
-    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false);
+    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard);
     return;
   }
   
@@ -990,8 +1004,8 @@ async function handleComprehensiveSearchResult(
   
   // Jika penalty >= 40: TETAP tampilkan pesan pencarian + peringatan walaupun langsung dapat partner
   // skipIfLowPenalty = true: jika penalty < 40 dan matched, lewati pesan pencarian
-  if (penaltyPoints >= 40) {
-    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false);
+  if (isNext || penaltyPoints >= 40) {
+    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard);
   }
   // Jika penalty < 40 dan matched: langsung ke notifikasi pairing (lewati pesan pencarian)
   
@@ -1386,7 +1400,7 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
     await sendTelegramMessage(
       botToken, 
       partnerId, 
-      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner atau laporkan!`,
+      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
       combinedPartnerKeyboard
     );
   } else {
@@ -1398,7 +1412,7 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   await sendTelegramMessage(
     botToken, 
     userId, 
-    `👋 Anda mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri rating untuk partner!`,
+    `👋 Anda mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
     endChatKeyboard
   );
   
