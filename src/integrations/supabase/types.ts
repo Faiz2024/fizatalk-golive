@@ -459,15 +459,6 @@ export type Database = {
         Args: { p_message_id: number; p_promo_id: string }
         Returns: undefined
       }
-      process_gift_transaction: {
-        Args: {
-          p_gift_id: string
-          p_gift_name: string
-          p_gift_price: number
-          p_sender_id: number
-        }
-        Returns: Json
-      }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
       search_or_next_partner: {
         Args: { p_is_next?: boolean; p_user_id: number }
