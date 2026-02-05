@@ -142,64 +142,8 @@ async function setBotSetting(supabase: any, key: string, value: string, updatedB
 }
 
 
-// HELPER: Cek apakah user sudah diblokir
-async function isUserBlocked(supabase: any, userId: number): Promise<boolean> {
-  const { data } = await supabase
-    .from('blocked_users')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .maybeSingle();
-  
-  return !!data;
-}
-
-
-
-// HELPER: Simple upsert user - uses RPC for maximum cost savings
-// Only updates username/first_name, NEVER update last_active
-async function simpleUpsertUser(
-  supabase: any, 
-  userId: number, 
-  username: string | undefined, 
-  firstName: string | undefined
-): Promise<void> {
-  // Use RPC for optimized upsert (skips update if data unchanged)
-  await supabase.rpc('upsert_user_optimized', {
-    p_user_id: userId,
-    p_username: username || null,
-    p_first_name: firstName || null,
-    p_update_last_active: false
-  });
-}
-
-// HELPER: Smart upsert user - update last_active ONLY ONCE PER DAY
-// Called on "Cari Partner", "Next", or "Stop" buttons
-async function smartUpsertUser(
-  supabase: any, 
-  userId: number, 
-  username: string | undefined, 
-  firstName: string | undefined
-): Promise<void> {
-  // Use RPC for optimized upsert with daily last_active update
-  await supabase.rpc('upsert_user_optimized', {
-    p_user_id: userId,
-    p_username: username || null,
-    p_first_name: firstName || null,
-    p_update_last_active: true // Only updates if last_active is not today
-  });
-}
-
-// HELPER: Check if user should see channel join message (registered > 1 week)
-async function shouldShowChannelJoin(supabase: any, userId: number): Promise<boolean> {
-  const { data, error } = await supabase.rpc('should_show_channel_join', { p_user_id: userId });
-  if (error) {
-    console.error('shouldShowChannelJoin error:', error);
-    return true; // Default to showing channel check on error
-  }
-  return data === true;
-}
-
+// NOTE: Helper functions isUserBlocked, simpleUpsertUser, smartUpsertUser, shouldShowChannelJoin
+// telah DIHAPUS - logika sudah terintegrasi dalam comprehensive_search_action RPC
 // HELPER: Kirim foto QRIS dengan instruksi pembayaran
 interface QRISPaymentParams {
   supabase: any;
@@ -291,10 +235,8 @@ async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null
     if (respJson.ok) {
       return respJson.result.message_id;
     }
-    console.error('sendQRISPayment failed:', respJson);
     return null;
   } catch (e) {
-    console.error('sendQRISPayment exception:', e);
     return null;
   }
 }
@@ -552,7 +494,6 @@ function getReplyPreview(replyMsg: any, currentUserId: number): string {
 async function sendTelegramMessage(botToken: string, chatId: number, text: string, replyMarkup?: any): Promise<boolean> {
   const url = `${TELEGRAM_API}${botToken}/sendMessage`;
   try {
-    console.log(`📤 Sending message to chat ${chatId}...`);
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -565,15 +506,11 @@ async function sendTelegramMessage(botToken: string, chatId: number, text: strin
     });
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ sendMessage failed [${response.status}]:`, errorText);
       return false;
     }
     
-    console.log(`✅ Message sent successfully to chat ${chatId}`);
     return true;
   } catch (error) {
-    console.error(`❌ sendMessage exception for chat ${chatId}:`, error);
     return false;
   }
 }
@@ -646,7 +583,6 @@ async function checkChannelMembership(botToken: string, userId: number, channelU
     const data = await response.json();
     
     if (!data.ok) {
-      console.error('getChatMember error:', data);
       // Jika error "member list is inaccessible", bot bukan admin channel
       if (data.description?.includes('member list is inaccessible')) {
         return { isMember: false, status: 'bot_not_admin', botNotAdmin: true };
@@ -661,7 +597,6 @@ async function checkChannelMembership(botToken: string, userId: number, channelU
     
     return { isMember, status, botNotAdmin: false };
   } catch (error) {
-    console.error('checkChannelMembership exception:', error);
     // Jika exception, anggap belum member untuk memaksa join
     return { isMember: false, status: 'error', botNotAdmin: false };
   }
@@ -883,7 +818,6 @@ async function comprehensiveSearchAction(
   firstName: string | undefined,
   isNext: boolean = false
 ): Promise<{ success: boolean; handled: boolean; result?: ComprehensiveSearchResult }> {
-  console.log(`🔍 comprehensiveSearchAction: ${isNext ? 'NEXT' : 'SEARCH'} untuk user ${userId}`);
   
   // Invalidate cache karena state akan berubah
   invalidateUserCache(userId);
@@ -897,7 +831,6 @@ async function comprehensiveSearchAction(
   });
   
   if (error) {
-    console.error(`❌ RPC Error:`, error);
     // Fallback: masukkan user ke antrian secara manual
     await supabase.from('waiting_queue').upsert({
       user_id: userId,
@@ -906,8 +839,6 @@ async function comprehensiveSearchAction(
     await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
     return { success: false, handled: true };
   }
-  
-  console.log(`📦 RPC Result:`, data);
   
   const result = data as ComprehensiveSearchResult;
   
@@ -939,7 +870,6 @@ async function comprehensiveSearchAction(
   
   // Handle error lain
   if (!result.success) {
-    console.log(`⚠️ RPC tidak sukses: ${result.error}`);
     return { success: false, handled: true, result };
   }
   
@@ -990,7 +920,6 @@ async function handleComprehensiveSearchResult(
   
   if (!result.matched) {
     // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
-    console.log(`📥 User ${userId} masuk antrian via RPC`);
     
     // Untuk tombol Next: selalu tampilkan pesan "Mengakhiri chat..." (dengan peringatan jika >= 40)
     // Untuk tombol Cari Partner: tampilkan pesan mencari (dengan peringatan jika >= 40)
@@ -1000,7 +929,6 @@ async function handleComprehensiveSearchResult(
   
   // Partner ditemukan!
   const partnerId = result.partner_id!;
-  console.log(`✅ Partner ditemukan via RPC: ${userId} <-> ${partnerId}`);
   
   // Jika penalty >= 40: TETAP tampilkan pesan pencarian + peringatan walaupun langsung dapat partner
   // skipIfLowPenalty = true: jika penalty < 40 dan matched, lewati pesan pencarian
@@ -1015,7 +943,6 @@ async function handleComprehensiveSearchResult(
 
 // HELPER: Panggil RPC find_and_pair_partner dan kirim notifikasi jika berhasil (LEGACY)
 async function searchPartnerWithRPC(supabase: any, botToken: string, userId: number): Promise<boolean> {
-  console.log(`🔍 searchPartnerWithRPC: Memulai pencarian untuk user ${userId}`);
   
     // Panggil RPC function di database - semua logika matching dilakukan di sini
     const { data, error } = await supabase.rpc('find_and_pair_partner', {
@@ -1024,7 +951,6 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     });
     
     if (error) {
-      console.error(`❌ RPC Error:`, error);
       // Fallback: masukkan user ke antrian secara manual
       await supabase.from('waiting_queue').upsert({
         user_id: userId,
@@ -1034,12 +960,9 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
       return false;
     }
     
-    console.log(`📦 RPC Result:`, data);
-    
     // Cek hasil RPC
     if (!data.success) {
       // Error dari RPC (user_not_found, user_already_chatting, dll)
-      console.log(`⚠️ RPC tidak sukses: ${data.error}`);
       if (data.error === 'user_already_chatting') {
         await sendTelegramMessage(botToken, userId, '⚠️ Kamu sudah dalam sesi chat!');
       }
@@ -1048,7 +971,6 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     
     if (!data.matched) {
       // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
-      console.log(`📥 User ${userId} masuk antrian via RPC`);
       // Kirim pesan mencari dengan reputasi (1 pesan gabungan)
       await sendSearchingMessage(botToken, userId, data.reputation, false);
       return false;
@@ -1056,7 +978,6 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     
     // Partner ditemukan! Kirim notifikasi ke kedua user
     const matchedPartnerId = data.partner_id;
-    console.log(`✅ Partner ditemukan via RPC: ${userId} <-> ${matchedPartnerId}`);
     
     // Kirim notifikasi pairing berhasil
     await sendPairingNotifications(supabase, botToken, userId, matchedPartnerId);
@@ -1071,7 +992,6 @@ async function sendPairingNotifications(supabase: any, botToken: string, user1Id
   // UPDATE CACHE untuk kedua user dengan data chatting baru
   setCachedUserData(user1Id, user2Id, 'chatting');
   setCachedUserData(user2Id, user1Id, 'chatting');
-  console.log(`📦 Cache SET (pair): User ${user1Id} <-> ${user2Id} now chatting`);
   
    // Get reaction counts for both users
   const { data: user1Reactions } = await supabase
@@ -1358,7 +1278,6 @@ interface EndChatResult {
 }
 
 async function endChat(supabase: any, botToken: string, userId: number): Promise<boolean> {
-  console.log(`🔚 endChat: User ${userId} mengakhiri chat`);
   
   // INVALIDATE CACHE sebelum RPC call
   const cachedData = getCachedUserData(userId);
@@ -1374,14 +1293,12 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   });
   
   if (error) {
-    console.error('❌ end_chat_comprehensive RPC error:', error);
     return false;
   }
   
   const result = data as EndChatResult;
   
   if (!result.success) {
-    console.log(`⚠️ endChat gagal: ${result.error}`);
     return false;
   }
   
@@ -1390,11 +1307,9 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   // Invalidate cache untuk partner juga
   invalidateUserCache(partnerId);
   
-  console.log(`✅ User ${userId} berhasil di-reset via RPC`);
   
   // Kirim notifikasi ke partner jika berhasil di-reset
   if (result.partner_reset) {
-    console.log(`✅ Partner ${partnerId} berhasil di-reset, kirim notifikasi`);
     
     const combinedPartnerKeyboard = buildEndChatKeyboard(userId);
     await sendTelegramMessage(
@@ -1403,8 +1318,6 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
       `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
       combinedPartnerKeyboard
     );
-  } else {
-    console.log(`⚠️ Partner ${partnerId} sudah di-reset sebelumnya`);
   }
   
   // Kirim notifikasi ke user yang mengakhiri
@@ -1460,17 +1373,13 @@ Deno.serve(async (req) => {
     let update: TelegramUpdate;
     try {
       const text = await req.text();
-      console.log('Raw request body:', text);
       
       if (!text || text.trim() === '') {
-        console.log('Empty request body, ignoring');
         return new Response('OK', { status: 200 });
       }
       
       update = JSON.parse(text);
-      console.log('Parsed update:', JSON.stringify(update));
     } catch (parseError) {
-      console.error('Error parsing request:', parseError);
       return new Response('Invalid JSON', { status: 400 });
     }
 
@@ -1481,20 +1390,9 @@ Deno.serve(async (req) => {
       const callbackData = query.data || '';
       const message = query.message;
 
-      // ************************************************
-      // CEK APAKAH USER SUDAH DIBLOKIR (CALLBACK QUERY)
-      // ************************************************
-      // PENGECUALIAN: pay_fine dan cancel_fine harus diizinkan agar user bisa bayar denda
-      const fineAllowedCallbacks = ['pay_fine', 'cancel_fine'];
-      
-      if (!fineAllowedCallbacks.includes(callbackData)) {
-        const userIsBlockedCallback = await isUserBlocked(supabase, userId);
-        if (userIsBlockedCallback) {
-          // User diblokir, kirim alert dan abaikan
-          await answerCallbackQuery(botToken, query.id, '🚫 Akun Anda diblokir. Hubungi @FizatalkCS jika ini kekeliruan.', true);
-          return new Response('OK', { status: 200 });
-        }
-      }
+      // NOTE: Pengecekan isUserBlocked DIHAPUS di sini untuk hemat biaya
+      // Cek blokir dilakukan di dalam comprehensive_search_action saat search/next
+      // Untuk callback lain (gift, topup, dll), validasi state sudah cukup
 
       // === CEK STATE AWAITING_PAYMENT - BLOKIR SEMUA TOMBOL KECUALI CANCEL ===
       // Hanya izinkan cancel_topup, cancel_premium, dan cancel_fine saat sedang dalam pembayaran
@@ -1874,84 +1772,59 @@ Deno.serve(async (req) => {
             return new Response('OK', { status: 200 });
         }
 
-        // Ambil data terbaru
-        const { data: senderData } = await supabase
-            .from('telegram_users')
-            .select('coins, state, partner_id')
-            .eq('id', userId)
-            .single();
-
-        // Validasi Status
-        if (senderData?.state !== 'chatting' || !senderData?.partner_id) {
+        // SATU RPC: Proses gift atomik (cek saldo, kurangi sender, tambah partner, log)
+        const { data: giftResult, error: giftError } = await supabase.rpc('process_gift_transaction', {
+          p_sender_id: userId,
+          p_gift_id: selectedGift.id,
+          p_gift_name: selectedGift.name,
+          p_gift_price: selectedGift.price
+        });
+        
+        if (giftError || !giftResult?.success) {
+          // Handle error berdasarkan tipe
+          const errorType = giftResult?.error || 'unknown';
+          
+          if (errorType === 'not_chatting') {
             await answerCallbackQuery(botToken, query.id, '❌ Tidak sedang chatting!');
             if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
             return new Response('OK', { status: 200 });
-        }
-
-        const partnerId = senderData.partner_id;
-        const currentCoins = senderData.coins || 0;
-
-  
-        // Validasi Saldo
-        if (currentCoins < selectedGift.price) {
-            // 1. Beri notifikasi toast bahwa saldo kurang
+          }
+          
+          if (errorType === 'insufficient_balance') {
             await answerCallbackQuery(botToken, query.id, '❌ Saldo tidak cukup, silakan Top Up');
-
-            // 2. Langsung EDIT pesan menjadi Menu Top Up
             if (message) {
-                const url = `${TELEGRAM_API}${botToken}/editMessageText`;
-                await fetch(url, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    chat_id: message.chat.id,
-                    message_id: message.message_id,
-                    // Tampilkan detail kenapa dialihkan
-                    text: `⚠️ <b>Saldo Tidak Cukup!</b>\n\n🎁 Harga Gift: <b>${selectedGift.price} koin</b>\n💰 Saldo Kamu: <b>${currentCoins} koin</b>\n\nSilakan isi ulang saldo untuk melanjutkan:`,
-                    parse_mode: 'HTML',
-                    reply_markup: buildTopupKeyboard() // Panggil helper keyboard topup
-                  })
-                });
+              await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: message.chat.id,
+                  message_id: message.message_id,
+                  text: `⚠️ <b>Saldo Tidak Cukup!</b>\n\n🎁 Harga Gift: <b>${selectedGift.price} koin</b>\n💰 Saldo Kamu: <b>${giftResult?.current_coins || 0} koin</b>\n\nSilakan isi ulang saldo untuk melanjutkan:`,
+                  parse_mode: 'HTML',
+                  reply_markup: buildTopupKeyboard()
+                })
+              });
             }
             return new Response('OK', { status: 200 });
+          }
+          
+          await answerCallbackQuery(botToken, query.id, '❌ Terjadi kesalahan');
+          return new Response('OK', { status: 200 });
         }
 
-        // --- EKSEKUSI TRANSAKSI ---
-        // 1. Kurangi Saldo Pengirim
-        const newSenderBalance = currentCoins - selectedGift.price;
-        await supabase.from('telegram_users').update({ coins: newSenderBalance }).eq('id', userId);
-        
-        await supabase.from('coin_transactions').insert({
-            user_id: userId,
-            amount: -selectedGift.price,
-            type: 'gift_sent',
-            description: `Kirim gift ${selectedGift.name}`
-        });
+        // Gift berhasil! Ambil data dari result RPC
+        const partnerId = giftResult.partner_id;
+        const newSenderBalance = giftResult.new_sender_balance;
+        const payoutAmount = giftResult.payout_amount;
 
-        // 2. Tambah Saldo Partner (75% Payout)
-        const payoutAmount = Math.floor(selectedGift.price * 0.75); // 75% Bulat
-        const { data: partnerData } = await supabase.from('telegram_users').select('coins').eq('id', partnerId).single();
-        const newPartnerBalance = (partnerData?.coins || 0) + payoutAmount;
-
-        await supabase.from('telegram_users').update({ coins: newPartnerBalance }).eq('id', partnerId);
-        
-        await supabase.from('coin_transactions').insert({
-            user_id: partnerId,
-            amount: payoutAmount,
-            type: 'gift_received',
-            description: `Terima gift ${selectedGift.name}`
-        });
-
-        // 3. Update Tampilan Menu Gift (Saldo berkurang, menu tetap terbuka)
+        // Update Tampilan Menu Gift (Saldo berkurang, menu tetap terbuka)
         if (message) {
-            const url = `${TELEGRAM_API}${botToken}/editMessageText`;
-            await fetch(url, {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 chat_id: message.chat.id,
                 message_id: message.message_id,
-                // Update teks saldo
                 text: `🎁 <b>Kirim Gift FizaTalk</b>\n\n💰 Saldo kamu: <b>${newSenderBalance} koin</b>\n\nPilih gift untuk dikirim ke partner:`,
                 parse_mode: 'HTML',
                 reply_markup: buildGiftKeyboard()
@@ -1959,13 +1832,13 @@ Deno.serve(async (req) => {
             });
         }
 
-        // 4. Notifikasi Toast
+        // Notifikasi Toast
         await answerCallbackQuery(botToken, query.id, `✅ Terkirim: ${selectedGift.name}`);
 
-        // 5. Pesan ke Chat Log (Pengirim)
+        // Pesan ke Chat Log (Pengirim)
         await sendTelegramMessage(botToken, userId, `🎁 Kamu mengirim <b>${selectedGift.name}</b> ${selectedGift.emoji}`);
 
-        // 6. Pesan ke Partner (Penerima)
+        // Pesan ke Partner (Penerima)
         let specialEffect = '';
         if (selectedGift.price >= 1000) specialEffect = '\n✨✨✨ <b>SULTAN VIBES!</b> ✨✨✨';
         
@@ -2530,9 +2403,6 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
         }
         
-        // Pastikan user ada di database (tanpa update last_active untuk hemat biaya)
-        await simpleUpsertUser(supabase, userId, query.from.username, query.from.first_name);
-        
         // Hapus dari promo_queue jika ada
         await supabase
           .from('promo_queue')
@@ -2542,7 +2412,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
 
         await answerCallbackQuery(botToken, query.id, '🔍 Mencari partner...');
         
-        // Langsung cari partner menggunakan helper yang sudah ada
+        // Langsung cari partner - upsert sudah terintegrasi di RPC
         await searchPartnerWithQueueCheck(supabase, botToken, userId);
         return new Response('OK', { status: 200 });
       }
@@ -3497,45 +3367,8 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
     }
     // --- END LOGIKA CALLBACK ---
 
-    // Handle message reactions
-    if (update.message_reaction) {
-      const reaction = update.message_reaction;
-      const userId = reaction.user.id;
-
-      // ************************************************
-      // CEK APAKAH USER SUDAH DIBLOKIR (REACTION)
-      // ************************************************
-      const userIsBlockedReaction = await isUserBlocked(supabase, userId);
-      if (userIsBlockedReaction) {
-        // User diblokir, abaikan reaction
-        return new Response('OK', { status: 200 });
-      }
-
-      // Get current user and partner
-      const { data: currentUser } = await supabase
-        .from('telegram_users')
-        .select('state, partner_id')
-        .eq('id', userId)
-        .single();
-
-      // If user is chatting and has a partner, notify partner about reaction
-      if (currentUser?.state === 'chatting' && currentUser?.partner_id) {
-        const newReactions = reaction.new_reaction || [];
-        const oldReactions = reaction.old_reaction || [];
-        
-        if (newReactions.length > oldReactions.length) {
-          // New reaction added
-          const newEmoji = newReactions[newReactions.length - 1]?.emoji || '👍';
-          await sendTelegramMessage(
-            botToken, 
-            currentUser.partner_id as number, 
-            `${newEmoji} <i>Partner bereaksi pada pesan</i>`
-          );
-        }
-      }
-
-      return new Response('OK', { status: 200 });
-    }
+    // NOTE: Message reaction handler DIHAPUS untuk hemat biaya cloud
+    // Setiap reaction memicu 2 query database (blocked check + state check)
 
     // ************************************************
     // START LOGIKA PESAN/COMMAND
@@ -3553,8 +3386,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
 
     // Photo received - log for debugging only
     if (message.photo && message.photo.length > 0) {
-      const largestPhoto = message.photo[message.photo.length - 1];
-      console.log('📸 Photo received from user', userId);
+      // Photo logging dihapus untuk hemat biaya
     }
 
     // Get current user state - dengan CACHING untuk hemat biaya cloud
@@ -3565,7 +3397,6 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
     if (cachedUserData && cachedUserData.state === 'chatting') {
       // Gunakan data dari cache untuk user yang sedang chatting
       currentUser = { state: cachedUserData.state, partner_id: cachedUserData.partnerId };
-      console.log(`📦 Cache HIT: User ${userId} state=${currentUser.state} partner=${currentUser.partner_id}`);
     } else {
       // Cache miss atau state bukan chatting - query database
       const { data: dbUser } = await supabase
@@ -3579,7 +3410,6 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       // Simpan ke cache jika user sedang chatting
       if (currentUser?.state === 'chatting' && currentUser?.partner_id) {
         setCachedUserData(userId, currentUser.partner_id, currentUser.state);
-        console.log(`📦 Cache SET: User ${userId} state=${currentUser.state} partner=${currentUser.partner_id}`);
       }
     }
 
