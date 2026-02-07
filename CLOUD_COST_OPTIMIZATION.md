@@ -307,3 +307,53 @@ SELECT process_gift_transaction(
 - **Removed:** Pengecekan blocked status di setiap callback query
 - **Reason:** Cek blokir hanya perlu di saat search/next (ada di RPC)
 - **Impact:** -1 query per callback = significant savings
+
+## 12. Button Debounce System (NEW!)
+
+### Overview
+Sistem anti double-click menggunakan in-memory cache untuk mencegah eksekusi tombol berulang dalam waktu singkat.
+
+### How It Works
+```typescript
+// Cache key: `${userId}_${action}`
+// Cache value: timestamp last click
+// Cooldown: berbeda per action type
+
+// Cek apakah tombol dalam cooldown
+if (isButtonOnCooldown(userId, actionType)) {
+  await answerCallbackQuery(botToken, query.id, '⏳ Mohon tunggu sebentar...');
+  return; // Block execution
+}
+```
+
+### Cooldown Configuration
+| Action | Cooldown |
+|--------|----------|
+| search_partner | 3 detik |
+| chat_next | 3 detik |
+| chat_stop | 2 detik |
+| send_gift | 1.5 detik |
+| init_topup | 3 detik |
+| buy_premium | 3 detik |
+| report_user | 2 detik |
+| rate_asik | 2 detik |
+| reconnect | 3 detik |
+| pay_fine | 3 detik |
+| cancel_* | 2 detik |
+| gender/target/location | 1.5 detik |
+| default | 1 detik |
+
+### Cost Savings
+**Sebelum:** User double-click → 2x database operations
+**Sesudah:** User double-click → 1x operation (second click blocked)
+
+**Contoh:**
+- User panic-click "Next" 3x dalam 2 detik
+- **Sebelum:** 3x RPC call = 3x biaya
+- **Sesudah:** 1x RPC call = 1x biaya
+- **Savings: 66%**
+
+### Memory Management
+- Cache cleanup otomatis jika size > 1000 entries
+- Entry > 1 menit otomatis dihapus
+- Minimal memory overhead

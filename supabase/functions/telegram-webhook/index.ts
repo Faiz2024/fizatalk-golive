@@ -809,6 +809,82 @@ function invalidatePairCache(userId: number, partnerId: number | null): void {
   }
 }
 
+// ============================================
+// BUTTON DEBOUNCE SYSTEM (Cost Optimization)
+// ============================================
+// Mencegah double-click dengan menyimpan timestamp klik terakhir
+// Key: `${userId}_${action}`, Value: timestamp
+const buttonClickCache = new Map<string, number>();
+
+// Cooldown per action type (dalam milidetik)
+const BUTTON_COOLDOWNS: Record<string, number> = {
+  'search_partner': 3000,    // 3 detik - mencari partner
+  'chat_next': 3000,         // 3 detik - next partner
+  'chat_stop': 2000,         // 2 detik - stop chat
+  'send_gift': 1500,         // 1.5 detik - kirim gift
+  'init_topup': 3000,        // 3 detik - init topup
+  'buy_premium': 3000,       // 3 detik - beli premium
+  'report_user': 2000,       // 2 detik - lapor user
+  'rate_asik': 2000,         // 2 detik - rate asik
+  'reconnect': 3000,         // 3 detik - reconnect partner
+  'pay_fine': 3000,          // 3 detik - bayar denda
+  'cancel_topup': 2000,      // 2 detik - cancel topup
+  'cancel_premium': 2000,    // 2 detik - cancel premium
+  'cancel_fine': 2000,       // 2 detik - cancel fine
+  'gender': 1500,            // 1.5 detik - pilih gender
+  'target': 1500,            // 1.5 detik - pilih target
+  'location': 1500,          // 1.5 detik - pilih lokasi
+  'default': 1000,           // 1 detik - default
+};
+
+// Helper: Cek apakah tombol masih dalam cooldown
+// Return true jika dalam cooldown (harus di-block), false jika boleh proceed
+function isButtonOnCooldown(userId: number, action: string): boolean {
+  const cacheKey = `${userId}_${action}`;
+  const lastClick = buttonClickCache.get(cacheKey);
+  const cooldownMs = BUTTON_COOLDOWNS[action] || BUTTON_COOLDOWNS['default'];
+  
+  if (lastClick && (Date.now() - lastClick) < cooldownMs) {
+    return true; // Masih dalam cooldown
+  }
+  
+  // Set timestamp klik baru
+  buttonClickCache.set(cacheKey, Date.now());
+  
+  // Cleanup: hapus entry yang sudah > 1 menit untuk mencegah memory leak
+  if (buttonClickCache.size > 1000) {
+    const oneMinuteAgo = Date.now() - 60000;
+    for (const [key, timestamp] of buttonClickCache.entries()) {
+      if (timestamp < oneMinuteAgo) {
+        buttonClickCache.delete(key);
+      }
+    }
+  }
+  
+  return false;
+}
+
+// Helper: Get action type dari callback data
+function getActionTypeFromCallback(callbackData: string): string {
+  if (callbackData === 'search_partner') return 'search_partner';
+  if (callbackData === 'chat_next') return 'chat_next';
+  if (callbackData === 'chat_stop') return 'chat_stop';
+  if (callbackData.startsWith('send_gift_')) return 'send_gift';
+  if (callbackData.startsWith('init_topup_')) return 'init_topup';
+  if (callbackData.startsWith('buy_premium_')) return 'buy_premium';
+  if (callbackData.startsWith('report_user_')) return 'report_user';
+  if (callbackData.startsWith('rate_asik_')) return 'rate_asik';
+  if (callbackData.startsWith('reconnect_')) return 'reconnect';
+  if (callbackData === 'pay_fine') return 'pay_fine';
+  if (callbackData === 'cancel_topup') return 'cancel_topup';
+  if (callbackData === 'cancel_premium') return 'cancel_premium';
+  if (callbackData === 'cancel_fine') return 'cancel_fine';
+  if (callbackData.startsWith('gender_') || callbackData.startsWith('set_gender_')) return 'gender';
+  if (callbackData.startsWith('target_')) return 'target';
+  if (callbackData.startsWith('set_loc_') || callbackData.startsWith('target_loc_')) return 'location';
+  return 'default';
+}
+
 // Satu panggilan menangani SEMUA: upsert, channel check, state, reputation, search
 async function comprehensiveSearchAction(
   supabase: any, 
@@ -1416,7 +1492,14 @@ Deno.serve(async (req) => {
         }
       }
 
-      // --- LOGIKA PEMBATALAN TOP-UP DARI INLINE BUTTON (SATU RPC) ---
+      // === CEK DEBOUNCE - MENCEGAH DOUBLE-CLICK ===
+      // Cek apakah tombol masih dalam cooldown
+      const actionType = getActionTypeFromCallback(callbackData);
+      if (isButtonOnCooldown(userId, actionType)) {
+        await answerCallbackQuery(botToken, query.id, '⏳ Mohon tunggu sebentar...', false);
+        return new Response('OK', { status: 200 });
+      }
+
       if (callbackData === 'cancel_topup') {
           // SATU RPC: Batalkan topup + reset state
           const { data: cancelResult } = await supabase.rpc('cancel_topup_transaction', {
