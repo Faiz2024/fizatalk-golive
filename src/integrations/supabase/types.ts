@@ -433,31 +433,10 @@ export type Database = {
       end_chat_comprehensive: { Args: { p_user_id: number }; Returns: Json }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
-      get_promo_eligible_users: {
-        Args: never
-        Returns: {
-          current_state: string
-          user_id: number
-        }[]
-      }
       get_user_reputation: { Args: { p_user_id: number }; Returns: Json }
-      get_waiting_idle_promos: {
-        Args: { p_user_id: number }
-        Returns: {
-          expires_at: string
-          id: string
-          message_text: string
-          photo_url: string
-          promo_buttons: Json
-        }[]
-      }
       handle_end_chat_promo_logic: {
         Args: { p_user_id: number }
         Returns: Json
-      }
-      mark_promo_sent: {
-        Args: { p_message_id: number; p_promo_id: string }
-        Returns: undefined
       }
       process_gift_transaction: {
         Args: {
