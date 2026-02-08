@@ -170,7 +170,7 @@ async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null
 
 💰 Harga: Rp ${price.toLocaleString('id-ID')}
 🔢 Kode Unik: ${uniqueCode}
-💵 <b>Total Bayar: Rp ${totalAmount.toLocaleString('id-ID')}</b>
+💵 <b>Total Transfer: Rp ${totalAmount.toLocaleString('id-ID')}</b>
 
 ⚠️ QRIS belum diatur oleh admin. Hubungi admin untuk pembayaran.
 
@@ -204,17 +204,17 @@ async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null
 
   💰 Harga: Rp ${price.toLocaleString('id-ID')}
   🔢 Kode Unik: ${uniqueCode}
-  💵 <b>Total Bayar: Rp ${totalAmount.toLocaleString('id-ID')}</b>
-
-📱 <b>CARA PEMBAYARAN:</b>
-1️⃣ Screenshot/simpan gambar QRIS di atas
-2️⃣ Buka aplikasi e-wallet (GoPay/OVO/DANA/ShopeePay/dll)
-3️⃣ Pilih menu <b>Scan QR</b> atau <b>Bayar</b>
-4️⃣ Pilih dari galeri, lalu pilih gambar QRIS
-5️⃣ Masukkan nominal <b>TEPAT Rp ${totalAmount.toLocaleString('id-ID')}</b>
-6️⃣ Konfirmasi pembayaran
-
-📸 Kirim <b>foto bukti pembayaran</b> ke chat ini.
+  💵 <b>Total Transfer: Rp ${totalAmount.toLocaleString('id-ID')}</b>
+  
+  📸 Kirim <b>foto bukti pembayaran</b> ke chat ini.
+  
+  📱 <b>CARA PEMBAYARAN:</b>
+  1️⃣ Screenshot/simpan gambar QRIS di atas
+  2️⃣ Buka aplikasi e-wallet (GoPay/OVO/DANA/ShopeePay/dll)
+  3️⃣ Pilih menu <b>Scan QR</b> atau <b>Bayar</b>
+  4️⃣ Pilih dari galeri, lalu pilih gambar QRIS
+  5️⃣ Masukkan nominal <b>TEPAT Rp ${totalAmount.toLocaleString('id-ID')}</b>
+  6️⃣ Konfirmasi pembayaran
 
 ⏰ Batas waktu: ${expiryMinutes} menit
 ⚠️ Harap hubungi Admin @FizaTalkCS jika mengalami kendala`;
