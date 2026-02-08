@@ -528,24 +528,6 @@ async function answerCallbackQuery(botToken: string, callbackQueryId: string, te
   });
 }
 
-// HELPER: nonaktifkan inline keyboard pada message tertentu
-// Tujuan: mencegah double click lintas instance (tanpa database)
-async function disableInlineKeyboard(botToken: string, chatId: number, messageId: number) {
-  try {
-    await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: messageId,
-        reply_markup: { inline_keyboard: [] }
-      })
-    });
-  } catch (_e) {
-    // ignore
-  }
-}
-
 // FUNGSI BARU: Menggunakan copyMessage untuk meneruskan SEMUA JENIS PESAN tanpa tag "diteruskan oleh"
 async function copyTelegramMessage(botToken: string, chatId: number, fromChatId: number, messageId: number) {
   const url = `${TELEGRAM_API}${botToken}/copyMessage`;
@@ -830,42 +812,9 @@ function invalidatePairCache(userId: number, partnerId: number | null): void {
 // ============================================
 // BUTTON DEBOUNCE SYSTEM (Cost Optimization)
 // ============================================
-// 2 lapis proteksi (tanpa database):
-// 1) Dedup by callback_query.id (untuk mencegah Telegram retry/resend memproses ulang klik yang sama)
-// 2) Cooldown by userId+action (untuk menahan klik beruntun)
-
-// Lapis 1: dedup callback id
-const processedCallbackQueryIds = new Map<string, number>();
-const CALLBACK_ID_TTL_MS = 2 * 60 * 1000; // 2 menit cukup untuk retry Telegram
-let lastCallbackIdCleanup = Date.now();
-
-function isDuplicateCallbackQueryId(callbackQueryId: string): boolean {
-  const now = Date.now();
-  const lastSeen = processedCallbackQueryIds.get(callbackQueryId);
-
-  if (lastSeen) {
-    // sudah pernah diproses (atau sedang diproses)
-    return true;
-  }
-
-  processedCallbackQueryIds.set(callbackQueryId, now);
-
-  // cleanup periodik
-  if (now - lastCallbackIdCleanup > 30000) {
-    const expiresBefore = now - CALLBACK_ID_TTL_MS;
-    for (const [id, ts] of processedCallbackQueryIds.entries()) {
-      if (ts < expiresBefore) processedCallbackQueryIds.delete(id);
-    }
-    lastCallbackIdCleanup = now;
-  }
-
-  return false;
-}
-
-// Lapis 2: cooldown per action
 // Mencegah double-click dengan menyimpan timestamp klik terakhir
 // Key: `${userId}_${action}`, Value: timestamp
-//
+// 
 // PENTING: Cache ini HARUS dicek PALING AWAL di handler callback_query
 // sebelum operasi database apapun untuk menghemat biaya cloud
 const buttonClickCache = new Map<string, number>();
@@ -940,12 +889,7 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('init_topup_')) return 'init_topup';
   if (callbackData.startsWith('buy_premium_')) return 'buy_premium';
   if (callbackData.startsWith('report_user_')) return 'report_user';
-
-  // Semua rating (spam/sange/asik) disamakan untuk cooldown
-  if (callbackData.startsWith('rate_spam_')) return 'rate_asik';
-  if (callbackData.startsWith('rate_sange_')) return 'rate_asik';
   if (callbackData.startsWith('rate_asik_')) return 'rate_asik';
-
   if (callbackData.startsWith('reconnect_')) return 'reconnect';
   if (callbackData === 'pay_fine') return 'pay_fine';
   if (callbackData === 'cancel_topup') return 'cancel_topup';
@@ -954,14 +898,10 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('gender_') || callbackData.startsWith('set_gender_')) return 'gender';
   if (callbackData.startsWith('target_')) return 'target';
   if (callbackData.startsWith('set_loc_') || callbackData.startsWith('target_loc_')) return 'location';
-
-  // UI/menu navigation - dianggap ringan
   if (callbackData === 'open_gift_menu' || callbackData === 'open_topup_menu') return 'default';
   if (callbackData === 'change_target' || callbackData === 'change_location') return 'default';
-
   if (callbackData === 'check_channel_joined') return 'search_partner'; // Sama dengan search
   if (callbackData.startsWith('dismiss_promo')) return 'search_partner'; // Dismiss promo = search
-
   return 'default';
 }
 
@@ -1547,33 +1487,15 @@ Deno.serve(async (req) => {
       const message = query.message;
 
       // ============================================
-      // STEP 0: DEDUP callback_query.id (NO DB)
+      // STEP 1: DEBOUNCE CHECK - PALING AWAL!
       // ============================================
-      // Jika Telegram me-resend callback yang sama (karena timeout jaringan, dll),
-      // kita skip supaya tidak memproses dua kali.
-      if (isDuplicateCallbackQueryId(query.id)) {
-        // Fire-and-forget (kalau sudah pernah di-ack, ini no-op)
-        answerCallbackQuery(botToken, query.id, '⏳ Sedang diproses...', false);
-        return new Response('OK', { status: 200 });
-      }
-
-      // ============================================
-      // STEP 1: COOLDOWN PER ACTION (NO DB)
-      // ============================================
+      // Cek debounce SEBELUM operasi apapun (termasuk database)
+      // Ini mencegah double-click bahkan saat Edge Function restart
       const actionType = getActionTypeFromCallback(callbackData);
       if (isButtonOnCooldown(userId, actionType)) {
         // Langsung jawab callback dan return - NO DATABASE OPERATIONS
         await answerCallbackQuery(botToken, query.id, '⏳ Mohon tunggu sebentar...', false);
         return new Response('OK', { status: 200 });
-      }
-
-      // ============================================
-      // STEP 1b: DISABLE KEYBOARD DI PESAN ASAL (NO DB)
-      // ============================================
-      // Ini cara paling efektif mencegah double-click lintas instance/cold start.
-      // Hanya dilakukan untuk action yang "one-shot" (bukan menu ringan).
-      if (message && actionType !== 'default') {
-        disableInlineKeyboard(botToken, message.chat.id, message.message_id);
       }
 
       // ============================================
