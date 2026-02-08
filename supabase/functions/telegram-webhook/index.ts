@@ -814,51 +814,67 @@ function invalidatePairCache(userId: number, partnerId: number | null): void {
 // ============================================
 // Mencegah double-click dengan menyimpan timestamp klik terakhir
 // Key: `${userId}_${action}`, Value: timestamp
+// 
+// PENTING: Cache ini HARUS dicek PALING AWAL di handler callback_query
+// sebelum operasi database apapun untuk menghemat biaya cloud
 const buttonClickCache = new Map<string, number>();
 
-// Cooldown per action type (dalam milidetik)
+// Cooldown per action type (dalam milidetik) - DIPERBESAR untuk mencegah double-click
 const BUTTON_COOLDOWNS: Record<string, number> = {
-  'search_partner': 3000,    // 3 detik - mencari partner
-  'chat_next': 3000,         // 3 detik - next partner
-  'chat_stop': 2000,         // 2 detik - stop chat
-  'send_gift': 1500,         // 1.5 detik - kirim gift
-  'init_topup': 3000,        // 3 detik - init topup
-  'buy_premium': 3000,       // 3 detik - beli premium
-  'report_user': 2000,       // 2 detik - lapor user
-  'rate_asik': 2000,         // 2 detik - rate asik
-  'reconnect': 3000,         // 3 detik - reconnect partner
-  'pay_fine': 3000,          // 3 detik - bayar denda
+  'search_partner': 5000,    // 5 detik - mencari partner (operasi berat)
+  'chat_next': 5000,         // 5 detik - next partner (operasi berat)
+  'chat_stop': 3000,         // 3 detik - stop chat
+  'send_gift': 3000,         // 3 detik - kirim gift
+  'init_topup': 4000,        // 4 detik - init topup
+  'buy_premium': 4000,       // 4 detik - beli premium
+  'report_user': 3000,       // 3 detik - lapor user
+  'rate_asik': 3000,         // 3 detik - rate asik
+  'reconnect': 4000,         // 4 detik - reconnect partner
+  'pay_fine': 4000,          // 4 detik - bayar denda
   'cancel_topup': 2000,      // 2 detik - cancel topup
   'cancel_premium': 2000,    // 2 detik - cancel premium
   'cancel_fine': 2000,       // 2 detik - cancel fine
-  'gender': 1500,            // 1.5 detik - pilih gender
-  'target': 1500,            // 1.5 detik - pilih target
-  'location': 1500,          // 1.5 detik - pilih lokasi
-  'default': 1000,           // 1 detik - default
+  'gender': 2000,            // 2 detik - pilih gender
+  'target': 2000,            // 2 detik - pilih target
+  'location': 2000,          // 2 detik - pilih lokasi
+  'default': 1500,           // 1.5 detik - default
 };
+
+// Timestamp terakhir cleanup untuk mencegah cleanup terlalu sering
+let lastCacheCleanup = Date.now();
+const CLEANUP_INTERVAL = 30000; // Cleanup setiap 30 detik
 
 // Helper: Cek apakah tombol masih dalam cooldown
 // Return true jika dalam cooldown (harus di-block), false jika boleh proceed
 function isButtonOnCooldown(userId: number, action: string): boolean {
   const cacheKey = `${userId}_${action}`;
+  const now = Date.now();
   const lastClick = buttonClickCache.get(cacheKey);
   const cooldownMs = BUTTON_COOLDOWNS[action] || BUTTON_COOLDOWNS['default'];
   
-  if (lastClick && (Date.now() - lastClick) < cooldownMs) {
+  // Jika masih dalam cooldown, block request
+  if (lastClick && (now - lastClick) < cooldownMs) {
+    console.log(`[DEBOUNCE] Blocked: user=${userId} action=${action} elapsed=${now - lastClick}ms cooldown=${cooldownMs}ms`);
     return true; // Masih dalam cooldown
   }
   
   // Set timestamp klik baru
-  buttonClickCache.set(cacheKey, Date.now());
+  buttonClickCache.set(cacheKey, now);
   
-  // Cleanup: hapus entry yang sudah > 1 menit untuk mencegah memory leak
-  if (buttonClickCache.size > 1000) {
-    const oneMinuteAgo = Date.now() - 60000;
+  // Periodic cleanup: hapus entry yang sudah > 1 menit
+  if (now - lastCacheCleanup > CLEANUP_INTERVAL) {
+    const oneMinuteAgo = now - 60000;
+    let cleanedCount = 0;
     for (const [key, timestamp] of buttonClickCache.entries()) {
       if (timestamp < oneMinuteAgo) {
         buttonClickCache.delete(key);
+        cleanedCount++;
       }
     }
+    if (cleanedCount > 0) {
+      console.log(`[DEBOUNCE] Cache cleanup: removed ${cleanedCount} entries, remaining ${buttonClickCache.size}`);
+    }
+    lastCacheCleanup = now;
   }
   
   return false;
@@ -882,6 +898,10 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('gender_') || callbackData.startsWith('set_gender_')) return 'gender';
   if (callbackData.startsWith('target_')) return 'target';
   if (callbackData.startsWith('set_loc_') || callbackData.startsWith('target_loc_')) return 'location';
+  if (callbackData === 'open_gift_menu' || callbackData === 'open_topup_menu') return 'default';
+  if (callbackData === 'change_target' || callbackData === 'change_location') return 'default';
+  if (callbackData === 'check_channel_joined') return 'search_partner'; // Sama dengan search
+  if (callbackData.startsWith('dismiss_promo')) return 'search_partner'; // Dismiss promo = search
   return 'default';
 }
 
@@ -1466,11 +1486,32 @@ Deno.serve(async (req) => {
       const callbackData = query.data || '';
       const message = query.message;
 
-      // NOTE: Pengecekan isUserBlocked DIHAPUS di sini untuk hemat biaya
-      // Cek blokir dilakukan di dalam comprehensive_search_action saat search/next
-      // Untuk callback lain (gift, topup, dll), validasi state sudah cukup
+      // ============================================
+      // STEP 1: DEBOUNCE CHECK - PALING AWAL!
+      // ============================================
+      // Cek debounce SEBELUM operasi apapun (termasuk database)
+      // Ini mencegah double-click bahkan saat Edge Function restart
+      const actionType = getActionTypeFromCallback(callbackData);
+      if (isButtonOnCooldown(userId, actionType)) {
+        // Langsung jawab callback dan return - NO DATABASE OPERATIONS
+        await answerCallbackQuery(botToken, query.id, '⏳ Mohon tunggu sebentar...', false);
+        return new Response('OK', { status: 200 });
+      }
 
-      // === CEK STATE AWAITING_PAYMENT - BLOKIR SEMUA TOMBOL KECUALI CANCEL ===
+      // ============================================
+      // STEP 2: ACKNOWLEDGE CALLBACK SEGERA
+      // ============================================
+      // Untuk action tertentu yang berat, acknowledge dulu untuk mencegah Telegram resend
+      // Ini juga menghilangkan "loading" indicator di tombol
+      const heavyActions = ['search_partner', 'chat_next', 'chat_stop', 'send_gift', 'init_topup', 'buy_premium', 'reconnect'];
+      if (heavyActions.includes(actionType)) {
+        // Don't await - fire and forget untuk kecepatan
+        answerCallbackQuery(botToken, query.id);
+      }
+
+      // ============================================
+      // STEP 3: CEK STATE AWAITING_PAYMENT
+      // ============================================
       // Hanya izinkan cancel_topup, cancel_premium, dan cancel_fine saat sedang dalam pembayaran
       const paymentAllowedCallbacks = ['cancel_topup', 'cancel_premium', 'cancel_fine'];
       
@@ -1486,18 +1527,10 @@ Deno.serve(async (req) => {
           await sendTelegramMessage(
             botToken, 
             userId, 
-            '⚠️ <b>Kamu sedang dalam proses pembayaran!</b>\n\nSelesaikan pembayaran dan <b>kirim bukti trsndfer ke chat ini</b> atau tekan tombol "Batalkan" pada pesan QRIS untuk membatalkan transaksi.'
+            '⚠️ <b>Kamu sedang dalam proses pembayaran!</b>\n\nSelesaikan pembayaran dan <b>kirim bukti transfer ke chat ini</b> atau tekan tombol "Batalkan" pada pesan QRIS untuk membatalkan transaksi.'
           );
           return new Response('OK', { status: 200 });
         }
-      }
-
-      // === CEK DEBOUNCE - MENCEGAH DOUBLE-CLICK ===
-      // Cek apakah tombol masih dalam cooldown
-      const actionType = getActionTypeFromCallback(callbackData);
-      if (isButtonOnCooldown(userId, actionType)) {
-        await answerCallbackQuery(botToken, query.id, '⏳ Mohon tunggu sebentar...', false);
-        return new Response('OK', { status: 200 });
       }
 
       if (callbackData === 'cancel_topup') {

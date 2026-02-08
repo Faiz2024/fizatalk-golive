@@ -1,5 +1,10 @@
 # Cloud Cost Optimization Guide
 
+## Changelog
+- **2026-02-08**: Perbaikan debounce - dipindahkan ke PALING AWAL sebelum operasi DB apapun
+- **2026-02-08**: Cooldown diperbesar (5 detik untuk search/next) dan logging ditambahkan
+- **2026-02-08**: Acknowledge callback segera untuk operasi berat (fire-and-forget)
+
 ## Overview
 This document describes the cost optimization strategies implemented in the Telegram bot to minimize Supabase cloud costs.
 
