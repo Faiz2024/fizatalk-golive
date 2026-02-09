@@ -362,3 +362,49 @@ if (isButtonOnCooldown(userId, actionType)) {
 - Cache cleanup otomatis jika size > 1000 entries
 - Entry > 1 menit otomatis dihapus
 - Minimal memory overhead
+
+## 13. Anti-Repeat Partner Matching (NEW!)
+
+### Overview
+Sistem untuk mencegah user bertemu dengan partner yang sama dalam interval waktu tertentu (default: 30 menit).
+
+### How It Works
+```sql
+-- Tabel recent_partners menyimpan history pasangan
+CREATE TABLE recent_partners (
+  user_id BIGINT,
+  partner_id BIGINT,
+  paired_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Saat matching, cek apakah recent partner
+SELECT EXISTS(
+  SELECT 1 FROM recent_partners
+  WHERE user_id = p_user_id 
+  AND partner_id = candidate_id
+  AND paired_at > NOW() - INTERVAL '30 minutes'
+) INTO v_is_recent_partner;
+
+IF v_is_recent_partner THEN
+  CONTINUE; -- Skip ke kandidat berikutnya
+END IF;
+
+-- Setelah match berhasil, record pairing
+PERFORM record_partner_pairing(p_user_id, v_partner_id);
+```
+
+### RPC Functions
+| RPC Function | Purpose |
+|--------------|---------|
+| `record_partner_pairing(user_id, partner_id)` | Catat pasangan baru (bidirectional) |
+| `is_recent_partner(user_id, partner_id, interval_minutes)` | Cek apakah pasangan dalam interval |
+| `cleanup_recent_partners()` | Hapus record > 1 jam (untuk pg_cron) |
+
+### Interval Configuration
+- Default: **30 menit** (hardcoded di RPC)
+- Cleanup: Record otomatis dihapus setelah **1 jam**
+
+### Cost Impact
+- **Tambahan query**: 1 EXISTS check per kandidat dalam loop matching
+- **Trade-off**: Sedikit overhead untuk UX yang lebih baik (user tidak ketemu partner sama berulang)
+- **Cleanup otomatis**: Tabel tidak membengkak dengan record lama

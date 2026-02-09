@@ -287,6 +287,27 @@ export type Database = {
           },
         ]
       }
+      recent_partners: {
+        Row: {
+          id: string
+          paired_at: string
+          partner_id: number
+          user_id: number
+        }
+        Insert: {
+          id?: string
+          paired_at?: string
+          partner_id: number
+          user_id: number
+        }
+        Update: {
+          id?: string
+          paired_at?: string
+          partner_id?: number
+          user_id?: number
+        }
+        Relationships: []
+      }
       telegram_users: {
         Row: {
           chat_end_count: number | null
@@ -421,6 +442,7 @@ export type Database = {
       cancel_premium_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_topup_transaction: { Args: { p_user_id: number }; Returns: Json }
       cleanup_inactive_users: { Args: never; Returns: undefined }
+      cleanup_recent_partners: { Args: never; Returns: number }
       comprehensive_search_action: {
         Args: {
           p_first_name?: string
@@ -438,6 +460,14 @@ export type Database = {
         Args: { p_user_id: number }
         Returns: Json
       }
+      is_recent_partner: {
+        Args: {
+          p_interval_minutes?: number
+          p_partner_id: number
+          p_user_id: number
+        }
+        Returns: boolean
+      }
       process_gift_transaction: {
         Args: {
           p_gift_id: string
@@ -446,6 +476,10 @@ export type Database = {
           p_sender_id: number
         }
         Returns: Json
+      }
+      record_partner_pairing: {
+        Args: { p_partner_id: number; p_user_id: number }
+        Returns: undefined
       }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
       search_or_next_partner: {
