@@ -3280,8 +3280,16 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
 
           await supabase
             .from('telegram_users')
-            .update({ premium_until: premiumEndDate.toISOString() })
+            .update({ 
+                premium_until: premiumEndDate.toISOString(),
+                penalty_score: 0 
+            })
             .eq('id', premiumRequest.user_id);
+
+          await supabase
+            .from('blocked_users')
+            .update({ is_active: false })
+            .eq('user_id', premiumRequest.user_id);
 
           await supabase
             .from('premium_requests')
@@ -3402,6 +3410,11 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
               unblocked_by: userId
             })
             .eq('user_id', fineRequest.user_id);
+          
+          await supabase
+            .from('telegram_users')
+            .update({ penalty_score: 0 }) 
+            .eq('id', fineRequest.user_id);
 
           // 3. Record transaction
           await supabase.from('coin_transactions').insert({
