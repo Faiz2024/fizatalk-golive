@@ -941,25 +941,72 @@ async function comprehensiveSearchAction(
   
   // Handle jika user diblokir (dari blocked_users table)
   if (!result.success && result.error === 'user_blocked') {
+    const blockedKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }
+        ],
+        [
+          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_30' }
+        ]
+      ]
+    };
+
+    const blockedMessage = `🚫 <b>AKUN ANDA DIBLOKIR</b>
+
+  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan sampai batas waktu yang tidak ditentukan.</b>
+
+  🔓 <b>CARA MEMBUKA BLOKIR:</b>
+
+  1️⃣ <b>Bayar Denda Pelanggaran</b>
+  Hapus status blokir saat ini dengan membayar denda sebesar <b>Rp 10.000</b>.
+
+  2️⃣ <b>Upgrade ke Premium (Recommended)</b>
+  Dapatkan status <b>VIP</b> yang lebih kebal terhadap laporan palsu, prioritas matching, dan fitur eksklusif lainnya.
+
+  Pilih opsi di bawah untuk memulihkan akun Anda segera:`;
+
     await sendTelegramMessage(
       botToken,
       userId,
-      `🚫 <b>Akun Diblokir</b>\n\n${result.blocked_message || 'Akun Anda telah diblokir.'}\n\n📞 Hubungi admin: @FizatalkCS`
+      blockedMessage,
+      blockedKeyboard
     );
     return { success: false, handled: true, result };
   }
   
   // Handle jika user banned via penalty points
+  // Handle jika user banned via penalty points
   if (!result.success && result.error === 'user_banned') {
     const blockedKeyboard = {
       inline_keyboard: [
-        [{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]
+        [
+          { text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }
+        ],
+        [
+          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_7' }
+        ]
       ]
     };
+
+    const blockedMessage = `🚫 <b>AKUN ANDA DIBLOKIR</b>
+
+  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan sampai batas waktu yang tidak ditentukan.</b>
+
+  🔓 <b>CARA MEMBUKA BLOKIR:</b>
+
+  1️⃣ <b>Bayar Denda Pelanggaran</b>
+  Hapus status blokir saat ini dengan membayar denda sebesar <b>Rp 10.000</b>.
+
+  2️⃣ <b>Upgrade ke Premium (Recommended)</b>
+  Dapatkan status <b>VIP</b> yang lebih kebal terhadap laporan palsu, prioritas matching, dan fitur eksklusif lainnya.
+
+  Pilih opsi di bawah untuk memulihkan akun Anda segera:`;
+
     await sendTelegramMessage(
       botToken,
       userId,
-      `🚫 <b>Akun Diblokir</b>\n\n${result.reputation?.message || 'Akun Anda telah diblokir.'}\n\n📞 Hubungi admin: @FizatalkCS`,
+      blockedMessage,
       blockedKeyboard
     );
     return { success: false, handled: true, result };
