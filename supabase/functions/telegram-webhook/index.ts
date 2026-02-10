@@ -672,6 +672,7 @@ interface ComprehensiveSearchResult {
   success: boolean;
   matched?: boolean;
   partner_id?: number;
+  partner_premium_until?: string | null;
   error?: string;
   action?: string;
   chat_ended?: boolean;
@@ -708,12 +709,12 @@ function buildSearchMessageWithReputation(
   
   // Penalty 40-69: Status Peringatan
   if (reputation.status === 'warning') {
-    return `${baseAction}\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message || 'Anda mendapat beberapa laporan negatif dari pengguna lain.'}\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.`;
+    return `${baseAction}\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message || 'Anda mendapat beberapa laporan negatif dari pengguna lain.'} Harap perbaiki sikap atau akun berisiko dibatasi.\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.`;
   }
   
   // Penalty 70-99: Status Kritis
   if (reputation.status === 'critical') {
-    return `${baseAction}\n\n🔞 <b>Status: Kritis</b>\n\n${reputation.message || 'Akun Anda dalam kondisi kritis.'}\n\n🚫 DAFTAR PELANGGARAN KERAS:
+    return `${baseAction}\n\n🔞 <b>Status: Kritis</b>\n\n${reputation.message || 'Akun Anda dalam kondisi kritis.'} Satu laporan lagi dan Anda akan dibanned.\n\n🚫 DAFTAR PELANGGARAN KERAS:
 
 <b>NSFW / Sange:</b> Chat seks, meminta pap, atau pembahasan vulgar.
 
@@ -1034,7 +1035,15 @@ async function handleComprehensiveSearchResult(
   // Jika penalty < 40 dan matched: langsung ke notifikasi pairing (lewati pesan pencarian)
   
   // Kirim notifikasi pairing berhasil
-  await sendPairingNotifications(supabase, botToken, userId, partnerId);
+  const { data: myself } = await supabase.from('telegram_users').select('premium_until').eq('id', userId).single();
+  const myPremiumUntil = myself?.premium_until;
+
+  // 2. Status Premium Partner
+  // INI PENTING: Kita pakai data dari RPC result, JANGAN query DB lagi.
+  const partnerPremiumUntil = result.partner_premium_until;
+
+  // Kirim notifikasi pairing (Tanpa Query Tambahan)
+  await sendPairingNotifications(botToken, userId, partnerId, myPremiumUntil, partnerPremiumUntil);
 }
 
 // HELPER: Panggil RPC find_and_pair_partner dan kirim notifikasi jika berhasil (LEGACY)
@@ -1083,73 +1092,21 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
 
 
 // HELPER: Kirim notifikasi setelah pairing berhasil
-async function sendPairingNotifications(supabase: any, botToken: string, user1Id: number, user2Id: number): Promise<void> {
+async function sendPairingNotifications(
+  botToken: string, 
+  user1Id: number, 
+  user2Id: number,
+  user1PremiumUntil: string | null,
+  user2PremiumUntil: string | null
+): Promise<void> {
   
   // UPDATE CACHE untuk kedua user dengan data chatting baru
   setCachedUserData(user1Id, user2Id, 'chatting');
   setCachedUserData(user2Id, user1Id, 'chatting');
   
-   // Get reaction counts for both users
-  const { data: user1Reactions } = await supabase
-    .from('user_reactions')
-    .select('emoji', { count: 'exact', head: true })
-    .eq('user_id', user1Id);
 
-  const { data: user2Reactions } = await supabase
-    .from('user_reactions')
-    .select('emoji', { count: 'exact', head: true })
-    .eq('user_id', user2Id);
-
-  const user1ReactionCount = user1Reactions?.length || 0;
-  const user2ReactionCount = user2Reactions?.length || 0;
-
-  // Get reaction stats for display
-  const { data: user1AllReactions } = await supabase
-    .from('user_reactions')
-    .select('emoji')
-    .eq('user_id', user1Id);
-
-  const { data: user2AllReactions } = await supabase
-    .from('user_reactions')
-    .select('emoji')
-    .eq('user_id', user2Id);
-
-  // Count each emoji type
-  const user1EmojiCounts = (user1AllReactions || []).reduce((acc: Record<string, number>, curr: any) => {
-    acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
-    return acc;
-  }, {});
-
-  const user2EmojiCounts = (user2AllReactions || []).reduce((acc: Record<string, number>, curr: any) => {
-    acc[curr.emoji] = (acc[curr.emoji] || 0) + 1;
-    return acc;
-  }, {});
-
-  const formatEmojiStats = (emojiCounts: Record<string, number>) => {
-    if (Object.keys(emojiCounts).length === 0) return 'Belum ada gift';
-    return Object.entries(emojiCounts)
-      .map(([emoji, count]) => `${emoji} x${count}`)
-      .join(' | ');
-  };
-
-  const user1Stats = formatEmojiStats(user1EmojiCounts);
-  const user2Stats = formatEmojiStats(user2EmojiCounts);
-
-  // Get premium status for both users
-  const { data: user1Data } = await supabase
-    .from('telegram_users')
-    .select('premium_until')
-    .eq('id', user1Id)
-    .single();
-
-  const { data: user2Data } = await supabase
-    .from('telegram_users')
-    .select('premium_until')
-    .eq('id', user2Id)
-    .single();
-
-  const user1IsPremium = user1Data?.premium_until && new Date(user1Data.premium_until) > new Date();
-  const user2IsPremium = user2Data?.premium_until && new Date(user2Data.premium_until) > new Date();
+  const user1IsPremium = user1PremiumUntil && new Date(user1PremiumUntil) > new Date();
+  const user2IsPremium = user2PremiumUntil && new Date(user2PremiumUntil) > new Date();
   
   // Build chat action keyboard
   const buildChatKeyboard = (isPremium: boolean) => ({
@@ -1173,13 +1130,13 @@ async function sendPairingNotifications(supabase: any, botToken: string, user1Id
     sendTelegramMessage(
       botToken, 
       user1Id, 
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n🎁 Gift Partner: ${user2ReactionCount || 0} gift\n${user2Stats}`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
       buildChatKeyboard(user1IsPremium)
     ),
     sendTelegramMessage(
       botToken, 
       user2Id, 
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n🎁 Gift Partner: ${user1ReactionCount || 0} gift\n${user1Stats}`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
       buildChatKeyboard(user2IsPremium)
     )
   ]);
