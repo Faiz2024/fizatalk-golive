@@ -287,27 +287,6 @@ export type Database = {
           },
         ]
       }
-      recent_partners: {
-        Row: {
-          id: string
-          paired_at: string
-          partner_id: number
-          user_id: number
-        }
-        Insert: {
-          id?: string
-          paired_at?: string
-          partner_id: number
-          user_id: number
-        }
-        Update: {
-          id?: string
-          paired_at?: string
-          partner_id?: number
-          user_id?: number
-        }
-        Relationships: []
-      }
       telegram_users: {
         Row: {
           chat_end_count: number | null
@@ -317,6 +296,7 @@ export type Database = {
           gender: string | null
           id: number
           last_active: string
+          last_partners: number[] | null
           last_promo_sent_at: string | null
           location: string | null
           partner_id: number | null
@@ -335,6 +315,7 @@ export type Database = {
           gender?: string | null
           id: number
           last_active?: string
+          last_partners?: number[] | null
           last_promo_sent_at?: string | null
           location?: string | null
           partner_id?: number | null
@@ -353,6 +334,7 @@ export type Database = {
           gender?: string | null
           id?: number
           last_active?: string
+          last_partners?: number[] | null
           last_promo_sent_at?: string | null
           location?: string | null
           partner_id?: number | null
