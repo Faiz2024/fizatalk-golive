@@ -3282,7 +3282,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
             .from('telegram_users')
             .update({ 
                 premium_until: premiumEndDate.toISOString(),
-                penalty_score: 0 
+                penalty_points: 0 
             })
             .eq('id', premiumRequest.user_id);
 
@@ -3302,7 +3302,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           await supabase.from('coin_transactions').insert({
             user_id: premiumRequest.user_id,
             amount: -premiumRequest.price,
-            type: 'premium_purchase',
+            type: 'purchase',
             description: `Pembelian Premium ${premiumRequest.duration_days} hari`
           });
 
@@ -3413,7 +3413,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           
           await supabase
             .from('telegram_users')
-            .update({ penalty_score: 0 }) 
+            .update({ penalty_points: 0 }) 
             .eq('id', fineRequest.user_id);
 
           // 3. Record transaction
@@ -4731,7 +4731,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
             await supabase.from('coin_transactions').insert({
               user_id: premiumRequest.user_id,
               amount: -premiumRequest.price,
-              type: 'premium_purchase',
+              type: 'purchase',
               description: `Pembelian Premium ${premiumRequest.duration_days} hari`
             });
 
