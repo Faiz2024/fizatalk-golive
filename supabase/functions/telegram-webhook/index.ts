@@ -1090,7 +1090,7 @@ async function handleComprehensiveSearchResult(
   const partnerPremiumUntil = result.partner_premium_until;
 
   // Kirim notifikasi pairing (Tanpa Query Tambahan)
-  await sendPairingNotifications(botToken, userId, partnerId, myPremiumUntil, partnerPremiumUntil);
+  await sendPairingNotifications(botToken, userId, partnerId, myPremiumUntil ?? null, partnerPremiumUntil ?? null);
 }
 
 // HELPER: Panggil RPC find_and_pair_partner dan kirim notifikasi jika berhasil (LEGACY)
@@ -1132,7 +1132,7 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     const matchedPartnerId = data.partner_id;
     
     // Kirim notifikasi pairing berhasil
-    await sendPairingNotifications(supabase, botToken, userId, matchedPartnerId);
+    await sendPairingNotifications(botToken, userId, matchedPartnerId, null, null);
     return true;
     
   }
@@ -1152,8 +1152,8 @@ async function sendPairingNotifications(
   setCachedUserData(user2Id, user1Id, 'chatting');
   
 
-  const user1IsPremium = user1PremiumUntil && new Date(user1PremiumUntil) > new Date();
-  const user2IsPremium = user2PremiumUntil && new Date(user2PremiumUntil) > new Date();
+  const user1IsPremium = !!(user1PremiumUntil && new Date(user1PremiumUntil) > new Date());
+  const user2IsPremium = !!(user2PremiumUntil && new Date(user2PremiumUntil) > new Date());
   
   // Build chat action keyboard
   const buildChatKeyboard = (isPremium: boolean) => ({
