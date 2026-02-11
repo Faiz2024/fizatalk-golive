@@ -750,65 +750,7 @@ async function sendSearchingMessage(
   }
 }
 
-// ============================================
-// COMPREHENSIVE SEARCH ACTION (Single RPC Call)
-// Menggabungkan: upsert, channel check, state check, reputation, search
-// ============================================
 
-// UNIFIED FUNCTION: Panggil RPC comprehensive_search_action
-// ============================================
-// IN-MEMORY CACHE SYSTEM (Cost Optimization)
-// ============================================
-// Cache untuk menyimpan data user yang sedang chatting
-// Key: userId, Value: { partnerId, state, cachedAt }
-// Cache berlaku selama 5 menit untuk mengurangi panggilan supabase
-const userChatCache = new Map<number, {
-  partnerId: number | null;
-  state: string;
-  cachedAt: number;
-}>();
-
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit cache lifetime
-
-// Helper: Cek apakah cache masih valid
-function isCacheValid(cachedAt: number): boolean {
-  return Date.now() - cachedAt < CACHE_TTL_MS;
-}
-
-// Helper: Get cached user data atau null jika expired/tidak ada
-function getCachedUserData(userId: number): { partnerId: number | null; state: string } | null {
-  const cached = userChatCache.get(userId);
-  if (cached && isCacheValid(cached.cachedAt)) {
-    return { partnerId: cached.partnerId, state: cached.state };
-  }
-  // Hapus cache yang expired
-  if (cached) {
-    userChatCache.delete(userId);
-  }
-  return null;
-}
-
-// Helper: Set cache untuk user
-function setCachedUserData(userId: number, partnerId: number | null, state: string): void {
-  userChatCache.set(userId, {
-    partnerId,
-    state,
-    cachedAt: Date.now()
-  });
-}
-
-// Helper: Invalidate cache untuk user (panggil saat state berubah)
-function invalidateUserCache(userId: number): void {
-  userChatCache.delete(userId);
-}
-
-// Helper: Invalidate cache untuk pasangan (panggil saat chat berakhir)
-function invalidatePairCache(userId: number, partnerId: number | null): void {
-  userChatCache.delete(userId);
-  if (partnerId) {
-    userChatCache.delete(partnerId);
-  }
-}
 
 // ============================================
 // BUTTON DEBOUNCE SYSTEM (Cost Optimization)
@@ -916,8 +858,6 @@ async function comprehensiveSearchAction(
   isNext: boolean = false
 ): Promise<{ success: boolean; handled: boolean; result?: ComprehensiveSearchResult }> {
   
-  // Invalidate cache karena state akan berubah
-  invalidateUserCache(userId);
   
   // SINGLE RPC CALL - handles everything!
   const { data, error } = await supabase.rpc('comprehensive_search_action', {
@@ -1147,11 +1087,6 @@ async function sendPairingNotifications(
   user2PremiumUntil: string | null
 ): Promise<void> {
   
-  // UPDATE CACHE untuk kedua user dengan data chatting baru
-  setCachedUserData(user1Id, user2Id, 'chatting');
-  setCachedUserData(user2Id, user1Id, 'chatting');
-  
-
   const user1IsPremium = !!(user1PremiumUntil && new Date(user1PremiumUntil) > new Date());
   const user2IsPremium = !!(user2PremiumUntil && new Date(user2PremiumUntil) > new Date());
   
@@ -1379,13 +1314,6 @@ interface EndChatResult {
 
 async function endChat(supabase: any, botToken: string, userId: number): Promise<boolean> {
   
-  // INVALIDATE CACHE sebelum RPC call
-  const cachedData = getCachedUserData(userId);
-  if (cachedData?.partnerId) {
-    invalidatePairCache(userId, cachedData.partnerId);
-  } else {
-    invalidateUserCache(userId);
-  }
   
   // SATU PANGGILAN RPC - handles semua operasi end chat!
   const { data, error } = await supabase.rpc('end_chat_comprehensive', {
@@ -1404,8 +1332,6 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   
   const partnerId = result.partner_id!;
   
-  // Invalidate cache untuk partner juga
-  invalidateUserCache(partnerId);
   
   
   // Kirim notifikasi ke partner jika berhasil di-reset
@@ -1727,14 +1653,54 @@ Deno.serve(async (req) => {
       if (callbackData === 'target_cowok' || callbackData === 'target_cewek' || callbackData === 'target_semua') {
         const targetGender = callbackData === 'target_cowok' ? 'cowok' : callbackData === 'target_cewek' ? 'cewek' : 'semua';
         
-        // SATU RPC: Update target_gender user
-        await supabase.rpc('update_target_gender', {
+        // SATU RPC: Update target_gender dan tangkap return 'state'
+        const { data: userState } = await supabase.rpc('update_target_gender', {
           p_user_id: userId,
           p_target_gender: targetGender
         });
 
         const targetLabel = targetGender === 'cowok' ? 'Cowok 👦' : targetGender === 'cewek' ? 'Cewek 👧' : 'Semua 👥';
+        
+        // Jawab callback agar loading di tombol hilang
         await answerCallbackQuery(botToken, query.id, `✅ Target gender: ${targetLabel}`);
+
+        // Cek apakah hasil return rpc menunjukkan user sedang chatting
+        const isChatting = (userState?.state || userState) === 'chatting';
+
+        // EDIT PESAN MENU MENJADI KONFIRMASI
+        if (message) {
+          const searchKeyboard = {
+            inline_keyboard: [
+              [
+                isChatting 
+                  ? { text: '🛑 Stop', callback_data: 'chat_stop' }
+                  : { text: '🔍 Cari Partner', callback_data: 'search_partner' },
+                isChatting 
+                  ? { text: '⏭️ Next Partner', callback_data: 'chat_next' }
+                  : null
+              ].filter(Boolean), // Filter akan otomatis membuang nilai null
+              [
+                { text: '🎯 Ubah Target Lagi', callback_data: 'change_target' }
+              ]
+            ]
+          };
+
+          try {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message.chat.id,
+                message_id: message.message_id,
+                text: `✅ <b>Target Gender Berhasil Diubah!</b>\n\n🎯 Target partner kamu sekarang: <b>${targetLabel}</b>\n\nSilakan mulai pencarian untuk menemukan partner baru.`,
+                parse_mode: 'HTML',
+                reply_markup: searchKeyboard
+              })
+            });
+          } catch (e) {
+            console.error('Gagal mengedit pesan target gender:', e);
+          }
+        }
 
         return new Response('OK', { status: 200 });
       }
@@ -1743,14 +1709,54 @@ Deno.serve(async (req) => {
       if (callbackData.startsWith('target_loc_')) {
         const targetLocation = callbackData.replace('target_loc_', '');
         
-        // SATU RPC: Update target_location user
-        await supabase.rpc('update_target_location', {
+        // SATU RPC: Update target_location dan tangkap return 'state'
+        const { data: userState } = await supabase.rpc('update_target_location', {
           p_user_id: userId,
           p_target_location: targetLocation
         });
 
         const targetLabel = targetLocation === 'semua' ? 'Semua 🌏' : `📍 ${targetLocation}`;
+        
+        // Jawab callback agar loading di tombol hilang
         await answerCallbackQuery(botToken, query.id, `✅ Target lokasi: ${targetLabel}`);
+
+        // Cek apakah hasil return rpc menunjukkan user sedang chatting
+        const isChatting = (userState?.state || userState) === 'chatting';
+
+        // EDIT PESAN MENU MENJADI KONFIRMASI
+        if (message) {
+          const searchKeyboard = {
+            inline_keyboard: [
+              [
+                isChatting 
+                  ? { text: '🛑 Stop', callback_data: 'chat_stop' }
+                  : { text: '🔍 Cari Partner', callback_data: 'search_partner' },
+                isChatting 
+                  ? { text: '⏭️ Next Partner', callback_data: 'chat_next' }
+                  : null
+              ].filter(Boolean),
+              [
+                { text: '📍 Ubah Lokasi Lagi', callback_data: 'change_location' }
+              ]
+            ]
+          };
+
+          try {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message.chat.id,
+                message_id: message.message_id,
+                text: `✅ <b>Target Lokasi Berhasil Diubah!</b>\n\n📌 Target lokasi partner kamu sekarang: <b>${targetLabel}</b>\n\nSilakan mulai pencarian untuk menemukan partner baru.`,
+                parse_mode: 'HTML',
+                reply_markup: searchKeyboard
+              })
+            });
+          } catch (e) {
+            console.error('Gagal mengedit pesan target lokasi:', e);
+          }
+        }
 
         return new Response('OK', { status: 200 });
       }
@@ -2208,9 +2214,6 @@ Deno.serve(async (req) => {
       // --- LOGIKA CHAT NEXT (INLINE BUTTON) - SATU PANGGILAN RPC ---
       if (callbackData === 'chat_next') {
         await answerCallbackQuery(botToken, query.id, '⏭️ Mencari partner baru...');
-        
-        // Invalidate cache karena state akan berubah
-        invalidateUserCache(userId);
         
         // SATU PANGGILAN RPC: handles upsert, blocked check, end chat, reputation, search
         const { success, handled, result: searchResult } = await comprehensiveSearchAction(
@@ -3522,30 +3525,17 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       // Photo logging dihapus untuk hemat biaya
     }
 
-    // Get current user state - dengan CACHING untuk hemat biaya cloud
-    // Cek cache dulu sebelum query ke database
     let currentUser: { state: string; partner_id: number | null } | null = null;
-    const cachedUserData = getCachedUserData(userId);
     
-    if (cachedUserData && cachedUserData.state === 'chatting') {
-      // Gunakan data dari cache untuk user yang sedang chatting
-      currentUser = { state: cachedUserData.state, partner_id: cachedUserData.partnerId };
-    } else {
-      // Cache miss atau state bukan chatting - query database
-      const { data: dbUser } = await supabase
-        .from('telegram_users')
-        .select('state, partner_id')
-        .eq('id', userId)
-        .single();
-      
-      currentUser = dbUser;
-      
-      // Simpan ke cache jika user sedang chatting
-      if (currentUser?.state === 'chatting' && currentUser?.partner_id) {
-        setCachedUserData(userId, currentUser.partner_id, currentUser.state);
-      }
-    }
+    const { data: dbUser, error: dbError } = await supabase
+      .from('telegram_users')
+      .select('state, partner_id')
+      .eq('id', userId)
+      .maybeSingle();
 
+    if (!dbError && dbUser) {
+      currentUser = dbUser;
+    }
     // ************************************************
     // LOGIKA GUARD: Hanya Terima Foto dan Command /stop saat Awaiting Payment
     // ************************************************
