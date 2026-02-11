@@ -1074,9 +1074,7 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     }
     
     if (!data.matched) {
-      // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
-      // Kirim pesan mencari dengan reputasi (1 pesan gabungan)
-      await sendSearchingMessage(botToken, userId, data.reputation, false);
+      
       return false;
     }
     
@@ -1084,6 +1082,8 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     const matchedPartnerId = data.partner_id;
     
     // Kirim notifikasi pairing berhasil
+    
+    await sendSearchingMessage(botToken, userId, data.reputation, false);
     await sendPairingNotifications(botToken, userId, matchedPartnerId, null, null);
     return true;
     
