@@ -2150,12 +2150,11 @@ Deno.serve(async (req) => {
               await sendJoinChannelMessage(botToken, userId, botNotAdmin);
               return new Response('OK', { status: 200 });
             } else {
-              // Sudah join tapi ditahan db -> masukkan ke antrean
+              // Jika ternyata SUDAH member tapi database menahan, kita masukkan ke antrean
               await searchPartnerWithQueueCheck(supabase, botToken, userId);
               return new Response('OK', { status: 200 });
             }
           }
-          // -
           
           // Handle hasil pencarian partner (isNext = false untuk tombol Cari Partner)
           await handleComprehensiveSearchResult(supabase, botToken, userId, result, false);
@@ -2226,31 +2225,28 @@ Deno.serve(async (req) => {
         }
         
         if (success && searchResult) {
-          // Cek channel join HANYA jika should_check_channel = true
-          if (searchResult.should_check_channel) {
+          // 1. TANGANI PROMO DARI DATABASE (Cegah Partner Nyangkut)
+          if (searchResult.action === 'show_promo') {
+             await sendSearchingMessage(botToken, userId, searchResult.reputation, true, false);
+             await executePromoAction(supabase, botToken, userId);
+             return new Response('OK', { status: 200 });
+          }
+
+          // 2. TANGANI CHANNEL CHECK DARI DATABASE
+          if (searchResult.action === 'needs_channel_check') {
             const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
             if (!isMember) {
-              // Untuk tombol Next: tetap tampilkan pesan "Mengakhiri chat..." dengan peringatan jika >= 40
               await sendSearchingMessage(botToken, userId, searchResult.reputation, true, false);
               await sendJoinChannelMessage(botToken, userId, botNotAdmin);
               return new Response('OK', { status: 200 });
-            }
-          }
-          
-          // Cek apakah user dapat promo
-          if (searchResult.chat_ended) {
-            const { data: promoUser } = await supabase.rpc('handle_end_chat_promo_logic', { p_user_id: userId });
-            
-            if (promoUser?.should_send) {
-              // Untuk tombol Next: tetap tampilkan pesan "Mengakhiri chat..." dengan peringatan jika >= 40
-              await sendSearchingMessage(botToken, userId, searchResult.reputation, true, false);
-              // JIKA DAPAT PROMO: Tampilkan promo dan BERHENTI
-              await executePromoAction(supabase, botToken, userId);
+            } else {
+              // Jika ternyata SUDAH member tapi database menahan, kita masukkan ke antrean
+              await searchPartnerWithQueueCheck(supabase, botToken, userId);
               return new Response('OK', { status: 200 });
             }
           }
           
-          // Handle hasil pencarian partner (isNext = true untuk tombol Next)
+          // 3. JIKA BUKAN PROMO & SUDAH JOIN CHANNEL -> NORMAL MATCHING
           await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true);
         }
 
