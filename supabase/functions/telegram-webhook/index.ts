@@ -1440,8 +1440,17 @@ Deno.serve(async (req) => {
 
       console.log(`[CHAT_MEMBER] @FizaTalkCh - User ${memberId} -> ${newStatus} (member: ${isNowMember})`);
 
-      // Lakukan update diam-diam ke DB (fire and forget)
-      supabase.from('telegram_users').update({ is_channel_member: isNowMember }).eq('id', memberId);
+      // Update DB dengan await agar query benar-benar dieksekusi
+      const { error: memberError } = await supabase
+        .from('telegram_users')
+        .update({ is_channel_member: isNowMember })
+        .eq('id', memberId);
+      
+      if (memberError) {
+        console.error(`[CHAT_MEMBER] DB update error for user ${memberId}:`, memberError.message);
+      } else {
+        console.log(`[CHAT_MEMBER] DB updated: user ${memberId} is_channel_member = ${isNowMember}`);
+      }
       
       return new Response('OK', { status: 200 });
     }
