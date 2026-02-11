@@ -67,9 +67,9 @@ interface CallbackQuery {
 }
 
 interface ChatMemberUpdate {
-  chat: { id: number };
+  chat: { id: number; username?: string };
   from: { id: number; first_name: string; username?: string };
-  new_chat_member: { status: string };
+  new_chat_member: { status: string; user: { id: number; first_name: string; username?: string } };
 }
 
 interface TelegramUpdate {
@@ -1422,17 +1422,26 @@ Deno.serve(async (req) => {
     }
     
     
-    // Tangkap event saat user join/leave channel
+    // Tangkap event saat user join/leave channel @FizaTalkCh SAJA
     if (update.chat_member) {
-      const channelId = update.chat_member.chat.id;
-      const userId = update.chat_member.from.id;
+      const chatUsername = update.chat_member.chat.username;
+      
+      // Filter: hanya proses event dari channel @FizaTalkCh
+      if (chatUsername !== 'FizaTalkCh') {
+        console.log(`[CHAT_MEMBER] Ignored - channel @${chatUsername} bukan @FizaTalkCh`);
+        return new Response('OK', { status: 200 });
+      }
+      
+      const memberId = update.chat_member.new_chat_member.user.id;
       const newStatus = update.chat_member.new_chat_member.status;
       
       // Jika statusnya member/admin/creator, set true. Jika left/kicked, set false.
       const isNowMember = ['member', 'administrator', 'creator'].includes(newStatus);
 
+      console.log(`[CHAT_MEMBER] @FizaTalkCh - User ${memberId} -> ${newStatus} (member: ${isNowMember})`);
+
       // Lakukan update diam-diam ke DB (fire and forget)
-      supabase.from('telegram_users').update({ is_channel_member: isNowMember }).eq('id', userId);
+      supabase.from('telegram_users').update({ is_channel_member: isNowMember }).eq('id', memberId);
       
       return new Response('OK', { status: 200 });
     }
