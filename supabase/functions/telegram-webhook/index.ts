@@ -2165,7 +2165,10 @@ Deno.serve(async (req) => {
               await sendJoinChannelMessage(botToken, userId, botNotAdmin);
               return new Response('OK', { status: 200 });
             } else {
-              // Jika ternyata SUDAH member tapi database menahan, kita masukkan ke antrean
+              // UPDATE FLAG AGAR TIDAK DICEK LAGI SEUMUR HIDUP
+              await supabase.from('telegram_users').update({ is_channel_member: true }).eq('id', userId);
+              
+              // Masukkan ke antrean
               await searchPartnerWithQueueCheck(supabase, botToken, userId);
               return new Response('OK', { status: 200 });
             }
