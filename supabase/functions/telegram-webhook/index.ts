@@ -248,6 +248,17 @@ async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null
   }
 }
 
+// HELPER: Kirim peringatan user sedang dalam pembayaran
+async function sendAwaitingPaymentWarning(botToken: string, userId: number) {
+  const text = `⚠️ <b>Kamu sedang dalam proses pembayaran!</b>\n\nSelesaikan pembayaran dan <b>kirim bukti transfer ke chat ini</b>.\n\nJika ingin membatalkan transaksi, klik tombol di bawah atau ketik /stop.`;
+  const keyboard = {
+      inline_keyboard: [
+          [{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_all_payment' }]
+      ]
+  };
+  await sendTelegramMessage(botToken, userId, text, keyboard);
+}
+
 // 1. DAFTAR GIFT (18 Item, 6 Baris x 3 Kolom)
 const GIFT_LIST: Gift[] = [
   // Baris 1: Receh
@@ -1458,8 +1469,7 @@ Deno.serve(async (req) => {
       // ============================================
       // STEP 3: CEK STATE AWAITING_PAYMENT
       // ============================================
-      // Hanya izinkan cancel_topup, cancel_premium, dan cancel_fine saat sedang dalam pembayaran
-      const paymentAllowedCallbacks = ['cancel_topup', 'cancel_premium', 'cancel_fine'];
+      const paymentAllowedCallbacks = ['cancel_topup', 'cancel_premium', 'cancel_fine', 'cancel_all_payment'];
       
       if (!paymentAllowedCallbacks.includes(callbackData)) {
         const { data: userPaymentCheck } = await supabase
@@ -1469,38 +1479,45 @@ Deno.serve(async (req) => {
           .single();
         
         if (userPaymentCheck?.state === 'awaiting_payment') {
-          await answerCallbackQuery(botToken, query.id, '⚠️ Selesaikan atau batalkan pembayaran terlebih dahulu!');
-          await sendTelegramMessage(
-            botToken, 
-            userId, 
-            '⚠️ <b>Kamu sedang dalam proses pembayaran!</b>\n\nSelesaikan pembayaran dan <b>kirim bukti transfer ke chat ini</b> atau tekan tombol "Batalkan" pada pesan QRIS untuk membatalkan transaksi.'
-          );
+          // true = tampilkan pop-up alert di layar user
+          await answerCallbackQuery(botToken, query.id, '⚠️ Selesaikan atau batalkan pembayaran terlebih dahulu!', true);
+          await sendAwaitingPaymentWarning(botToken, userId);
           return new Response('OK', { status: 200 });
         }
       }
 
-      if (callbackData === 'cancel_topup') {
-          // SATU RPC: Batalkan topup + reset state
-          const { data: cancelResult } = await supabase.rpc('cancel_topup_transaction', {
-            p_user_id: userId
-          });
+      // --- LOGIKA PEMBATALAN SEMUA TRANSAKSI (UNIFIED) ---
+      if (paymentAllowedCallbacks.includes(callbackData)) {
+          await answerCallbackQuery(botToken, query.id, '🚫 Membatalkan transaksi...');
 
-          await answerCallbackQuery(botToken, query.id, '🚫 Transaksi dibatalkan!');
-          
-          // Hapus pesan QRIS
+          // Eksekusi semua RPC pembatalan secara paralel (Sangat cepat & hemat biaya cloud)
+          // Hanya RPC dari transaksi yang nyangkut yang akan mengubah database.
+          await Promise.all([
+              supabase.rpc('cancel_topup_transaction', { p_user_id: userId }),
+              supabase.rpc('cancel_premium_transaction', { p_user_id: userId }),
+              supabase.rpc('cancel_fine_transaction', { p_user_id: userId })
+          ]);
+
+          // Hapus pesan QRIS atau pesan Warning
           if (message) {
               await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
           }
-          
-          // Kirim pesan konfirmasi pembatalan
-          const newState = cancelResult?.new_state || 'idle';
-          const nextActionText = newState === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Anda dapat memulai chat baru dengan /start.';
-          await sendTelegramMessage(
-            botToken,
-            userId,
-            `🚫 <b>TRANSAKSI TOP-UP DIBATALKAN</b>\n\n${nextActionText}\n\nGunakan /topup untuk top-up koin lagi.`
-          );
-          
+
+          // Dapatkan state terbaru dari user
+          const { data: user } = await supabase.from('telegram_users').select('state').eq('id', userId).single();
+          const newState = user?.state || 'idle';
+
+          // UX Pesan balasan
+          let nextActionText = newState === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Gunakan menu /start untuk memulai kembali.';
+          let keyboard = undefined;
+
+          // Khusus jika yang dibatalkan adalah denda (UI UX consideration)
+          if (callbackData === 'cancel_fine') {
+              nextActionText = 'Akun Anda masih dalam status diblokir.\n\n💰 Bayar denda Rp10.000 untuk membuka blokir.';
+              keyboard = { inline_keyboard: [[{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]] };
+          }
+
+          await sendTelegramMessage(botToken, userId, `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n${nextActionText}`, keyboard);
           return new Response('OK', { status: 200 });
       }
 
@@ -1551,35 +1568,6 @@ Deno.serve(async (req) => {
             `💰 <b>PEMBAYARAN DENDA DIMULAI</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n💵 Total: Rp ${totalAmount.toLocaleString('id-ID')}\n\n⏳ Menunggu bukti pembayaran...`
           );
         }
-        
-        return new Response('OK', { status: 200 });
-      }
-
-      // --- LOGIKA PEMBATALAN DENDA DARI INLINE BUTTON (SATU RPC) ---
-      if (callbackData === 'cancel_fine') {
-        // SATU RPC: Batalkan fine + reset state
-        await supabase.rpc('cancel_fine_transaction', { p_user_id: userId });
-
-        await answerCallbackQuery(botToken, query.id, '🚫 Pembayaran denda dibatalkan!');
-        
-        // Hapus pesan QRIS
-        if (message) {
-          await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-        }
-        
-        // Kirim pesan konfirmasi (tetap blocked)
-        const blockedKeyboard = {
-          inline_keyboard: [
-            [{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]
-          ]
-        };
-        
-        await sendTelegramMessage(
-          botToken,
-          userId,
-          `🚫 <b>Pembayaran Denda Dibatalkan</b>\n\nAkun Anda masih dalam status diblokir.\n\n💰 Bayar denda Rp10.000 untuk membuka blokir.`,
-          blockedKeyboard
-        );
         
         return new Response('OK', { status: 200 });
       }
@@ -3119,28 +3107,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
         }
         return new Response('OK', { status: 200 });
       }
-      // --- LOGIKA PEMBATALAN PREMIUM (SATU RPC) ---
-      if (callbackData === 'cancel_premium') {
-        // SATU RPC: Batalkan premium + reset state
-        await supabase.rpc('cancel_premium_transaction', { p_user_id: userId });
-
-        await answerCallbackQuery(botToken, query.id, '🚫 Transaksi dibatalkan!');
-        
-        // Hapus pesan QRIS
-        if (message) {
-          await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-        }
-        
-        // Kirim pesan konfirmasi pembatalan
-        await sendTelegramMessage(
-          botToken,
-          userId,
-          `🚫 <b>TRANSAKSI PREMIUM DIBATALKAN</b>\n\nAnda dapat mencoba lagi kapan saja dengan mengklik tombol beli premium atau ketik /premium`
-        );
-        return new Response('OK', { status: 200 });
-      }
-      // --- END LOGIKA PEMBELIAN PREMIUM ---
-
+     
       // --- LOGIKA ADMIN APPROVE/REJECT TOPUP ---
       if (callbackData.startsWith('admin_approve_topup_') || callbackData.startsWith('admin_reject_topup_')) {
         const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
@@ -3778,30 +3745,23 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
           );
         }
       } else if (text === '/stop') {
-          // Izinkan command /stop untuk membatalkan transaksi yang belum ada bukti bayar (masih dianggap 'mengendap')
-          await supabase
-              .from('topup_requests')
-              .update({ status: 'cancelled' })
-              .eq('user_id', userId)
-              .eq('status', 'pending')
-              .is('payment_proof', null); // HANYA batalkan yang belum ada bukti bayar
+          // Sama seperti callback, batalkan semua transaksi via RPC paralel
+          await Promise.all([
+              supabase.rpc('cancel_topup_transaction', { p_user_id: userId }),
+              supabase.rpc('cancel_premium_transaction', { p_user_id: userId }),
+              supabase.rpc('cancel_fine_transaction', { p_user_id: userId })
+          ]);
           
-          // Reset state user ke CHATTING atau IDLE
-          const newState = currentUser.partner_id ? 'chatting' : 'idle';
-          await supabase
-              .from('telegram_users')
-              .update({ state: newState }) // <-- KEMBALIKAN KE CHATTING JIKA ADA PARTNER
-              .eq('id', userId);
+          const { data: user } = await supabase.from('telegram_users').select('state').eq('id', userId).single();
+          const newState = user?.state || 'idle';
+          const nextActionText = newState === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Anda dapat menggunakan bot kembali.';
           
-          await sendTelegramMessage(botToken, userId, '🚫 Permintaan top-up yang belum dibayar dibatalkan. Anda dapat melanjutkan chat.'); // <-- PESAN BARU
+          await sendTelegramMessage(botToken, userId, `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n${nextActionText}`);
           
       } else {
-        // Pesan masuk BUKAN foto dan BUKAN /stop (semua command lain dan teks biasa/media lain)
-        await sendTelegramMessage(
-          botToken, 
-          userId, 
-          '⚠️ Anda sedang menunggu proses top-up. Silakan kirimkan **foto bukti pembayaran** Anda, atau gunakan **/stop** untuk membatalkan dan kembali ke chat.' // <-- PESAN BARU
-        );
+        // Pesan masuk BUKAN foto dan BUKAN /stop (semua command lain / teks / stiker dll)
+        // Langsung panggil helper warning (satu pesan rapi dengan tombol cancel)
+        await sendAwaitingPaymentWarning(botToken, userId);
       }
       return new Response('OK', { status: 200 }); // Selesai memproses jika state awaiting_payment
     }
