@@ -2144,14 +2144,18 @@ Deno.serve(async (req) => {
             return new Response('OK', { status: 200 });
           }
           
-          // Cek channel join HANYA jika should_check_channel = true
-          if (result.should_check_channel) {
+          if (result.action === 'needs_channel_check') {
             const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
             if (!isMember) {
               await sendJoinChannelMessage(botToken, userId, botNotAdmin);
               return new Response('OK', { status: 200 });
+            } else {
+              // Sudah join tapi ditahan db -> masukkan ke antrean
+              await searchPartnerWithQueueCheck(supabase, botToken, userId);
+              return new Response('OK', { status: 200 });
             }
           }
+          // -
           
           // Handle hasil pencarian partner (isNext = false untuk tombol Cari Partner)
           await handleComprehensiveSearchResult(supabase, botToken, userId, result, false);
