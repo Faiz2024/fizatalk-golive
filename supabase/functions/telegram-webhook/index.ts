@@ -491,28 +491,22 @@ function getReplyPreview(replyMsg: any, currentUserId: number): string {
 }
 
 
-async function sendTelegramMessage(botToken: string, chatId: number, text: string, replyMarkup?: any): Promise<boolean> {
+async function sendTelegramMessage(botToken: string, chatId: number, text: string, replyMarkup?: any, retries = 2): Promise<boolean> {
   const url = `${TELEGRAM_API}${botToken}/sendMessage`;
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'HTML',
-        reply_markup: replyMarkup
-      })
-    });
-    
-    if (!response.ok) {
-      return false;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', reply_markup: replyMarkup })
+      });
+      if (response.ok) return true;
+      if (response.status === 429) await new Promise(res => setTimeout(res, 1000)); // Rate limit handling
+    } catch (error) {
+       if (i === retries - 1) return false;
     }
-    
-    return true;
-  } catch (error) {
-    return false;
   }
+  return false;
 }
 
 async function answerCallbackQuery(botToken: string, callbackQueryId: string, text?: string, showAlert: boolean = false) {
