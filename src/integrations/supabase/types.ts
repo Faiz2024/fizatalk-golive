@@ -295,6 +295,7 @@ export type Database = {
           first_name: string | null
           gender: string | null
           id: number
+          is_channel_member: boolean | null
           last_active: string
           last_partners: number[] | null
           last_promo_sent_at: string | null
@@ -314,6 +315,7 @@ export type Database = {
           first_name?: string | null
           gender?: string | null
           id: number
+          is_channel_member?: boolean | null
           last_active?: string
           last_partners?: number[] | null
           last_promo_sent_at?: string | null
@@ -333,6 +335,7 @@ export type Database = {
           first_name?: string | null
           gender?: string | null
           id?: number
+          is_channel_member?: boolean | null
           last_active?: string
           last_partners?: number[] | null
           last_promo_sent_at?: string | null

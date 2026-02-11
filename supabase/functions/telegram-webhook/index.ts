@@ -66,11 +66,18 @@ interface CallbackQuery {
   data?: string;
 }
 
+interface ChatMemberUpdate {
+  chat: { id: number };
+  from: { id: number; first_name: string; username?: string };
+  new_chat_member: { status: string };
+}
+
 interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
   message_reaction?: MessageReaction;
   callback_query?: CallbackQuery;
+  chat_member?: ChatMemberUpdate;
 }
 
 interface Gift {
@@ -2250,7 +2257,7 @@ Deno.serve(async (req) => {
           }
 
           // TANGANI CHANNEL CHECK
-          if (result.action === 'needs_channel_check') {
+          if (searchResult.action === 'needs_channel_check') {
             const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
             if (!isMember) {
               await sendJoinChannelMessage(botToken, userId, botNotAdmin);
