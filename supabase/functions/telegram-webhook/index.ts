@@ -1402,7 +1402,22 @@ Deno.serve(async (req) => {
     } catch (parseError) {
       return new Response('Invalid JSON', { status: 400 });
     }
+    
+    
+    // Tangkap event saat user join/leave channel
+    if (update.chat_member) {
+      const channelId = update.chat_member.chat.id;
+      const userId = update.chat_member.from.id;
+      const newStatus = update.chat_member.new_chat_member.status;
+      
+      // Jika statusnya member/admin/creator, set true. Jika left/kicked, set false.
+      const isNowMember = ['member', 'administrator', 'creator'].includes(newStatus);
 
+      // Lakukan update diam-diam ke DB (fire and forget)
+      supabase.from('telegram_users').update({ is_channel_member: isNowMember }).eq('id', userId);
+      
+      return new Response('OK', { status: 200 });
+    }
     // Handle callback queries (emoji rating & NEW: cancel topup)
     if (update.callback_query) {
       const query = update.callback_query;
@@ -2227,20 +2242,21 @@ Deno.serve(async (req) => {
         if (success && searchResult) {
           // 1. TANGANI PROMO DARI DATABASE (Cegah Partner Nyangkut)
           if (searchResult.action === 'show_promo') {
-             await sendSearchingMessage(botToken, userId, searchResult.reputation, true, false);
              await executePromoAction(supabase, botToken, userId);
              return new Response('OK', { status: 200 });
           }
 
-          // 2. TANGANI CHANNEL CHECK DARI DATABASE
-          if (searchResult.action === 'needs_channel_check') {
+          // TANGANI CHANNEL CHECK
+          if (result.action === 'needs_channel_check') {
             const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
             if (!isMember) {
-              await sendSearchingMessage(botToken, userId, searchResult.reputation, true, false);
               await sendJoinChannelMessage(botToken, userId, botNotAdmin);
               return new Response('OK', { status: 200 });
             } else {
-              // Jika ternyata SUDAH member tapi database menahan, kita masukkan ke antrean
+              // UPDATE FLAG AGAR TIDAK DICEK LAGI SEUMUR HIDUP
+              await supabase.from('telegram_users').update({ is_channel_member: true }).eq('id', userId);
+              
+              // Masukkan ke antrean
               await searchPartnerWithQueueCheck(supabase, botToken, userId);
               return new Response('OK', { status: 200 });
             }
