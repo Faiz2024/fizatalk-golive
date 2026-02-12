@@ -1398,9 +1398,21 @@ async function sendPromoToUser(
 }
 
 // Helper Global untuk mengirim promo agar sinkron di semua fitur
+// Helper Global untuk mengirim promo agar sinkron di semua fitur
 async function executePromoAction(supabase: any, botToken: string, userId: number) {
-  const promoFileId = await getPromoPremiumFileId(supabase);
   
+  // 1. LOGIKA PEMILIHAN GAMBAR ACAK (Zero Cost & Fast)
+  let selectedPromoFileId: string | null = null;
+
+  if (PROMO_FILEID_LIST && PROMO_FILEID_LIST.length > 0) {
+    // Pilih satu secara acak dari list konstanta (Sangat Cepat)
+    const randomIndex = Math.floor(Math.random() * PROMO_FILEID_LIST.length);
+    selectedPromoFileId = PROMO_FILEID_LIST[randomIndex];
+  } else {
+    // Fallback: Jika list kosong, ambil dari setting database (agar Admin tetap punya kontrol via /set_promo)
+    selectedPromoFileId = await getPromoPremiumFileId(supabase);
+  }
+
   const promoMessage = `🚨 <b>PROMO TERBATAS! HANYA 1 JAM!</b> 🚨
 
 ⏰ <b>Berakhir dalam 1 jam dari sekarang!</b> - Jangan sampai kelewatan!
@@ -1423,7 +1435,8 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
     ]
   };
 
-  return await sendPromoToUser(botToken, userId, promoMessage, promoFileId, promoKeyboard);
+  // Kirim menggunakan File ID yang terpilih
+  return await sendPromoToUser(botToken, userId, promoMessage, selectedPromoFileId, promoKeyboard);
 }
 
 // NOTE: buildEndChatKeyboard sudah didefinisikan di atas (line ~811)
