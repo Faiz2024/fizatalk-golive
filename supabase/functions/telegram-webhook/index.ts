@@ -1397,16 +1397,7 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 📦 <b>PREMIUM 30 HARI</b>
 <s>Rp 60.000</s> → <b>HANYA Rp 10.000!</b>
 ━━━━━━━━━━━━━━━━━━━━
-
-🎯 <b>KEUNTUNGAN PREMIUM:</b>
-• Pilih target gender chat
-• Pilih target lokasi chat  
-• ⭐ Badge Premium eksklusif
-• 🚀 Prioritas matching tercepat
-
-💥 <b>HEMAT 83%!</b>
-
-⚡ <b>Ambil sekarang sebelum kehabisan!</b>`;
+💥 <b>HEMAT 83%!</b>`;
 
   const promoKeyboard = {
     inline_keyboard: [
