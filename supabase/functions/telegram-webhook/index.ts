@@ -1601,6 +1601,50 @@ Deno.serve(async (req) => {
       }
 
       // ============================================
+      // STEP 1.5: PROMO EXPIRATION CHECK (Zero Cost)
+      // ============================================
+      // Cek apakah tombol promo diklik setelah > 1 jam
+      // List callback yang terikat waktu promo 1 jam
+      const LIMITED_TIME_PROMOS = [
+        'buy_premium_30', // Rp 10.000
+        'buy_premium_35', // Rp 20.000
+        'buy_premium_7',  // Rp 5.000
+        'buy_premium_3',  // Rp 2.000
+        'buy_premium_1'   // Rp 1.000
+      ];
+
+      if (LIMITED_TIME_PROMOS.includes(callbackData)) {
+        // Telegram message.date adalah Unix timestamp dalam detik (seconds)
+        const messageDate = message?.date; 
+        
+        if (messageDate) {
+          const nowSeconds = Math.floor(Date.now() / 1000);
+          const diffSeconds = nowSeconds - messageDate;
+          const ONE_HOUR = 3600; // 3600 detik
+
+          // Jika umur pesan lebih dari 1 jam (tambah buffer 60 detik untuk toleransi delay jaringan)
+          if (diffSeconds > (ONE_HOUR + 60)) {
+            
+            // 1. Beritahu user via Alert (Pop-up)
+            await answerCallbackQuery(
+              botToken, 
+              query.id, 
+              '⏳ Yah, telat!\n\nMasa promo 1 JAM sudah berakhir. Tunggu penawaran spesial berikutnya ya! 👋', 
+              true // true = Tampilkan sebagai alert window, bukan toast
+            );
+
+            // 2. Hapus pesan promo yang sudah kadaluarsa (Cleanup UI)
+            if (message) {
+              await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+            }
+
+            // 3. Stop proses, jangan lanjutkan ke logic database/pembayaran
+            return new Response('OK', { status: 200 });
+          }
+        }
+      }
+
+      // ============================================
       // STEP 2: ACKNOWLEDGE CALLBACK SEGERA
       // ============================================
       // Untuk action tertentu yang berat, acknowledge dulu untuk mencegah Telegram resend
