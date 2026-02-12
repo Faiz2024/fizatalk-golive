@@ -1132,8 +1132,8 @@ async function sendPairingNotifications(
 }
 
 // LEGACY: Keep old function name as alias for backward compatibility
-async function searchPartnerWithQueueCheck(supabase: any, botToken: string, userId: number): Promise<boolean> {
-  return searchPartnerWithRPC(supabase, botToken, userId);
+async function searchPartnerWithQueueCheck(supabase: any, botToken: string, userId: number): Promise<void> {
+  return autoSearchPartner(supabase, botToken, userId);
 }
 
 // Helper: Build target gender keyboard or premium offer based on user status
