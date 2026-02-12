@@ -248,113 +248,91 @@ async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null
   }
 }
 
-// --- DATA PESAN ANTI-SANGE (Clean Version) ---
-// Disimpan di memori: Hemat biaya DB, Load instan <1ms
-const WARNING_MESSAGES = [
-  "Tahan nafsu, ingat dosa dikit napa. 😇",
-  "Awas, jangan sange nanti bisulan! 🙈",
-  "Sopan ya, jangan bikin malu kaummu. 😎",
-  "Jangan sange, mending sate. Lebih enak. 🍢",
-  "Otaknya tolong ditaruh di kepala, bukan di selangkangan. 🧠",
-  "Sange = Auto Neraka Jalur VIP. 🔥",
-  "Jangan mesum, nanti HP-nya meledak lho. 💥",
-  "Tahan, jangan langsung nyosor kayak soang. 🦢",
-  "Jangan sange, inget cicilan masih banyak. 💸",
-  "Awas, sange dikit langsung kena azab. ⚡",
-  "Kalau sange mending mandi air es sana. 🧊",
-  "Jangan aneh-aneh, malaikat nyatet lho. 📝",
-  "Sopan itu ganteng/cantik. Sange itu jelek. 🤪",
-  "Jangan minta PAP aneh-aneh, minta PAP nilai rapor aja. 📚",
-  "Jangan sange, nanti jodohnya jauh. 🚀",
-  "Tahan bestie, jangan bikin ilfeel. 🤢",
-  "Hati-hati! Bot ini punya pendeteksi sange. Awas kena block! 🚫",
-  "Puasa, puasa! Tahan nafsunya. 🤐",
-  "Jangan sange, mending push rank. 🎮",
-  "Awas, yang sange biasanya napasnya bau naga. 🐉",
-  "Jangan mesum, nanti diketawain ayam. 🐔",
-  "Ingat pesan Ibu: Jangan jadi fakboy/fakgirl. 👵",
-  "Sange itu penyakit, obatnya cuma tobat. 💊",
-  "Jangan rusuh, jangan sange, kalem aja bos. ☕",
-  "Awas ilernya netes, jangan sange woi. 🤤",
-  "Jaga jari, jangan ngetik yang iya-iya. 💅",
-  "Jangan sange, nanti dijauhi rezeki. 💸",
-  "Mode: Sopan & Santuy. Mode Sange: OFF. 📴",
-  "Kalau mau sange, salah tempat bosku. 🚪",
-  "Tahan... Tahan... Jangan porno! 🛑",
-  "Sange dikit, admin sentil ginjalnya. 🤏",
-  "Jangan mesum, malu sama kuota internet. 📡",
-  "Jangan sange, mending ngaji atau tidur. 😴",
-  "Awas, jangan bikin partnernya kabur ketakutan. 🏃💨",
-  "Jangan sange, inget umur udah tua/masih kecil. 👶👴",
-  "Sange? Ke laut aja sana berenang sama hiu. 🦈",
-  "Jaga iman, jaga imun, jaga 'itu'. 🛡️",
-  "Jangan kirim yang aneh-aneh, admin memantau. 👮‍♂️",
-  "Sange itu berat, kamu nggak akan kuat. Sopan aja. 🏋️",
-  "Jangan sange, nanti dikira orang purba. 🦖",
-  "Jangan minta macem-macem, minta doa restu aja. 🙏",
-  "Awas, sange dapat menyebabkan akun hangus. 📵",
-  "Otak dipakai buat mikir topik, bukan mikir jorok. 💡",
-  "Tahan diri, jangan malu-maluin bangsa. 🇮🇩",
-  "Jangan sange, nanti Tuhan marah lho. ⛈️",
-  "Sange = Skip. Sopan = Langgeng. ❤️",
-  "Jangan jadi buaya/kucing garong di sini. 🐊",
-  "Mandi junub dulu gih biar adem otaknya. 🚿",
-  "Jangan sange, mending bantu Emak cuci piring. 🍽️",
-  "Stop sange, start chatting asik. 🛑✅",
-  "Jangan mesum, nanti mukanya jerawatan. 🌝",
-  "Sange itu tanda kurang kasih sayang. Pukpuk. 👋",
-  "Awas, jangan sampai jari mengetik hal kotor. 🧼",
-  "Tahan nafsu, dunia sementara akhirat selamanya. ⏳",
-  "Jangan sange, nanti keyboardnya lengket (eh?). ⌨️",
-  "Jangan norak, jangan sange, stay cool. 😎",
-  "Kalau sange mending lari keliling komplek. 🏃",
-  "Jangan bikin emosi, jangan bikin sange. 🤬",
-  "Sopan dikit napa, jangan kayak orang kesurupan. 👻",
-  "Sange? Sorry, stok sabun habis. 🧼",
-  "Jangan mesum, nanti admin laporin ke Makmu. 📞",
-  "Tahan, jangan brutal. Kalem bro/sist. 🧘",
-  "Jangan sange, mending sange-in ilmu pengetahuan. 📖",
-  "Awas, sange bisa menurunkan IQ. 📉",
-  "Jangan kirim foto aneh, nanti HP lu error. 📱",
-  "Sange? Siram air panas nih. ♨️",
-  "Jangan sange, mending cari duit. 💰",
-  "Tahan drastis, jangan romantis apalagi sadis. 🔪",
-  "Jangan sange, nanti digigit nyamuk DBD. 🦟",
-  "Istighfar bang/neng, nyebut... nyebut. 📿",
-  "Sange nggak bikin kenyang, mending makan nasi padang. 🍛",
-  "Jangan mesum, kita di sini mau seru-seruan aja. 🥳",
-  "Awas, jangan sampai setan merasukimu. 👿",
-  "Sange dikit, langsung 'End Chat'. 👋",
-  "Jangan sange, nanti masuk angin. 🌬️",
-  "Tolong kondisikan otak dan jarinya ya. 👐",
-  "Jangan sange, malu sama kucing tetangga. 🐈",
-  "Tahan bos, jangan sange di sini. Sempit. 📦",
-  "Sange itu kuno, sopan itu modern. ✨",
-  "Jangan mesum, nanti rezekinya seret kayak kran mampet. 🚰",
-  "Awas, jangan sange nanti ketabrak becak. 🚲",
-  "Fokus cari temen, bukan cari dosa. 🎯",
-  "Jangan sange, mending minum air putih biar sehat. 🥤",
-  "Sange? Belum sunat ya? ✂️",
-  "Tahan nafsu, jangan bikin partner trauma. 🚑",
-  "Jangan sange, nanti admin santet online. 🔮",
-  "Jangan mesum, mending ngitung bintang di langit. ⭐",
-  "Sange itu lebay. Jadilah berkelas. 🎩",
-  "Jangan sange, ingat wajah orang tua di rumah. 🏠",
-  "Stop horny, start friendly. 🤝",
-  "Jangan sange, nanti digondol wewe gombel. 🧟‍♀️",
-  "Tahan, jangan kayak orang nggak pernah liat manusia. 👀",
-  "Sange? Maaf, layanan ini untuk manusia beradab. 👔",
-  "Jangan mesum, nanti bisulnya pindah ke muka. 🤕",
-  "Jangan sange, mending push up 100x biar setrong. 💪",
-  "Awas, sange dapat menyebabkan kantong kering. 👛",
-  "Jangan aneh-aneh, nanti kena hukum karma. ♻️",
-  "Sange itu nggak keren, yang keren itu sholeh/hah. 👳‍♂️",
-  "Jangan sange, nanti admin sedih liatnya. 😢",
-  "Tahan nafsu, kendalikan dirimu, wahai anak muda! ⚔️"
+// ==========================================
+// DATA PESAN & HELPER (IN-MEMORY / ZERO COST)
+// ==========================================
+
+// 1. Teks untuk COWOK (Himbauan jangan sange) - TOTAL: 100
+const MALE_WARNINGS = [
+  "Tahan nafsu, ingat dosa dikit napa. 😇", "Awas, jangan sange nanti bisulan! 🙈", "Otaknya tolong ditaruh di kepala, bukan di selangkangan. 🧠",
+  "Sange = Auto Neraka Jalur VIP. 🔥", "Jangan mesum, nanti HP-nya meledak lho. 💥", "Ingat pesan Ibu: Jangan jadi fakboy. 👵",
+  "Sange itu penyakit, obatnya cuma tobat. 💊", "Awas ilernya netes, jangan sange woi. 🤤", "Mode: Sopan & Santuy. Mode Sange: OFF. 📴",
+  "Kalau mau sange, salah tempat bosku. 🚪", "Tahan... Tahan... Jangan porno! 🛑", "Sange dikit, admin sentil ginjalnya. 🤏",
+  "Jangan sange, mending push rank. 🎮", "Istighfar bang, nyebut... nyebut. 📿", "Sange? Siram air panas nih. ♨️",
+  "Jangan kirim foto aneh, nanti HP lu error. 📱", "Sange nggak bikin kenyang, mending makan nasi padang. 🍛", "Jangan mesum, nanti rezekinya seret. 🚰",
+  "Tahan nafsu, kendalikan dirimu, wahai anak muda! ⚔️", "Jangan sange, nanti dikira orang purba. 🦖", "Sopan itu ganteng. Sange itu jelek. 🤪",
+  "Jangan minta PAP aneh-aneh, minta PAP nilai rapor aja. 📚", "Jangan sange, nanti jodohnya jauh. 🚀", "Hati-hati! Bot ini punya pendeteksi sange. Awas kena block! 🚫",
+  "Puasa, puasa! Tahan nafsunya. 🤐", "Awas, yang sange biasanya napasnya bau naga. 🐉", "Jangan mesum, nanti diketawain ayam. 🐔",
+  "Jangan rusuh, jangan sange, kalem aja bos. ☕", "Jaga jari, jangan ngetik yang iya-iya. 💅", "Jangan sange, nanti dijauhi rezeki. 💸",
+  "Jangan mesum, malu sama kuota internet. 📡", "Jangan sange, mending ngaji atau tidur. 😴", "Awas, jangan bikin partnernya kabur ketakutan. 🏃💨",
+  "Jangan sange, inget umur udah tua/masih kecil. 👶👴", "Sange? Ke laut aja sana berenang sama hiu. 🦈", "Jaga iman, jaga imun, jaga 'itu'. 🛡️",
+  "Jangan kirim yang aneh-aneh, admin memantau. 👮‍♂️", "Sange itu berat, kamu nggak akan kuat. Sopan aja. 🏋️", "Jangan minta macem-macem, minta doa restu aja. 🙏",
+  "Awas, sange dapat menyebabkan akun hangus. 📵", "Otak dipakai buat mikir topik, bukan mikir jorok. 💡", "Tahan diri, jangan malu-maluin bangsa. 🇮🇩",
+  "Jangan sange, nanti Tuhan marah lho. ⛈️", "Sange = Skip. Sopan = Langgeng. ❤️", "Jangan jadi buaya/kucing garong di sini. 🐊",
+  "Mandi junub dulu gih biar adem otaknya. 🚿", "Jangan sange, mending bantu Emak cuci piring. 🍽️", "Stop sange, start chatting asik. 🛑✅",
+  "Jangan mesum, nanti mukanya jerawatan. 🌝", "Sange itu tanda kurang kasih sayang. Pukpuk. 👋", "Awas, jangan sampai jari mengetik hal kotor. 🧼",
+  "Tahan nafsu, dunia sementara akhirat selamanya. ⏳", "Jangan sange, nanti keyboardnya lengket (eh?). ⌨️", "Jangan norak, jangan sange, stay cool. 😎",
+  "Kalau sange mending lari keliling komplek. 🏃", "Jangan bikin emosi, jangan bikin sange. 🤬", "Sopan dikit napa, jangan kayak orang kesurupan. 👻",
+  "Sange? Sorry, stok sabun habis. 🧼", "Jangan mesum, nanti admin laporin ke Makmu. 📞", "Tahan, jangan brutal. Kalem bro. 🧘",
+  "Jangan sange, mending sange-in ilmu pengetahuan. 📖", "Awas, sange bisa menurunkan IQ. 📉", "Tahan drastis, jangan romantis apalagi sadis. 🔪",
+  "Jangan sange, nanti digigit nyamuk DBD. 🦟", "Jangan mesum, kita di sini mau seru-seruan aja. 🥳", "Awas, jangan sampai setan merasukimu. 👿",
+  "Sange dikit, langsung 'End Chat'. 👋", "Jangan sange, nanti masuk angin. 🌬️", "Tolong kondisikan otak dan jarinya ya. 👐",
+  "Jangan sange, malu sama kucing tetangga. 🐈", "Tahan bos, jangan sange di sini. Sempit. 📦", "Sange itu kuno, sopan itu modern. ✨",
+  "Jangan mesum, nanti rezekinya seret kayak kran mampet. 🚰", "Awas, jangan sange nanti ketabrak becak. 🚲", "Fokus cari temen, bukan cari dosa. 🎯",
+  "Jangan sange, mending minum air putih biar sehat. 🥤", "Sange? Belum sunat ya? ✂️", "Tahan nafsu, jangan bikin partner trauma. 🚑",
+  "Jangan sange, nanti admin santet online. 🔮", "Jangan mesum, mending ngitung bintang di langit. ⭐", "Sange itu lebay. Jadilah berkelas. 🎩",
+  "Jangan sange, ingat wajah orang tua di rumah. 🏠", "Stop horny, start friendly. 🤝", "Jangan sange, nanti digondol wewe gombel. 🧟‍♀️",
+  "Tahan, jangan kayak orang nggak pernah liat manusia. 👀", "Sange? Maaf, layanan ini untuk manusia beradab. 👔", "Jangan mesum, nanti bisulnya pindah ke muka. 🤕",
+  "Jangan sange, mending push up 100x biar setrong. 💪", "Awas, sange dapat menyebabkan kantong kering. 👛", "Jangan aneh-aneh, nanti kena hukum karma. ♻️",
+  "Sange itu nggak keren, yang keren itu sholeh. 👳‍♂️", "Jangan sange, nanti admin sedih liatnya. 😢", "Sange? Ingat neraka jalur prestasi. 🔥",
+  "Kalau sange, wudhu gih biar adem. 🚰", "Tahan, jangan langsung minta open BO. 🏨", "Awas, sange bikin rezeki seret jodoh mampet. 🚫",
+  "Jangan sange, nanti dilaknat netizen. 📱", "Sopan dikit, partner lu manusia bukan boneka. 🧸"
 ];
 
-function getRandomWarning() {
-  return WARNING_MESSAGES[Math.floor(Math.random() * WARNING_MESSAGES.length)];
+// 2. Teks untuk CEWEK (Himbauan waspada buaya & jaga diri)
+const FEMALE_WARNINGS = [
+  "Awas buaya darat lepas, siapkan pawang. 🐊", "Hi Queen! Kalau dia aneh-aneh, langsung hempas aja. 💅", "Jangan gampang baper, cowok di sini mulutnya manis. 🍭",
+  "Kalau minta PAP, kasih foto KTP bapakmu. 📸", "Inget, harga diri di atas segalanya bestie. 👑", "Hati-hati, banyak fakboy berkeliaran. 🚩",
+  "Jual mahal dikit, jangan murahan. 😎", "Kalau dia sange, auto block. Jangan kasih ampun. 🚫", "Kamu berlian, jangan mau sama batu kali. 💎",
+  "Awas modus 'Halo Dek', itu jebakan batman. 🦇", "Kalau diajak VCS, bilang aja kamera HP lagi rusak. 📵", "Jangan mau dibego-begoin cinta virtual. 💔",
+  "Stay classy, stay sassy. Jangan mau direndahin. 👠", "Kalau dia nanya warna daleman, laporin admin. 👮‍♀️", "Anggap aja hiburan, jangan pake hati. 🎭",
+  "Cowok sange itu kayak nyamuk, berisik & ganggu. 🦟", "Jaga jari, jangan kirim foto yang aneh-aneh. 🖼️", "Kamu pantas dapat pangeran, bukan preman. 🤴",
+  "Awas, yang profilnya ganteng biasanya fake. 🎭", "Kalau chatnya mulai jorok, ruqyah online aja. 👻", "Jadilah cewek mahal yang susah didapetin. 💰",
+  "Hati-hati, jarimu harimau-mu (tapi buat dia). 🐯", "Kalau dia curhat, dengerin aja. Jangan jadi badutnya. 🤡", "Cowok bener ga bakal minta aneh-aneh di awal. ✅",
+  "Inget, cowok virtual belum tentu nyata gantengnya. 👽", "Tahan jempol, jangan kepancing emosi. 🧘‍♀️", "Kalau dia ghosting, ya udah biarin. Cowok banyak. 🤷‍♀️",
+  "Jangan mau dipanggil 'Sayang' kalau belum jadian. 🤮", "Standar kamu harus tinggi, setinggi harapan orang tua. 📈", "Kalau dia maksa, langsung kick aja dari kehidupanmu. ⚽",
+  "Jangan buang waktu sama cowok yang ga jelas. ⏳", "Kamu itu prioritas, bukan pilihan. Inget itu. 🌟", "Jaga kehormatan, jangan mau diajak 'nakal'. 📛",
+  "Kalau dia mulai sange, suruh dia tobat. 🙏", "Cewek cerdas ga bakal ketipu rayuan gombal mukidi. 📚", "Awas, jangan share lokasi rumah. Bahaya. 🏠",
+  "Kalau dia minta nomor WA, pikir 1000x dulu. 📱", "Jangan mau jadi pelarian di saat dia gabut. 🏃‍♀️", "Kamu cantik, jangan mau sama cowok burik (hatinya). 💩",
+  "Stay cool, biar dia yang penasaran. 🧊", "Jangan gampang luluh sama stiker lucu. Itu trik. 🧸", "Kalau dia kasar, jangan ragu tekan /stop. 🛑",
+  "Kamu bukan tempat sampah buat nampung sange orang. 🗑️", "Mandiri itu seksi. Jangan ngemis perhatian. 💪", "Kalau diajak nikah online, ketawain aja yang kenceng. 😂",
+  "Jaga hati, jaga diri, jaga image. 📸", "Jangan mau disuruh-suruh, kamu bukan pembantunya. 🧹", "Kalau dia nanya 'Lagi apa?', jawab 'Lagi sibuk jadi Ratu'. 👸",
+  "Awas love bombing, manis di awal pait di akhir. 🍬", "Jangan kirim foto muka full, misterius itu asik. 🎭", "Cowok sange itu lemah, kamu yang kuat. 🏋️‍♀️",
+  "Jangan mau diajak check-in (check-in hati maksudnya). 🏨", "Kalau dia ga sopan, didik dia dengan keacuhan. ❄️", "Jangan baper sama ketikan, itu cuma pixel. 👾",
+  "Kamu berharga, jangan didiskon buat cowok gratisan. 🏷️", "Kalau dia minta PAP tet**, kirim gambar tetikus (mouse). 🐭", "Jangan mau jadi korban virtual police line. 🚧",
+  "Santuy aja, kalau jodoh ga kemana. 🛤️", "Kalau dia ngegas, kamu ngerem. Biar ga tabrakan. 🚗", "Awas, banyak buaya berbulu domba. 🐑",
+  "Jangan mau diajak video call kalau gelap-gelapan. 💡", "Saring sebelum sharing (perasaan). 💓", "Kalau dia nanya ukuran, jawab ukuran sepatu bapakmu. 👞",
+  "Kamu itu bunga, jangan mau dipetik sembarangan. 🌹", "Kalau dia mulai aneh, pura-pura sinyal jelek aja. 📶", "Jangan mau jadi badut demi bikin dia ketawa. 🤹‍♀️",
+  "Cewek smart itu menawan. Tunjukin wawasanmu. 🧠", "Jangan mau diajak 'main', emang kamu mainan? 🧸", "Awas, yang manis biasanya mengandung diabetes (penyakit hati). 💉",
+  "Kalau dia ninggalin, berarti dia yang rugi. 📉", "Jangan oversharing, simpan misterimu. 🤫", "Kalau dia sange, suruh dia meluk guling. 🛌",
+  "Jangan mau dijadiin pelampiasan nafsu sesaat. 🌬️", "Tetap waspada, kejahatan terjadi karena ada kesempatan. 📺", "Kamu bukan Ojol yang siap sedia 24 jam buat dia. 🛵",
+  "Jangan mau digantungin, emang kamu jemuran? 👕", "Awas, jangan sampai hatimu dicuri maling. 🦹‍♂️", "Fokus cari temen ngobrol, bukan cari masalah. 🧩",
+  "Kalau dia ga hargain kamu, bye bye in aja. 👋", "Jangan mau diajak COD (Call of Duty? No, Cash on Delivery hati). 📦", "Tahan diri, jangan gampang falling in love. 🍂",
+  "Kalau dia nanya aneh, bales pake stiker azab. ⚡", "Jangan mau diajak 'seru-seruan' versi dia. Versi kita beda. 🙅‍♀️", "Kamu berlian, jangan mau digosok batu akik. 💍",
+  "Kalau dia maksa minta IG, kasih IG lambe turah. 💋", "Stay safe, dunia maya itu hutan belantara. 🌳", "Jangan mau jadi selingkuhan online. Dosanya sama. 🔥",
+  "Tunjukin kalau kamu cewek berkelas. 🥂", "Sange? Block. Sopan? Lanjut. Simpel kan? 🤷‍♀️", "Jangan mau dikadalin, kamu bukan cicak. 🦎",
+  "Kalau dia minta pulsa, fix dia penipu. 💸", "Awas, jangan sampai baper sama bot (eh, ini manusia kok). 🤖", "Jangan aneh-aneh, nanti nyesel belakangan. 🔙",
+  "Cowok baik itu menghormati wanita. Titik. ⏺️", "Jangan mau diajak VC sex, rekam jejak digital itu kejam. 🎥", "Be a Queen, cari King, bukan Joker. 🃏"
+];
+
+// Helper: Ambil pesan acak berdasarkan gender (Safe & Fast)
+function getMessageByGender(gender: string | null) {
+  const g = gender ? gender.toLowerCase().trim() : 'cowok'; // Default ke cowok
+  if (['cewek', 'female', 'perempuan', 'woman'].includes(g)) {
+    return FEMALE_WARNINGS[Math.floor(Math.random() * FEMALE_WARNINGS.length)];
+  } else {
+    return MALE_WARNINGS[Math.floor(Math.random() * MALE_WARNINGS.length)];
+  }
 }
 
 // HELPER: Kirim peringatan user sedang dalam pembayaran
@@ -1151,7 +1129,7 @@ async function handleComprehensiveSearchResult(
   const partnerPremiumUntil = result.partner_premium_until;
 
   // Kirim notifikasi pairing (Tanpa Query Tambahan)
-  await sendPairingNotifications(botToken, userId, partnerId, myPremiumUntil ?? null, partnerPremiumUntil ?? null);
+  await sendPairingNotifications(supabase, botToken, userId, partnerId, myPremiumUntil ?? null, partnerPremiumUntil ?? null);
 }
 
 // ============================================
@@ -1189,13 +1167,14 @@ async function autoSearchPartner(supabase: any, botToken: string, userId: number
     
     // 4. Jika Match, kirim notifikasi. Jika Waiting, biarkan saja (pesan "Mencari..." sudah ada).
     if (data.status === 'matched' && data.partner_id) {
-       await sendPairingNotifications(botToken, userId, data.partner_id, null, null);
+       await sendPairingNotifications(supabase, botToken, userId, data.partner_id, null, null);
     }
 }
 
 
 // HELPER: Kirim notifikasi setelah pairing berhasil
 async function sendPairingNotifications(
+  supabase: any,
   botToken: string, 
   user1Id: number, 
   user2Id: number,
@@ -1223,22 +1202,45 @@ async function sendPairingNotifications(
     ]
   });
 
-  const warningUser = getRandomWarning();
-  const warningPartner = getRandomWarning();
+  // 1. Ambil Gender Kedua User (Single Optimized Query)
+  // Menggunakan .in() jauh lebih hemat daripada 2 query terpisah
+  let genderUser1 = 'cowok';
+  let genderUser2 = 'cowok';
+
+  try {
+      const { data: usersData } = await supabase
+        .from('telegram_users')
+        .select('id, gender')
+        .in('id', [user1Id, user2Id]);
+
+      if (usersData) {
+          const u1 = usersData.find((u: any) => u.id === user1Id);
+          const u2 = usersData.find((u: any) => u.id === user2Id);
+          if (u1?.gender) genderUser1 = u1.gender;
+          if (u2?.gender) genderUser2 = u2.gender;
+      }
+  } catch (e) {
+      console.error('Failed fetching gender for pairing msg', e);
+  }
+
+  // 2. Pilih Pesan Sesuai Gender
+  const warningUser1 = getMessageByGender(genderUser1);
+  const warningUser2 = getMessageByGender(genderUser2);
+
   // Send notifications in parallel
   await Promise.all([
     sendTelegramMessage(
       botToken, 
       user1Id, 
       // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n${warningUser}`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n${warningUser1}`,
       buildChatKeyboard(user1IsPremium)
     ),
     sendTelegramMessage(
       botToken, 
       user2Id, 
       // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n${warningPartner}`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n${warningUser2}`,
       buildChatKeyboard(user2IsPremium)
     )
   ]);
