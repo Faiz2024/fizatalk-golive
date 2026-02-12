@@ -1231,14 +1231,14 @@ async function sendPairingNotifications(
       botToken, 
       user1Id, 
       // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
-      `✅ <b>Partner ditemukan!</b>\n\n${warningUser}`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n${warningUser}`,
       buildChatKeyboard(user1IsPremium)
     ),
     sendTelegramMessage(
       botToken, 
       user2Id, 
       // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
-      `✅ <b>Partner ditemukan!</b>\n\n${warningPartner}`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n${warningPartner}`,
       buildChatKeyboard(user2IsPremium)
     )
   ]);
