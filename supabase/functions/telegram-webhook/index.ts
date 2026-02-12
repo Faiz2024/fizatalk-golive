@@ -1082,8 +1082,6 @@ async function searchPartnerWithRPC(supabase: any, botToken: string, userId: num
     const matchedPartnerId = data.partner_id;
     
     // Kirim notifikasi pairing berhasil
-    
-    await sendSearchingMessage(botToken, userId, data.reputation, false);
     await sendPairingNotifications(botToken, userId, matchedPartnerId, null, null);
     return true;
     
@@ -1634,7 +1632,7 @@ Deno.serve(async (req) => {
         }
 
         // Jika sudah set lokasi, langsung cari partner dengan logika baru
-        // Cek antrian dulu, jika tidak ada yang cocok baru masuk antrian
+        await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
         await searchPartnerWithQueueCheck(supabase, botToken, userId);
 
         return new Response('OK', { status: 200 });
@@ -1659,6 +1657,7 @@ Deno.serve(async (req) => {
 
         // Langsung cari partner dengan logika baru
         // Cek antrian dulu, jika tidak ada yang cocok baru masuk antrian
+        await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
         await searchPartnerWithQueueCheck(supabase, botToken, userId);
 
         return new Response('OK', { status: 200 });
