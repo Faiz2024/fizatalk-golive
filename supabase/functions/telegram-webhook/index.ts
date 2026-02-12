@@ -1045,47 +1045,44 @@ async function handleComprehensiveSearchResult(
   await sendPairingNotifications(botToken, userId, partnerId, myPremiumUntil ?? null, partnerPremiumUntil ?? null);
 }
 
-// HELPER: Panggil RPC find_and_pair_partner dan kirim notifikasi jika berhasil (LEGACY)
-async function searchPartnerWithRPC(supabase: any, botToken: string, userId: number): Promise<boolean> {
-  
-    // Panggil RPC function di database - semua logika matching dilakukan di sini
+// ============================================
+// OPTIMIZED AUTO-SEARCH LOGIC (CLEAN)
+// ============================================
+
+async function autoSearchPartner(supabase: any, botToken: string, userId: number): Promise<void> {
+    // 1. Kirim pesan UI "Mencari..." di awal
+    await sendSearchingMessage(botToken, userId, undefined, false, false, undefined);
+
+    // 2. Panggil RPC (Otomatis match atau masuk queue)
     const { data, error } = await supabase.rpc('find_and_pair_partner', {
       p_user_id: userId
-  
     });
     
+    // Handle Error RPC / Koneksi
     if (error) {
-      // Fallback: masukkan user ke antrian secara manual
-      await supabase.from('waiting_queue').upsert({
-        user_id: userId,
-        joined_at: new Date().toISOString()
-      });
+      console.error('AutoSearch Error:', error);
+      // Fallback: Masukkan ke antrian secara manual jika RPC error
+      await supabase.from('waiting_queue').upsert({ user_id: userId, joined_at: new Date().toISOString() });
       await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
-      return false;
+      return;
     }
     
-    // Cek hasil RPC
+    // 3. Handle Result
     if (!data.success) {
-      // Error dari RPC (user_not_found, user_already_chatting, dll)
       if (data.error === 'user_already_chatting') {
-        await sendTelegramMessage(botToken, userId, '⚠️ Kamu sudah dalam sesi chat!');
+         const chatKeyboard = {
+            inline_keyboard: [[{ text: '🛑 Stop', callback_data: 'chat_stop' }, { text: '⏭️ Next', callback_data: 'chat_next' }]]
+         };
+         await sendTelegramMessage(botToken, userId, '⚠️ Kamu sudah memiliki partner aktif.', chatKeyboard);
       }
-      return false;
+      return;
     }
     
-    if (!data.matched) {
-      
-      return false;
+    // 4. Jika Match, kirim notifikasi. Jika Waiting, biarkan saja (pesan "Mencari..." sudah ada).
+    if (data.status === 'matched' && data.partner_id) {
+       await sendPairingNotifications(botToken, userId, data.partner_id, null, null);
     }
-    
-    // Partner ditemukan! Kirim notifikasi ke kedua user
-    const matchedPartnerId = data.partner_id;
-    
-    // Kirim notifikasi pairing berhasil
-    await sendPairingNotifications(botToken, userId, matchedPartnerId, null, null);
-    return true;
-    
-  }
+}
 
 
 // HELPER: Kirim notifikasi setelah pairing berhasil
@@ -1631,9 +1628,7 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
 
-        // Jika sudah set lokasi, langsung cari partner dengan logika baru
-        await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
-        await searchPartnerWithQueueCheck(supabase, botToken, userId);
+        await autoSearchPartner(supabase, botToken, userId);
 
         return new Response('OK', { status: 200 });
       }
@@ -1655,10 +1650,7 @@ Deno.serve(async (req) => {
 
         await answerCallbackQuery(botToken, query.id, `✅ Lokasi diset: ${selectedLocation}`);
 
-        // Langsung cari partner dengan logika baru
-        // Cek antrian dulu, jika tidak ada yang cocok baru masuk antrian
-        await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!');
-        await searchPartnerWithQueueCheck(supabase, botToken, userId);
+        await autoSearchPartner(supabase, botToken, userId);
 
         return new Response('OK', { status: 200 });
       }
@@ -2110,7 +2102,7 @@ Deno.serve(async (req) => {
           }
         }
         
-        await searchPartnerWithQueueCheck(supabase, botToken, userId);
+        await autoSearchPartner(supabase, botToken, userId);
         return new Response('OK', { status: 200 });
       }
 
