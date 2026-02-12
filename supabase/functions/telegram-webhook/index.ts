@@ -248,6 +248,19 @@ async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null
   }
 }
 
+const PROMO_FILEID_LIST = [
+  'AgACAgUAAxkBAAHVILFpjh5KuWoRVLVgBVYQE-y0w5uQWQACIg9rGzfYcFQdSsNtCFJQlwEAAwIAA3kAAzoE', // Promo 1
+  'AgACAgUAAxkBAAHVILJpjh5K4ZZ-gZrGkJWgDZ5lW9WYzgACIw9rGzfYcFQ2b_YhpPl1KQEAAwIAA3kAAzoE', // Promo 2
+  'AgACAgUAAxkBAAHVILVpjh5K1xHQH8fjLfkQHHUAAfpKdTYAAiUPaxs32HBUM-vk55O0EJMBAAMCAAN5AAM6BA',  // Promo 3
+  'AgACAgUAAxkBAAHVILNpjh5K-TWN8eumA55VGlfa1M_XrgACJA9rGzfYcFR9DdkE5AjrIwEAAwIAA3kAAzoE', // Promo 4
+  'AgACAgUAAxkBAAHVILdpjh5K82JLPf05IYBjOYC5FdxquAACJg9rGzfYcFQZvT9hKbRpCgEAAwIAA3kAAzoE', // Promo 5
+  'AgACAgUAAxkBAAHVILhpjh5KVZuaYhRDWzgKClMvVlR_GQACJw9rGzfYcFQvEkLP59Kw7AEAAwIAA3kAAzoE', // Promo 6
+  'AgACAgUAAxkBAAHVILppjh5KHEZbNxG0CjPnGJAjJuyB4wACKA9rGzfYcFQ5uFOhYKLwvAEAAwIAA3kAAzoE', // Promo 7
+  'AgACAgUAAxkBAAHVILtpjh5Kv6dWVzZPY4hoJyZRPEPO6wACKQ9rGzfYcFRGBk_NBnvzYgEAAwIAA3kAAzoE', // Promo 8
+];
+
+
+
 // ==========================================
 // DATA PESAN & HELPER (IN-MEMORY / ZERO COST)
 // ==========================================
