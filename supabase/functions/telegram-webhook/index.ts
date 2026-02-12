@@ -986,7 +986,7 @@ async function comprehensiveSearchAction(
           { text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }
         ],
         [
-          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_30' }
+          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_normal_7' }
         ]
       ]
     };
@@ -1023,7 +1023,7 @@ async function comprehensiveSearchAction(
           { text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }
         ],
         [
-          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_7' }
+          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_normal_7' }
         ]
       ]
     };
@@ -1394,8 +1394,8 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 
 🎁 <b>PENAWARAN EKSKLUSIF:</b>
 ━━━━━━━━━━━━━━━━━━━━
-📦 <b>PREMIUM 5 BULAN</b>
-<s>Rp 300.000</s> → <b>HANYA Rp 10.000!</b>
+📦 <b>PREMIUM 30 HARI</b>
+<s>Rp 60.000</s> → <b>HANYA Rp 10.000!</b>
 ━━━━━━━━━━━━━━━━━━━━
 
 🎯 <b>KEUNTUNGAN PREMIUM:</b>
@@ -1404,17 +1404,17 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 • ⭐ Badge Premium eksklusif
 • 🚀 Prioritas matching tercepat
 
-💥 <b>HEMAT 97%!</b> Kesempatan langka ini tidak akan terulang!
+💥 <b>HEMAT 83%!</b>
 
 ⚡ <b>Ambil sekarang sebelum kehabisan!</b>`;
 
   const promoKeyboard = {
     inline_keyboard: [
-      [{ text: '🔥 5 Bulan / Rp10.000', callback_data: 'buy_premium_150' }],
-      [{ text: '💎 6 Bulan / Rp 25.000', callback_data: 'buy_premium_180' }],
-      [{ text: '📦 1 Bulan / Rp 5.000', callback_data: 'buy_premium_30' }],
-      [{ text: '📅 1 Minggu / Rp 2.000', callback_data: 'buy_premium_7' }],
-      [{ text: '⚡ 3 Hari / Rp 1.000', callback_data: 'buy_premium_3' }],
+      [{ text: '🔥 30 Hari / Rp10.000', callback_data: 'buy_premium_30' }],
+      [{ text: '💎 35 Hari / Rp 20.000', callback_data: 'buy_premium_35' }],
+      [{ text: '📦 7 Hari / Rp 5.000', callback_data: 'buy_premium_7' }],
+      [{ text: '📅 3 Hari / Rp 2.000', callback_data: 'buy_premium_3' }],
+      [{ text: '⚡ 1 Hari / Rp 1.000', callback_data: 'buy_premium_1' }],
       [{ text: '🔍 Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
     ]
   };
@@ -2672,9 +2672,9 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA PEMBELIAN PREMIUM 5 BULAN (150 HARI) + BONUS 5000 KOIN ---
-      if (callbackData === 'buy_premium_150') {
-        const durationDays = 150; // 5 bulan
+      // --- LOGIKA PEMBELIAN PREMIUM 30 HARI (PROMO SPESIAL) ---
+      if (callbackData === 'buy_premium_30') {
+        const durationDays = 30; // 1 bulan
         const price = 10000;
         
         // Hapus pesan promo
@@ -2765,9 +2765,102 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA PEMBELIAN PREMIUM 1 BULAN (30 HARI) ---
-      if (callbackData === 'buy_premium_30') {
-        const durationDays = 30;
+      // --- LOGIKA PEMBELIAN PREMIUM 1 BULAN (35 HARI) ---
+      if (callbackData === 'buy_premium_35') {
+        const durationDays = 35;
+        const price = 20000;
+        
+        // Hapus pesan promo
+        if (message) {
+          await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+        }
+
+        // Cek apakah user sudah premium
+        const { data: userData } = await supabase
+          .from('telegram_users')
+          .select('premium_until')
+          .eq('id', userId)
+          .single();
+
+        const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
+        if (isPremium) {
+          await answerCallbackQuery(botToken, query.id, '⚠️ Kamu sudah Premium!');
+          await sendTelegramMessage(
+            botToken,
+            userId,
+            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${formatDateWIB(new Date(userData.premium_until))}\n\nGunakan /target untuk memilih gender chat!`
+          );
+          return new Response('OK', { status: 200 });
+        }
+
+        // Batalkan premium request pending sebelumnya yang belum ada bukti bayar
+        await supabase
+          .from('premium_requests')
+          .update({ status: 'cancelled' })
+          .eq('user_id', userId)
+          .eq('status', 'pending')
+          .is('payment_proof', null);
+
+        // Cek apakah ada premium request pending dengan bukti bayar
+        const { count: paymentPendingCount } = await supabase
+          .from('premium_requests')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('status', 'pending')
+          .not('payment_proof', 'is', null);
+
+        if (paymentPendingCount && paymentPendingCount > 0) {
+          await answerCallbackQuery(botToken, query.id, '⚠️ Transaksi pending!');
+          await sendTelegramMessage(
+            botToken,
+            userId,
+            '⚠️ Anda memiliki transaksi premium yang sedang menunggu konfirmasi admin. Mohon tunggu verifikasi.'
+          );
+          return new Response('OK', { status: 200 });
+        }
+
+        // Generate unique code
+        const uniqueCode = Math.floor(Math.random() * 999) + 1;
+        const totalAmount = price + uniqueCode;
+
+        // Update user state
+        await supabase
+          .from('telegram_users')
+          .update({ state: 'awaiting_payment' })
+          .eq('id', userId);
+
+        // Kirim QRIS menggunakan helper function
+        await answerCallbackQuery(botToken, query.id, '✅ Memproses...');
+        
+        const qrisMsgId = await sendQRISPayment({
+          supabase,
+          botToken,
+          chatId: userId,
+          title: `PEMBELIAN PREMIUM ${durationDays} HARI (PROMO)`,
+          price,
+          uniqueCode,
+          totalAmount,
+          expiryMinutes: 15,
+          cancelCallbackData: 'cancel_premium'
+        });
+
+        // INSERT DB
+        if (qrisMsgId) {
+            await supabase.from('premium_requests').insert({
+                user_id: userId,
+                duration_days: durationDays,
+                price: price,
+                unique_code: uniqueCode,
+                status: 'pending',
+                message_id: qrisMsgId
+            });
+        }
+        return new Response('OK', { status: 200 });
+      }
+
+      // --- LOGIKA PEMBELIAN PREMIUM 3 HARI ---
+      if (callbackData === 'buy_premium_7') {
+        const durationDays = 7;
         const price = 5000;
         
         // Hapus pesan promo
@@ -2861,99 +2954,6 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       // --- LOGIKA PEMBELIAN PREMIUM 3 HARI ---
       if (callbackData === 'buy_premium_3') {
         const durationDays = 3;
-        const price = 1000;
-        
-        // Hapus pesan promo
-        if (message) {
-          await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-        }
-
-        // Cek apakah user sudah premium
-        const { data: userData } = await supabase
-          .from('telegram_users')
-          .select('premium_until')
-          .eq('id', userId)
-          .single();
-
-        const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
-        if (isPremium) {
-          await answerCallbackQuery(botToken, query.id, '⚠️ Kamu sudah Premium!');
-          await sendTelegramMessage(
-            botToken,
-            userId,
-            `✨ Kamu sudah menjadi user Premium!\n\n📅 Berlaku hingga: ${formatDateWIB(new Date(userData.premium_until))}\n\nGunakan /target untuk memilih gender chat!`
-          );
-          return new Response('OK', { status: 200 });
-        }
-
-        // Batalkan premium request pending sebelumnya yang belum ada bukti bayar
-        await supabase
-          .from('premium_requests')
-          .update({ status: 'cancelled' })
-          .eq('user_id', userId)
-          .eq('status', 'pending')
-          .is('payment_proof', null);
-
-        // Cek apakah ada premium request pending dengan bukti bayar
-        const { count: paymentPendingCount } = await supabase
-          .from('premium_requests')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('status', 'pending')
-          .not('payment_proof', 'is', null);
-
-        if (paymentPendingCount && paymentPendingCount > 0) {
-          await answerCallbackQuery(botToken, query.id, '⚠️ Transaksi pending!');
-          await sendTelegramMessage(
-            botToken,
-            userId,
-            '⚠️ Anda memiliki transaksi premium yang sedang menunggu konfirmasi admin. Mohon tunggu verifikasi.'
-          );
-          return new Response('OK', { status: 200 });
-        }
-
-        // Generate unique code
-        const uniqueCode = Math.floor(Math.random() * 999) + 1;
-        const totalAmount = price + uniqueCode;
-
-        // Update user state
-        await supabase
-          .from('telegram_users')
-          .update({ state: 'awaiting_payment' })
-          .eq('id', userId);
-
-        // Kirim QRIS menggunakan helper function
-        await answerCallbackQuery(botToken, query.id, '✅ Memproses...');
-        
-        const qrisMsgId = await sendQRISPayment({
-          supabase,
-          botToken,
-          chatId: userId,
-          title: `PEMBELIAN PREMIUM ${durationDays} HARI (PROMO)`,
-          price,
-          uniqueCode,
-          totalAmount,
-          expiryMinutes: 15,
-          cancelCallbackData: 'cancel_premium'
-        });
-
-        // INSERT DB
-        if (qrisMsgId) {
-            await supabase.from('premium_requests').insert({
-                user_id: userId,
-                duration_days: durationDays,
-                price: price,
-                unique_code: uniqueCode,
-                status: 'pending',
-                message_id: qrisMsgId
-            });
-        }
-        return new Response('OK', { status: 200 });
-      }
-
-      // --- LOGIKA PEMBELIAN PREMIUM 1 MINGGU (7 HARI) ---
-      if (callbackData === 'buy_premium_7') {
-        const durationDays = 7;
         const price = 2000;
         
         // Hapus pesan promo
@@ -3044,10 +3044,10 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA PEMBELIAN PREMIUM 6 BULAN (180 HARI) ---
-      if (callbackData === 'buy_premium_180') {
-        const durationDays = 180;
-        const price = 25000;
+      // --- LOGIKA PEMBELIAN PREMIUM 1 HARI  ---
+      if (callbackData === 'buy_premium_1') {
+        const durationDays = 1;
+        const price = 1000;
         
         // Hapus pesan promo
         if (message) {
