@@ -1388,9 +1388,9 @@ async function sendPromoToUser(
 async function executePromoAction(supabase: any, botToken: string, userId: number) {
   const promoFileId = await getPromoPremiumFileId(supabase);
   
-  const promoMessage = `🚨 <b>PROMO TERBATAS! HANYA 5 JAM!</b> 🚨
+  const promoMessage = `🚨 <b>PROMO TERBATAS! HANYA 1 JAM!</b> 🚨
 
-⏰ <b>Berakhir dalam 5 jam dari sekarang!</b> - Jangan sampai kelewatan!
+⏰ <b>Berakhir dalam 1 jam dari sekarang!</b> - Jangan sampai kelewatan!
 
 🎁 <b>PENAWARAN EKSKLUSIF:</b>
 ━━━━━━━━━━━━━━━━━━━━
