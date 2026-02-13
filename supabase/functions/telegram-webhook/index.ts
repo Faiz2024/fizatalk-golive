@@ -1609,7 +1609,7 @@ Deno.serve(async (req) => {
         'buy_premium_30', // Rp 10.000
         'buy_premium_35', // Rp 20.000
         'buy_premium_7',  // Rp 5.000
-        'buy_premium_3',  // Rp 2.000
+        'buy_premium_3',  // Rp 2.000                                                                                                        
         'buy_premium_1'   // Rp 1.000
       ];
 
@@ -4142,20 +4142,60 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
               const coins = userData?.coins || 0;
               await sendTelegramMessage(botToken, userId, `💰 Saldo Koin Kamu: ${coins} koin`);
               isCommand = true;
+          // ... kode sebelumnya ...
           } else if (text === '/reward') { 
               // Logika /reward saat chatting
+              
+              // Pesan yang akan otomatis muncul di input text user saat klik tombol
+              const preFilledMessage = encodeURIComponent("Halo Admin, saya ingin mendaftar menjadi konten kreator FizaTalk. Mohon infonya.");
+              
               const rewardKeyboard = {
                   inline_keyboard: [
-                      [{ text: '💸 Cek Reward & Daftar', url: '' }]
+                      // Menggunakan URL t.me dengan parameter ?text=
+                      [{ text: '💸 Chat Admin & Daftar', url: `https://t.me/FizaTalkCS?text=${preFilledMessage}` }]
                   ]
               };
               await sendTelegramMessage(
                   botToken, 
                   userId, 
-                  '✨ <b>Dapatkan Reward dengan Membuat Konten Fizatalk!</b>\n\nYuk, buat video tentang pengalaman chat seru kamu di Fizatalk dan dapatkan penghasilan berdasarkan jumlah *views* yang kamu dapatkan!\n\n💰 <b>Skema Reward:</b>\n• 10k views = Rp 10.000\n• 50k views = Rp 50.000\n• 100k views = Rp 100.000\n\nKlik tombol di bawah untuk info lebih lanjut dan cara klaim reward!',
+                  '✨ <b>Dapatkan Reward dengan Membuat Konten Fizatalk!</b>\n\nYuk, buat video tentang pengalaman chat seru kamu di Fizatalk dan dapatkan penghasilan berdasarkan jumlah <b>views</b> yang kamu dapatkan!\n\n💰 <b>Contoh Skema Reward:</b>\n• 10k views = Rp 10.000\n• 50k views = Rp 50.000\n• 100k views = Rp 100.000\n\nKlik tombol di bawah untuk menghubungi Admin dan mendaftar!',
                   rewardKeyboard
               );
               isCommand = true;
+          }
+        // COMMAND /LOKASI - Ubah lokasi (tidak memerlukan premium)
+        else if (text === '/lokasi') {
+          // Buat keyboard lokasi 
+          const locationButtons = [];
+          for (let i = 0; i < LOCATION_LIST.length; i += 3) {
+            const row = [];
+            for (let j = 0; j < 3 && i + j < LOCATION_LIST.length; j++) {
+              const loc = LOCATION_LIST[i + j];
+              row.push({ text: loc, callback_data: `set_loc_${loc}` });
+            }
+            locationButtons.push(row);
+          }
+
+          const locationKeyboard = {
+            inline_keyboard: locationButtons
+          };
+
+          // Get current location
+          const { data: userData } = await supabase
+            .from('telegram_users')
+            .select('location')
+            .eq('id', userId)
+            .single();
+
+          const currentLocation = userData?.location ? `📍 ${userData.location}` : 'Belum diset';
+
+          await sendTelegramMessage(
+            botToken,
+            userId,
+            `🔄 <b>Ubah Lokasi</b>\n\n📌 Lokasi saat ini: <b>${currentLocation}</b>\n\nPilih lokasi baru:`,
+            locationKeyboard
+          );
+            isCommand = true;
           } else if (text === '/gift') {
         // Jika SEDANG chatting: Tampilkan Menu Gift
         const { data: userCoins } = await supabase.from('telegram_users').select('coins').eq('id', userId).single();
@@ -4263,20 +4303,27 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
           const coins = userData?.coins || 0;
           await sendTelegramMessage(botToken, userId, `💰 Saldo Koin Kamu: ${coins} koin`);
         }
+        // ... kode sebelumnya ...
         else if (text === '/reward') { // <-- IMPLEMENTASI COMMAND /REWARD BARU
+            
+            // Pesan yang akan otomatis muncul di input text user saat klik tombol
+            const preFilledMessage = encodeURIComponent("Halo Admin, saya ingin mendaftar menjadi konten kreator FizaTalk. Mohon infonya.");
+
             const rewardKeyboard = {
                 inline_keyboard: [
-                    [{ text: '💸 Cek Reward & Daftar', url: 'https://fizatalk-reward.app' }]
+                    // Menggunakan URL t.me dengan parameter ?text=
+                    [{ text: '💸 Chat Admin & Daftar', url: `https://t.me/FizaTalkCS?text=${preFilledMessage}` }]
                 ]
             };
 
             await sendTelegramMessage(
                 botToken, 
                 userId, 
-                '✨ <b>Dapatkan Reward dengan Membuat Konten Fizatalk!</b>\n\nYuk, buat video tentang pengalaman chat seru kamu di Fizatalk dan dapatkan penghasilan berdasarkan jumlah *views* yang kamu dapatkan!\n\n💰 <b>Skema Reward:</b>\n• 10k views = Rp 10.000\n• 50k views = Rp 50.000\n• 100k views = Rp 100.000\n\nKlik tombol di bawah untuk info lebih lanjut dan cara klaim reward!',
+                '✨ <b>Dapatkan Reward dengan Membuat Konten Fizatalk!</b>\n\nYuk, buat video tentang pengalaman chat seru kamu di Fizatalk dan dapatkan penghasilan berdasarkan jumlah <b>views</b> yang kamu dapatkan!\n\n💰 <b>Contoh Skema Reward:</b>\n• 10k views = Rp 10.000\n• 50k views = Rp 50.000\n• 100k views = Rp 100.000\n\nKlik tombol di bawah untuk menghubungi Admin dan mendaftar!',
                 rewardKeyboard
             );
         }
+
         else if (text === '/gift') {
         const startKeyboard = {
           inline_keyboard: [
