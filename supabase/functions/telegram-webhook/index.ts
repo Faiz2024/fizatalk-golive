@@ -3783,15 +3783,25 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
       await sendMediaToSheet(botToken, message, supabase);
     }
 
+   // ... kode sebelumnya (setelah const text = message.text) ...
+
     let currentUser: { state: string; partner_id: number | null } | null = null;
     
+    // UBAH BAGIAN INI: Tambahkan retry sederhana atau error blocking
     const { data: dbUser, error: dbError } = await supabase
       .from('telegram_users')
       .select('state, partner_id')
       .eq('id', userId)
       .maybeSingle();
 
-    if (!dbError && dbUser) {
+    // JIKA DB ERROR: Jangan lanjut ke logika Welcome! 
+    // Return 500 agar Telegram mencoba mengirim ulang pesan (webhook retry)
+    if (dbError) {
+      console.error('[CRITICAL] DB Error fetching user:', dbError.message);
+      return new Response('Database Error', { status: 500 });
+    }
+
+    if (dbUser) {
       currentUser = dbUser;
     }
     // ************************************************
