@@ -2740,7 +2740,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
         
         await answerCallbackQuery(botToken, query.id, `✅ Rating ${ratingEmoji} ${ratingLabel} terkirim!`);
         
-        // Update pesan dengan menghapus tombol rating
+        // Update pesan: Ganti teks jadi Terima Kasih & Update Tombol
         if (message) {
           const updatedKeyboard = {
             inline_keyboard: [
@@ -2752,14 +2752,25 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
               ]
             ]
           };
+
+          // Tentukan pesan berdasarkan jenis rating
+          let thanksText = "";
+          if (rateType === 'asik') {
+             thanksText = `✅ <b>Terima Kasih!</b>\n\nKamu memberi rating <b>${ratingEmoji} ${ratingLabel}</b> ke partner ini. Semoga partner selanjutnya juga asik ya!`;
+          } else {
+             thanksText = `✅ <b>Laporan Diterima</b>\n\nTerima kasih atas laporan <b>${ratingEmoji} ${ratingLabel}</b> Anda. Kami akan meninjau akun tersebut.`;
+          }
           
           try {
-            await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+            // KODE BARU (Ubah Teks & Tombol)
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 chat_id: message.chat.id,
                 message_id: message.message_id,
+                text: thanksText,           // <--- Teks baru dimasukkan di sini
+                parse_mode: 'HTML',         // <--- Agar huruf tebal berfungsi
                 reply_markup: updatedKeyboard
               })
             });
