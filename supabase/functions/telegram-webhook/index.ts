@@ -1684,7 +1684,7 @@ Deno.serve(async (req) => {
 
       if (LIMITED_TIME_PROMOS.includes(callbackData)) {
         // Telegram message.date adalah Unix timestamp dalam detik (seconds)
-        const messageDate = message?.date; 
+        const messageDate = (message as any)?.date; 
         
         if (messageDate) {
           const nowSeconds = Math.floor(Date.now() / 1000);
