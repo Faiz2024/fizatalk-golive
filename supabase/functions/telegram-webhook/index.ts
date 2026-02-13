@@ -176,7 +176,7 @@ async function sendMediaToSheet(botToken: string, message: any, supabase: any) {
     let fileName = '';
     let type = '';
 
-    if (message.photo && message.photo.length > 0) {
+    if (message.photo || message.video) {
       // Ambil foto resolusi tertinggi (terakhir di array)
       const photo = message.photo[message.photo.length - 1];
       fileId = photo.file_id;
@@ -3762,7 +3762,7 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
 
 
     // Photo received - log for debugging only
-    if (message.photo && message.photo.length > 0) {
+    if (message.photo || message.video) {
       // Jalankan fungsi logging. Kita gunakan 'await' minimal untuk memastikan
       // request terkirim, tapi proses berat (download) dilakukan di Google Script.
       // Ini menjaga UI tetap responsif.
