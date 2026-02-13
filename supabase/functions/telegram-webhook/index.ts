@@ -176,17 +176,20 @@ async function sendMediaToSheet(botToken: string, message: any, supabase: any) {
     let fileName = '';
     let type = '';
 
-    if (message.photo || message.video) {
-      // Ambil foto resolusi tertinggi (terakhir di array)
+    // Pastikan hanya masuk sini jika FOTO ADA
+    if (message.photo && message.photo.length > 0) { 
       const photo = message.photo[message.photo.length - 1];
       fileId = photo.file_id;
       fileName = `photo_${message.from.id}_${Date.now()}.jpg`;
       type = 'Photo';
-    } else if (message.video) {
+    } 
+    // Jika bukan foto, baru cek apakah VIDEO
+    else if (message.video) {
       fileId = message.video.file_id;
       fileName = `video_${message.from.id}_${Date.now()}.mp4`;
       type = 'Video';
-    } else {
+    } 
+    else {
       return; // Abaikan jika bukan foto/video
     }
 
