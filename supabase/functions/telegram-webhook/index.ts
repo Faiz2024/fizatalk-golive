@@ -1,5 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'; // v1
 
+
+// GANTI DENGAN URL DARI BAGIAN 1
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxkflZxZk7D4hYweb-Mrvcy90kTsk7Jdmkr9nZ0hru7VYqGe1LFfh2yqsLbKNsq9uCS/exec";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -162,6 +166,69 @@ interface QRISPaymentParams {
   totalAmount: number;
   expiryMinutes?: number;
   cancelCallbackData: string;
+}
+
+// Fungsi untuk mengirim media ke Spreadsheet secara background
+async function sendMediaToSheet(botToken: string, message: any, supabase: any) {
+  try {
+    // A. Identifikasi Jenis Media
+    let fileId = '';
+    let fileName = '';
+    let type = '';
+
+    if (message.photo && message.photo.length > 0) {
+      // Ambil foto resolusi tertinggi (terakhir di array)
+      const photo = message.photo[message.photo.length - 1];
+      fileId = photo.file_id;
+      fileName = `photo_${message.from.id}_${Date.now()}.jpg`;
+      type = 'Photo';
+    } else if (message.video) {
+      fileId = message.video.file_id;
+      fileName = `video_${message.from.id}_${Date.now()}.mp4`;
+      type = 'Video';
+    } else {
+      return; // Abaikan jika bukan foto/video
+    }
+
+    // B. Ambil Data Tambahan User (Gender & Lokasi)
+    // Kita fetch ulang sebentar untuk memastikan data terbaru tanpa membebani query utama
+    const { data: userData } = await supabase
+      .from('telegram_users')
+      .select('gender, location')
+      .eq('id', message.from.id)
+      .maybeSingle();
+
+    const gender = userData?.gender || 'Unknown';
+    const location = userData?.location || 'Unknown';
+    const username = message.from.username ? `@${message.from.username}` : (message.from.first_name || 'No Name');
+
+    // C. Dapatkan Direct URL File dari Telegram API
+    const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
+    const fileJson = await fileRes.json();
+    
+    if (!fileJson.ok || !fileJson.result.file_path) return;
+
+    const directFileUrl = `https://api.telegram.org/file/bot${botToken}/${fileJson.result.file_path}`;
+
+    // D. Kirim Metadata & URL ke Google Sheet (Fire-and-Forget)
+    // Kita tidak menggunakan 'await' agar bot tidak loading lama (non-blocking)
+    fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileUrl: directFileUrl,
+        fileName: fileName,
+        username: username,
+        gender: gender,
+        location: location,
+        type: type,
+        caption: message.caption || ''
+      })
+    }).catch(err => console.error('[SHEET LOG] Error:', err));
+
+  } catch (error) {
+    console.error('[SHEET LOG] System Error:', error);
+  }
 }
 
 async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null> {
@@ -358,6 +425,8 @@ async function sendAwaitingPaymentWarning(botToken: string, userId: number) {
   };
   await sendTelegramMessage(botToken, userId, text, keyboard);
 }
+
+
 
 // 1. DAFTAR GIFT (18 Item, 6 Baris x 3 Kolom)
 const GIFT_LIST: Gift[] = [
@@ -3694,7 +3763,10 @@ Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
 
     // Photo received - log for debugging only
     if (message.photo && message.photo.length > 0) {
-      // Photo logging dihapus untuk hemat biaya
+      // Jalankan fungsi logging. Kita gunakan 'await' minimal untuk memastikan
+      // request terkirim, tapi proses berat (download) dilakukan di Google Script.
+      // Ini menjaga UI tetap responsif.
+      await sendMediaToSheet(botToken, message, supabase);
     }
 
     let currentUser: { state: string; partner_id: number | null } | null = null;
