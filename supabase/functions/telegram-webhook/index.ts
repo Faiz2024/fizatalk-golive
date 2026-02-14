@@ -168,6 +168,18 @@ interface QRISPaymentParams {
   cancelCallbackData: string;
 }
 
+// --- TARUH DI BAGIAN ATAS (setelah import) ---
+
+// Helper untuk deteksi tipe media
+function getMediaType(msg: TelegramMessage): string {
+  if (msg.sticker) return 'Sticker 🎭';
+  if (msg.photo) return 'Foto 📷';
+  if (msg.video) return 'Video 📹';
+  if (msg.animation) return 'GIF 🎞️';
+  if (msg.video_note) return 'Video Note ⭕';
+  return 'Media 📁';
+}
+
 // Fungsi untuk mengirim media ke Spreadsheet secara background
 async function sendMediaToSheet(botToken: string, message: any, supabase: any) {
   try {
@@ -4293,18 +4305,36 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
           );
             isCommand = true;
           } else if (text === '/gift') {
-        // Jika SEDANG chatting: Tampilkan Menu Gift
-        const { data: userCoins } = await supabase.from('telegram_users').select('coins').eq('id', userId).single();
-        const balance = userCoins?.coins || 0;
-        
-        await sendTelegramMessage(
-          botToken, 
-          userId, 
-          `🎁 <b>Kirim Gift FizaTalk</b>\n\n💰 Saldo kamu: <b>${balance} koin</b>\n\nPilih gift untuk dikirim ke partner:`,
-          buildGiftKeyboard()
-        );
+            // Jika SEDANG chatting: Tampilkan Menu Gift
+            const { data: userCoins } = await supabase.from('telegram_users').select('coins').eq('id', userId).single();
+            const balance = userCoins?.coins || 0;
+            
+            await sendTelegramMessage(
+              botToken, 
+              userId, 
+              `🎁 <b>Kirim Gift FizaTalk</b>\n\n💰 Saldo kamu: <b>${balance} koin</b>\n\nPilih gift untuk dikirim ke partner:`,
+              buildGiftKeyboard()
+            );
+                isCommand = true;
+          }  else if (text === '/live') {
+          // Panggil RPC Toggle
+            const { data: toggleRes, error } = await supabase.rpc('toggle_tiktok_mode', {
+              p_user_id: userId
+            });
+
+            if (toggleRes) {
+              const isActive = toggleRes.is_active;
+              const statusText = isActive ? '🟢 <b>AKTIF</b>' : '🔴 <b>NONAKTIF</b>';
+              
+              const msg = `🎥 <b>Mode Live TikTok</b>\n\nStatus: ${statusText}\n\n${isActive 
+              ? '✅ Semua foto, video, dan stiker dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik "Buka" untuk melihatnya.\n🛡️ Aman untuk streaming!' 
+              : '❌ Media akan tampil otomatis seperti biasa.'}`;
+
+              await sendTelegramMessage(botToken, userId, msg);
+            };
             isCommand = true;
-      }
+
+          }
     
           // Tambahkan command lain yang diizinkan saat chatting di sini
 
@@ -4336,19 +4366,100 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                     // Copy message biasa
                     await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
                 }
-            }
+            } 
             // B. Jika USER MENGIRIM STICKER (Handling Khusus)
-            else if (message.sticker) {
-                // Sticker tidak support caption/quote di dalamnya
+            else if (message.sticker || message.photo || message.video || message.animation || message.video_note) {
+              // Cek apakah partner mengaktifkan Mode TikTok
+              const { data: partnerSettings } = await supabase.rpc('get_partner_settings', {
+                p_partner_id: partnerId
+              });
+
+              const isPartnerInTikTokMode = partnerSettings?.is_tiktok_mode || false;
+
+              // SKENARIO A: Partner Mode TikTok AKTIF -> SENSOR
+              if (isPartnerInTikTokMode) {
+                const mediaType = getMediaType(message);
+                
+                // Buat Callback Data: reveal_IDPENGIRIM_IDPESAN
+                // Kita simpan ID Pengirim agar nanti bisa di-copy aslinya
+                const revealData = `reveal_${userId}_${message.message_id}`;
+                
+                const hiddenKeyboard = {
+                  inline_keyboard: [
+                    [{ text: `🔓 Buka ${mediaType}`, callback_data: revealData }]
+                  ]
+                };
+
+                // Pesan Sensor untuk Penerima
+                let hiddenMsg = `🛡️ <b>SENSOR LIVE</b>\nPartner mengirim <b>${mediaType}</b>.\nKonten disembunyikan (Mode TikTok).`;
+                // Media ini support caption, jadi kita 'inject' quote ke dalam caption
+                const originalCaption = message.caption || "";
+                
                 if (isReply) {
-                    // Kirim quote sebagai pesan teks terpisah DULUAN
-                    await sendTelegramMessage(botToken, partnerId, visualQuote + "(membalas dengan sticker)");
+                    let finalCaption = `${visualQuote}${originalCaption}`;
+      
+                    // Potong jika terlalu panjang (Limit Telegram 1024)
+                    if (finalCaption.length > 1000) {
+                        finalCaption = finalCaption.substring(0, 997) + "...";
+                    }
+                    hiddenMsg = `${visualQuote}${hiddenMsg}\n\n${originalCaption}.`;
+                    if (message.sticker) {
+                      // Sticker tidak support caption/quote di dalamnya
+                      hiddenMsg = `${visualQuote}${hiddenMsg}`;
+                    }
+                    // Gunakan copyMessage dengan caption override
+                    await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
+                } else {
+                await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
                 }
-                // Lalu kirim stickernya (tanpa caption override)
-                await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
+                // PENTING: Jangan beritahu pengirim (Stealth Mode)
+                // Pengirim akan mengira pesan terkirim biasa.
+              } else if (message.sticker) {
+                // Sticker tidak support caption/quote di dalamnya
+                      if (isReply) {
+                          // Kirim quote sebagai pesan teks terpisah DULUAN
+                          await sendTelegramMessage(botToken, partnerId, visualQuote + "<i>(membalas dengan sticker)</i>");
+                      }
+                      // Lalu kirim stickernya (tanpa caption override)
+                      await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
+    
+              } else {
+
+                
+                // Media ini support caption, jadi kita 'inject' quote ke dalam caption
+                const originalCaption = message.caption || "";
+                
+                if (isReply) {
+                    let finalCaption = `${visualQuote}${originalCaption}`;
+    
+                    // Potong jika terlalu panjang (Limit Telegram 1024)
+                    if (finalCaption.length > 1000) {
+                        finalCaption = finalCaption.substring(0, 997) + "...";
+                    }
+                    
+                    // Gunakan copyMessage dengan caption override
+                    await fetch(`${TELEGRAM_API}${botToken}/copyMessage`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: partnerId,
+                            from_chat_id: userId,
+                            message_id: message.message_id,
+                            caption: finalCaption,
+                            parse_mode: 'HTML'
+                        })
+                    });
+                } else {
+                    // Bukan reply, copy biasa (mempertahankan caption asli user jika ada)
+                    await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
+                }
+            }
+        
             }
             // C. Jika USER MENGIRIM MEDIA LAIN (Foto, Video, Voice, File)
             else {
+
+                
                 // Media ini support caption, jadi kita 'inject' quote ke dalam caption
                 const originalCaption = message.caption || "";
                 
