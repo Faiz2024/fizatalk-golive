@@ -32,6 +32,8 @@ interface TelegramMessage {
   voice?: any; // Representasi voice/voicenote
   sticker?: any; // Representasi sticker
   document?: any; // Representasi dokumen
+  animation?: any; // Representasi GIF
+  video_note?: any; // Representasi video note
   reply_to_message?: TelegramMessage; // Untuk fitur reply
   // Tambahkan tipe media lain jika diperlukan
 }

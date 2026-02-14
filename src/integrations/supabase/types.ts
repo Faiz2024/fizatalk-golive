@@ -296,6 +296,7 @@ export type Database = {
           gender: string | null
           id: number
           is_channel_member: boolean | null
+          is_tiktok_mode: boolean | null
           last_active: string
           last_partners: number[] | null
           last_promo_sent_at: string | null
@@ -316,6 +317,7 @@ export type Database = {
           gender?: string | null
           id: number
           is_channel_member?: boolean | null
+          is_tiktok_mode?: boolean | null
           last_active?: string
           last_partners?: number[] | null
           last_promo_sent_at?: string | null
@@ -336,6 +338,7 @@ export type Database = {
           gender?: string | null
           id?: number
           is_channel_member?: boolean | null
+          is_tiktok_mode?: boolean | null
           last_active?: string
           last_partners?: number[] | null
           last_promo_sent_at?: string | null
@@ -439,6 +442,7 @@ export type Database = {
       end_chat_comprehensive: { Args: { p_user_id: number }; Returns: Json }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
+      get_partner_settings: { Args: { p_partner_id: number }; Returns: Json }
       get_user_reputation: { Args: { p_user_id: number }; Returns: Json }
       handle_end_chat_promo_logic: {
         Args: { p_user_id: number }
@@ -471,6 +475,7 @@ export type Database = {
         }
         Returns: Json
       }
+      toggle_tiktok_mode: { Args: { p_user_id: number }; Returns: Json }
       update_last_active_daily: {
         Args: { p_user_id: number }
         Returns: boolean
