@@ -1793,7 +1793,65 @@ Deno.serve(async (req) => {
           await sendTelegramMessage(botToken, userId, `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n${nextActionText}`, keyboard);
           return new Response('OK', { status: 200 });
       }
+      // --- DI DALAM BLOK: if (update.callback_query) ---
+// Letakkan sebelum atau sesudah handler callback lainnya
 
+      if (callbackData.startsWith('reveal_')) {
+        // Format data: reveal_SENDERID_MESSAGEID
+        const parts = callbackData.split('_');
+        const senderId = parseInt(parts[1]);
+        const originalMsgId = parseInt(parts[2]);
+
+        if (!senderId || !originalMsgId) {
+          await answerCallbackQuery(botToken, query.id, '❌ Error data');
+          return new Response('OK', { status: 200 });
+        }
+
+        // Feedback UI Loading
+        await answerCallbackQuery(botToken, query.id, '🔓 Membuka...');
+
+        try {
+          // 1. Copy pesan asli dari Pengirim ke Penerima (User yang klik tombol)
+          const copyRes = await fetch(`${TELEGRAM_API}${botToken}/copyMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  chat_id: userId,        // Penerima (yang klik tombol)
+                  from_chat_id: senderId, // Pengirim Asli
+                  message_id: originalMsgId
+              })
+          });
+
+          const copyJson = await copyRes.json();
+
+          if (copyJson.ok) {
+              // 2. HAPUS pesan sensor (tombol) agar chat bersih
+              if (message) {
+                  await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+              }
+          } else {
+              // Jika pesan asli sudah dihapus/kadaluarsa
+              await answerCallbackQuery(botToken, query.id, '❌ Media gagal dimuat', true);
+              
+              // Update tampilan jadi error
+              if (message) {
+                  await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      chat_id: message.chat.id,
+                      message_id: message.message_id,
+                      text: `❌ <b>Gagal Memuat</b>\nMedia asli mungkin sudah dihapus.`,
+                      parse_mode: 'HTML'
+                    })
+                  });
+              }
+          }
+        } catch (e) {
+          console.error('Reveal Error:', e);
+        }
+        return new Response('OK', { status: 200 });
+      }
       // --- LOGIKA BAYAR DENDA (BUKA BLOKIR) - SATU RPC ---
       if (callbackData === 'pay_fine') {
         await answerCallbackQuery(botToken, query.id);
@@ -4391,7 +4449,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                 };
 
                 // Pesan Sensor untuk Penerima
-                let hiddenMsg = `🛡️ <b>SENSOR LIVE</b>\nPartner mengirim <b>${mediaType}</b>.\nKonten disembunyikan (Mode TikTok).`;
+                let hiddenMsg = `🛡️ <b>SENSOR LIVE MODE</b>\n\nPartner mengirim <b>${mediaType}</b>.\nKonten disembunyikan untuk keamanan Live Streaming.`;
                 // Media ini support caption, jadi kita 'inject' quote ke dalam caption
                 const originalCaption = message.caption || "";
                 
@@ -4402,7 +4460,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                     if (finalCaption.length > 1000) {
                         finalCaption = finalCaption.substring(0, 997) + "...";
                     }
-                    hiddenMsg = `${visualQuote}${hiddenMsg}\n\n${originalCaption}.`;
+                    hiddenMsg = `${visualQuote}${originalCaption}\n\n${hiddenMsg}.`;
                     if (message.sticker) {
                       // Sticker tidak support caption/quote di dalamnya
                       hiddenMsg = `${visualQuote}${hiddenMsg}`;
@@ -4786,6 +4844,23 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
             };
             await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam chat. Pilih aksi:', startKeyboard);
         }
+        else if (text === '/live') {
+          // Panggil RPC Toggle
+            const { data: toggleRes, error } = await supabase.rpc('toggle_tiktok_mode', {
+              p_user_id: userId
+            });
+
+            if (toggleRes) {
+              const isActive = toggleRes.is_active;
+              const statusText = isActive ? '🟢 <b>AKTIF</b>' : '🔴 <b>NONAKTIF</b>';
+              
+              const msg = `🎥 <b>Mode Live TikTok</b>\n\nStatus: ${statusText}\n\n${isActive 
+              ? '✅ Semua foto, video, dan stiker dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik "Buka" untuk melihatnya.\n🛡️ Aman untuk streaming!' 
+              : '❌ Media akan tampil otomatis seperti biasa.'}`;
+
+              await sendTelegramMessage(botToken, userId, msg);
+            };
+          }
         // CS Commands untuk approve/reject topup
         else if (text.startsWith('/approve ') || text.startsWith('/reject ')) {
           const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
