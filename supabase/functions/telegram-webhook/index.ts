@@ -539,7 +539,9 @@ function buildPremiumNormalKeyboard(): any {
   return {
     inline_keyboard: [
       [{ text: `📦 ${PREMIUM_PACKAGES.normal['7'].label} - Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_7' }],
-      [{ text: `📦 ${PREMIUM_PACKAGES.normal['30'].label} - Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_30' }]
+      [{ text: `📦 ${PREMIUM_PACKAGES.normal['30'].label} - Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_30' }],
+      // --- TOMBOL BARU DITAMBAHKAN DI SINI ---
+      [{ text: '🎁 Gratis Premium (15-22 Feb)', callback_data: 'promo_free_content' }]
     ]
   };
 }
@@ -1794,6 +1796,55 @@ Deno.serve(async (req) => {
 
           await sendTelegramMessage(botToken, userId, `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n${nextActionText}`, keyboard);
           return new Response('OK', { status: 200 });
+      }
+
+      // --- LOGIKA PROMO GRATIS KONTEN TIKTOK (EVENT 15-22 FEB) ---
+      if (callbackData === 'promo_free_content') {
+        // 1. Acknowledge callback agar loading hilang
+        await answerCallbackQuery(botToken, query.id);
+
+        // 2. Hapus pesan penawaran premium sebelumnya (UI Cleanup)
+        if (message) {
+          await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+        }
+
+        // 3. Siapkan Template Pesan untuk dikirim ke Admin
+        // Menggunakan encodeURIComponent agar karakter khusus (spasi, enter) terbaca di URL
+        const templateMessage = `Halo Admin, saya ingin klaim Premium Gratis (Event 15-22 Feb).
+
+🆔 ID Telegram: ${userId}
+👤 Username TikTok: 
+🔗 Link Konten: 
+
+Mohon dicek. Terima kasih!`;
+        
+        const encodedTemplate = encodeURIComponent(templateMessage);
+        const adminUrl = `https://t.me/FizaTalkCS?text=${encodedTemplate}`;
+
+        // 4. Siapkan Pesan Instruksi
+        const instructionText = `🎁 <b>EVENT GRATIS PREMIUM (15-22 FEB)</b>
+
+Dapatkan akses <b>Premium 7 Hari</b> secara GRATIS hanya dengan membuat konten seru! 🚀
+
+📝 <b>SYARAT & KETENTUAN:</b>
+1️⃣ Buat konten TikTok tentang isi chat seru/lucu kamu di FizaTalk (minimal screensot chat).
+2️⃣ Wajib pakai hashtag: <code>#fizatalk #fizatalkbottelegram</code>
+3️⃣ Submit link konten ke admin untuk verifikasi.
+
+👇 <b>CARA KLAIM:</b>
+Klik tombol <b>"📤 Submit Konten"</b> di bawah ini. Anda akan diarahkan ke chat admin dan lengkapi <b>Username TikTok</b> dan <b>Link Video</b> lalu kirim!`;
+
+        const actionKeyboard = {
+          inline_keyboard: [
+            // Tombol URL Deeplink
+            [{ text: '📤 Submit Konten', url: adminUrl }]  
+          ]
+        };
+
+        // 5. Kirim Pesan
+        await sendTelegramMessage(botToken, userId, instructionText, actionKeyboard);
+        
+        return new Response('OK', { status: 200 });
       }
       // --- DI DALAM BLOK: if (update.callback_query) ---
 // Letakkan sebelum atau sesudah handler callback lainnya
