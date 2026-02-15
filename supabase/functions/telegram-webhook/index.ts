@@ -1804,11 +1804,6 @@ Deno.serve(async (req) => {
         // 1. Acknowledge callback agar loading hilang
         await answerCallbackQuery(botToken, query.id);
 
-        // 2. Hapus pesan penawaran premium sebelumnya (UI Cleanup)
-        if (message) {
-          await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-        }
-
         // 3. Siapkan Template Pesan untuk dikirim ke Admin
         // Menggunakan encodeURIComponent agar karakter khusus (spasi, enter) terbaca di URL
         const templateMessage = `Halo Admin, saya ingin klaim Premium Gratis (Event 15-22 Feb).
