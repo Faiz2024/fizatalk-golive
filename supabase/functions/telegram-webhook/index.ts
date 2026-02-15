@@ -1519,7 +1519,8 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
       [{ text: '📦 7 Hari / Rp 5.000', callback_data: 'buy_premium_7' }],
       [{ text: '📅 3 Hari / Rp 2.000', callback_data: 'buy_premium_3' }],
       [{ text: '⚡ 1 Hari / Rp 1.000', callback_data: 'buy_premium_1' }],
-      [{ text: '🔍 Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
+      [{ text: '🎁 Gratis Premium (15-22 Feb)', callback_data: 'promo_free_content' }]
+      // [{ text: '🔍 Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
     ]
   };
 
