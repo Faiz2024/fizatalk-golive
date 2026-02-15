@@ -541,7 +541,7 @@ function buildPremiumNormalKeyboard(): any {
       [{ text: `📦 ${PREMIUM_PACKAGES.normal['7'].label} - Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_7' }],
       [{ text: `📦 ${PREMIUM_PACKAGES.normal['30'].label} - Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_30' }],
       // --- TOMBOL BARU DITAMBAHKAN DI SINI ---
-      [{ text: '🎁 Gratis Premium (15-22 Feb)', callback_data: 'promo_free_content' }]
+      [{ text: '🎁 Gratis (15-22 Feb)', callback_data: 'promo_free_content' }]
     ]
   };
 }
@@ -1519,7 +1519,7 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
       [{ text: '📦 7 Hari / Rp 5.000', callback_data: 'buy_premium_7' }],
       [{ text: '📅 3 Hari / Rp 2.000', callback_data: 'buy_premium_3' }],
       [{ text: '⚡ 1 Hari / Rp 1.000', callback_data: 'buy_premium_1' }],
-      [{ text: '🎁 Gratis Premium (15-22 Feb)', callback_data: 'promo_free_content' }]
+      [{ text: '🎁 Gratis (15-22 Feb)', callback_data: 'promo_free_content' }]
       // [{ text: '🔍 Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
     ]
   };
