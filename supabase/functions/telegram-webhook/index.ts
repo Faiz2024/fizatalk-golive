@@ -1218,6 +1218,7 @@ async function handleComprehensiveSearchResult(
   // skipIfLowPenalty = true: jika penalty < 40 dan matched, lewati pesan pencarian
   if (isNext || penaltyPoints >= 40) {
     await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard);
+    await new Promise(resolve => setTimeout(resolve, 600));
   }
   // Jika penalty < 40 dan matched: langsung ke notifikasi pairing (lewati pesan pencarian)
   
