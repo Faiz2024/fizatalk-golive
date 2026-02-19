@@ -1928,10 +1928,56 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   if (result.partner_promo?.should_send) {
     await executePromoAction(supabase, botToken, partnerId);
   }
+
+
   
+ // === LOGIKA BARU: CEK PENDING RECONNECT ===
+  // SCENARIO C: Partner (User ini) selesai chat, dan ada yang menunggu (Requester)
+  if (result.reconnect_notification) {
+      const notif = result.reconnect_notification;
+      
+      // 1. Kirim Notifikasi ke User ini (Target)
+      const acceptKeyboard = {
+            inline_keyboard: [
+                [
+                    { text: '✅ Terima', callback_data: `accept_reconnect_${notif.request_id}` },
+                    { text: '❌ Tolak', callback_data: `reject_reconnect_${notif.request_id}` }
+                ]
+            ]
+        };
+       
+       // Delay sedikit agar tidak bertumpuk dengan pesan "Chat Ended"
+       setTimeout(async () => {
+           await sendTelegramMessage(
+                botToken,
+                userId, // Target (User yang baru selesai chat)
+                `📞 <b>PANGGILAN TERTUNDA!</b>\n\nPartner sebelumnya (${notif.requester_id}) ingin ngobrol lagi. Terima?`,
+                acceptKeyboard
+            );
+       }, 1000);
+
+      // 2. Edit Pesan di Sisi Penelpon (Requester)
+      // Memberitahu bahwa notifikasi SUDAH dikirim ke target (karena target sudah free)
+      if (notif.requester_message_id) {
+          try {
+              await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: notif.requester_id,
+                    message_id: notif.requester_message_id,
+                    text: `🔔 <b>Partner Online!</b>\n\nPartner telah menyelesaikan chat mereka. Notifikasi panggilan telah dikirim. Menunggu jawaban...`,
+                    parse_mode: 'HTML'
+                })
+            });
+          } catch (e) {
+              console.error('Failed to update requester message:', e);
+          }
+      }
+  }
+
   return true;
 }
-
 
 
 
@@ -3082,30 +3128,128 @@ Fitur <b>Hubungi Kembali</b> hanya tersedia untuk user <b>Premium</b>.
           return new Response('OK', { status: 200 });
         }
 
-        // User sudah premium - tampilkan pesan fitur sedang dikembangkan
-        await answerCallbackQuery(botToken, query.id, '🚧 Fitur dalam pengembangan');
+        // 2. User Premium -> Eksekusi Reconnect via RPC
+    await answerCallbackQuery(botToken, query.id, '🔄 Menghubungi...');
+
+    // Panggil RPC initiate_reconnect
+    const { data: reconnectRes, error: rpcError } = await supabase.rpc('initiate_reconnect', {
+        p_requester_id: userId,
+        p_target_id: targetPartnerId,
+        p_message_id: message?.message_id // Kirim ID pesan tombol untuk diedit nanti
+    });
+
+    if (rpcError || !reconnectRes.success) {
+        const errorMsg = reconnectRes?.error === 'recently_rejected' 
+            ? '❌ Partner menolak panggilan ini. Coba lagi nanti.' 
+            : '❌ Gagal menghubungkan. Partner mungkin sudah tidak aktif.';
         
-        await sendTelegramMessage(
-          botToken,
-          userId,
-          `🚧 <b>Fitur Dalam Pengembangan</b>
+        await answerCallbackQuery(botToken, query.id, errorMsg, true);
+        return new Response('OK', { status: 200 });
+    }
 
-Terima kasih sudah menjadi user <b>Premium</b>! 💎
-
-Fitur <b>Hubungi Kembali Partner</b> sedang dalam tahap pengembangan dan akan segera tersedia.
-
-Kami akan memberitahu kamu ketika fitur ini sudah siap digunakan! 🔔`,
-          {
+    // 3. Handle Hasil RPC
+    if (reconnectRes.action === 'notify_now') {
+        // SKENARIO A: Partner Idle -> Kirim Notifikasi Langsung
+        const reqId = reconnectRes.request_id;
+        
+        const acceptKeyboard = {
             inline_keyboard: [
-              [
-                { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
-              ]
+                [
+                    { text: '✅ Terima', callback_data: `accept_reconnect_${reqId}` },
+                    { text: '❌ Tolak', callback_data: `reject_reconnect_${reqId}` }
+                ]
             ]
-          }
+        };
+
+        // Kirim notifikasi ke Target
+        await sendTelegramMessage(
+            botToken,
+            targetPartnerId,
+            `📞 <b>PANGGILAN MASUK!</b>\n\nPartner sebelumnya ingin ngobrol lagi sama kamu. Terima?`,
+            acceptKeyboard
         );
 
+        // Update Pesan User (Pengirim)
+        if (message) {
+             await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: userId,
+                    message_id: message.message_id,
+                    text: `🔄 <b>Menunggu Konfirmasi...</b>\n\nNotifikasi telah dikirim ke partner. Menunggu jawaban mereka...`,
+                    parse_mode: 'HTML'
+                })
+            });
+        }
+
+    } else if (reconnectRes.action === 'queue_notification') {
+        // SKENARIO B: Partner Busy -> Notifikasi bahwa request di-queue
+        if (message) {
+             await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: userId,
+                    message_id: message.message_id,
+                    text: `⏳ <b>Partner Sedang Sibuk</b>\n\nPartner sedang dalam percakapan lain. Kami akan memberitahu mereka segera setelah mereka selesai.\n\nAnda akan mendapat notifikasi jika mereka menerima.`,
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                         inline_keyboard: [[{ text: '🔍 Cari Partner Lain', callback_data: 'search_partner' }]]
+                    }
+                })
+            });
+        }
+    }
+    return new Response('OK', { status: 200 });
+}
+
+      // --- HANDLER TERIMA/TOLAK RECONNECT ---
+if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('reject_reconnect_')) {
+    const action = callbackData.startsWith('accept_reconnect_') ? 'accept' : 'reject';
+    const requestId = callbackData.split('_')[2]; // Format: action_reconnect_UUID
+
+    await answerCallbackQuery(botToken, query.id, action === 'accept' ? '✅ Menghubungkan...' : '❌ Menolak...');
+
+    // Panggil RPC Resolve
+    const { data: resolveRes, error } = await supabase.rpc('resolve_reconnect', {
+        p_request_id: requestId,
+        p_action: action
+    });
+
+    // Hapus pesan notifikasi (tombol terima/tolak) agar tidak diklik 2x
+    if (message) {
+        await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+    }
+
+    if (error || !resolveRes.success) {
+        if (resolveRes?.error === 'requester_busy') {
+            await sendTelegramMessage(botToken, userId, '❌ Penelpon sudah masuk ke chat lain.');
+        } else if (resolveRes?.error === 'target_busy') {
+             await sendTelegramMessage(botToken, userId, '⚠️ Kamu harus keluar dari antrian/chat untuk menerima panggilan.');
+        } else {
+             await sendTelegramMessage(botToken, userId, '❌ Permintaan kadaluarsa.');
+        }
         return new Response('OK', { status: 200 });
-      }
+    }
+
+    // SUKSES
+    if (action === 'accept') {
+        const requesterId = resolveRes.requester_id;
+        
+        // Kirim Notifikasi Pairing ke Keduanya (Gunakan helper yang sudah ada)
+        // Fungsi ini akan mengirim pesan "Partner Ditemukan" ke User A dan User B
+        await sendPairingNotifications(supabase, botToken, requesterId, userId, null, null);
+
+    } else {
+        // REJECT
+        const requesterId = resolveRes.requester_id;
+        // Beritahu penelpon bahwa ditolak
+        await sendTelegramMessage(botToken, requesterId, '❌ Partner menolak atau sedang tidak bisa diganggu.');
+    }
+
+    return new Response('OK', { status: 200 });
+}
 
       // --- LOGIKA RATING PARTNER (SPAM/SANGE/ASIK) ---
       if (callbackData.startsWith('report_user_')) {        // Ambil partner_id dari pesan sebelumnya jika ada, atau dari database
