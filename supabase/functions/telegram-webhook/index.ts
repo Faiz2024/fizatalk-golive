@@ -1670,14 +1670,14 @@ async function sendPairingNotifications(
       botToken, 
       user1Id, 
       // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n${warningUser1}`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n<b><i>${warningUser1}</i></b>`,
       buildChatKeyboard(user1IsPremium)
     ),
     sendTelegramMessage(
       botToken, 
       user2Id, 
       // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n${warningUser2}`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n<b><i>${warningUser2}</i></b>`,
       buildChatKeyboard(user2IsPremium)
     )
   ]);
