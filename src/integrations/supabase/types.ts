@@ -287,6 +287,51 @@ export type Database = {
           },
         ]
       }
+      reconnect_requests: {
+        Row: {
+          created_at: string | null
+          id: string
+          requester_id: number
+          requester_message_id: number | null
+          status: string | null
+          target_id: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          requester_id: number
+          requester_message_id?: number | null
+          status?: string | null
+          target_id: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          requester_id?: number
+          requester_message_id?: number | null
+          status?: string | null
+          target_id?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconnect_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconnect_requests_target_id_fkey"
+            columns: ["target_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       telegram_users: {
         Row: {
           chat_end_count: number | null
@@ -448,6 +493,14 @@ export type Database = {
         Args: { p_user_id: number }
         Returns: Json
       }
+      initiate_reconnect: {
+        Args: {
+          p_message_id: number
+          p_requester_id: number
+          p_target_id: number
+        }
+        Returns: Json
+      }
       process_gift_transaction: {
         Args: {
           p_gift_id: string
@@ -458,6 +511,10 @@ export type Database = {
         Returns: Json
       }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
+      resolve_reconnect: {
+        Args: { p_action: string; p_request_id: string }
+        Returns: Json
+      }
       search_or_next_partner: {
         Args: { p_is_next?: boolean; p_user_id: number }
         Returns: Json

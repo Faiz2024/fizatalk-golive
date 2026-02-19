@@ -1874,6 +1874,11 @@ interface EndChatResult {
   partner_reset?: boolean;
   user_promo?: { should_send: boolean };
   partner_promo?: { should_send: boolean };
+  reconnect_notification?: {
+    request_id: string;
+    requester_id: number;
+    requester_message_id: number | null;
+  } | null;
 }
 
 async function endChat(supabase: any, botToken: string, userId: number): Promise<boolean> {
