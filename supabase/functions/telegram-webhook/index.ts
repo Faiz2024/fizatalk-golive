@@ -131,9 +131,220 @@ function formatTimeWIB(date: Date): string {
   }) + ' WIB';
 }
 
+// === SAKURUPIAH PAYMENT GATEWAY ===
+const SAKURUPIAH_API_URL = 'https://sakurupiah.id/api/create.php';
+const SAKURUPIAH_CALLBACK_URL = 'https://chwopnsmykwzqflqozvf.supabase.co/functions/v1/sakurupiah-callback';
+
+interface SakurupiahInvoiceParams {
+  method: 'QRIS' | 'DANA';
+  amount: number;
+  merchantRef: string;
+  productName: string;
+  customerName?: string;
+  expired?: number;
+}
+
+interface SakurupiahInvoiceResult {
+  success: boolean;
+  trxId?: string;
+  qrString?: string;
+  checkoutUrl?: string;
+  error?: string;
+}
+
 async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise<SakurupiahInvoiceResult> {
-  const apiId = ID-13542277;
-  const apiKey = KEY-hOFol77eXVpoLZu3XH98snvHq1QpCh;
+  const apiId = Deno.env.get('SAKURUPIAH_API_ID') || '';
+  const apiKey = Deno.env.get('SAKURUPIAH_API_KEY') || '';
+  
+  if (!apiId || !apiKey) {
+    console.error('[SAKURUPIAH] API credentials not configured');
+    return { success: false, error: 'Payment gateway not configured' };
+  }
+
+  // Generate signature: HMAC-SHA256(api_id + method + merchant_ref + amount, apikey)
+  const signatureData = `${apiId}${params.method}${params.merchantRef}${params.amount}`;
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(apiKey),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signatureData));
+  const signature = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  const formData = new URLSearchParams();
+  formData.append('api_id', apiId);
+  formData.append('method', params.method);
+  formData.append('name', params.customerName || 'FizaTalk User');
+  formData.append('phone', '6280000000000');
+  formData.append('amount', params.amount.toString());
+  formData.append('merchant_fee', '1');
+  formData.append('merchant_ref', params.merchantRef);
+  formData.append('expired', (params.expired || 1).toString());
+  formData.append('produk[]', params.productName);
+  formData.append('qty[]', '1');
+  formData.append('harga[]', params.amount.toString());
+  formData.append('callback_url', SAKURUPIAH_CALLBACK_URL);
+  formData.append('return_url', 'https://t.me/FizaTalkBot');
+  formData.append('signature', signature);
+
+  try {
+    const resp = await fetch(SAKURUPIAH_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData.toString(),
+    });
+
+    const json = await resp.json();
+    console.log('[SAKURUPIAH] Response:', JSON.stringify(json));
+
+    if (json.status === '200' && json.data?.[0]) {
+      const inv = json.data[0];
+      return {
+        success: true,
+        trxId: inv.trx_id,
+        qrString: inv.qr || undefined,
+        checkoutUrl: inv.checkout_url,
+      };
+    }
+    return { success: false, error: json.message || 'Invoice creation failed' };
+  } catch (e) {
+    console.error('[SAKURUPIAH] Error:', e);
+    return { success: false, error: 'Network error' };
+  }
+}
+
+// === PAYMENT METHOD SELECTION HELPER ===
+function buildPaymentMethodKeyboard(qrisCallback: string, danaCallback: string, cancelCallback?: string): any {
+  const kb: any[][] = [
+    [{ text: '📱 QRIS (Semua E-Wallet & Bank)', callback_data: qrisCallback }],
+    [{ text: '💙 DANA', callback_data: danaCallback }],
+  ];
+  if (cancelCallback) kb.push([{ text: '❌ Batalkan', callback_data: cancelCallback }]);
+  return { inline_keyboard: kb };
+}
+
+// === PREMIUM PAYMENT CONFIG (Sakurupiah) ===
+const PREMIUM_PAY_CONFIG: Record<string, { days: number; price: number; label: string }> = {
+  '30': { days: 30, price: 10000, label: 'PREMIUM 30 HARI (PROMO SPESIAL)' },
+  '35': { days: 35, price: 15000, label: 'PREMIUM 35 HARI (PROMO)' },
+  '7': { days: 7, price: 20000, label: 'PREMIUM 7 HARI' },
+  '3': { days: 3, price: 12000, label: 'PREMIUM 3 HARI' },
+  '1': { days: 1, price: 5000, label: 'PREMIUM 1 HARI' },
+  'n7': { days: 7, price: 25000, label: 'PREMIUM 7 HARI' },
+  'n30': { days: 30, price: 60000, label: 'PREMIUM 30 HARI' },
+};
+
+const BUY_PREMIUM_MAP: Record<string, string> = {
+  'buy_premium_30': '30',
+  'buy_premium_35': '35',
+  'buy_premium_7': '7',
+  'buy_premium_3': '3',
+  'buy_premium_1': '1',
+  'buy_premium_normal_7': 'n7',
+  'buy_premium_normal_30': 'n30',
+};
+
+// Helper: Process Sakurupiah payment for premium
+async function processSakurupiahPremiumPayment(
+  supabase: any, botToken: string, userId: number,
+  configKey: string, method: 'QRIS' | 'DANA',
+  queryId: string, message: any
+): Promise<void> {
+  const config = PREMIUM_PAY_CONFIG[configKey];
+  if (!config) {
+    await answerCallbackQuery(botToken, queryId, '❌ Paket tidak valid');
+    return;
+  }
+
+  if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+
+  const { data: userData } = await supabase
+    .from('telegram_users')
+    .select('premium_until, first_name, username')
+    .eq('id', userId).single();
+
+  if (userData?.premium_until && new Date(userData.premium_until) > new Date()) {
+    await answerCallbackQuery(botToken, queryId, '⚠️ Kamu sudah Premium!');
+    await sendTelegramMessage(botToken, userId,
+      `✨ Kamu sudah Premium!\n📅 Hingga: ${formatDateWIB(new Date(userData.premium_until))}`);
+    return;
+  }
+
+  // Cancel old pending without trx_id
+  await supabase.from('premium_requests')
+    .update({ status: 'cancelled' })
+    .eq('user_id', userId).eq('status', 'pending')
+    .is('sakurupiah_trx_id', null).is('payment_proof', null);
+
+  const { count } = await supabase.from('premium_requests')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId).eq('status', 'pending')
+    .not('sakurupiah_trx_id', 'is', null);
+
+  if (count && count > 0) {
+    await answerCallbackQuery(botToken, queryId, '⚠️ Transaksi pending!');
+    await sendTelegramMessage(botToken, userId,
+      '⚠️ Kamu punya transaksi premium aktif. Selesaikan pembayaran atau tunggu expired.');
+    return;
+  }
+
+  await answerCallbackQuery(botToken, queryId, '✅ Memproses pembayaran...');
+
+  const { data: premReq, error: insertErr } = await supabase.from('premium_requests')
+    .insert({
+      user_id: userId, duration_days: config.days, price: config.price,
+      unique_code: 0, status: 'pending', payment_method: method,
+    }).select('id').single();
+
+  if (insertErr || !premReq) {
+    await sendTelegramMessage(botToken, userId, '❌ Gagal membuat transaksi. Coba lagi.');
+    return;
+  }
+
+  const merchantRef = `p_${premReq.id}`;
+  const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'FizaTalk User';
+
+  const invoice = await createSakurupiahInvoice({
+    method, amount: config.price, merchantRef,
+    productName: config.label, customerName: userName, expired: 1,
+  });
+
+  if (!invoice.success) {
+    await supabase.from('premium_requests').update({ status: 'cancelled' }).eq('id', premReq.id);
+    await sendTelegramMessage(botToken, userId, `❌ Gagal membuat invoice: ${invoice.error}\n\nSilakan coba lagi.`);
+    return;
+  }
+
+  await supabase.from('premium_requests')
+    .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', premReq.id);
+
+  const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_premium' }]] };
+
+  if (method === 'QRIS' && invoice.qrString) {
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(invoice.qrString)}`;
+    const caption = `💳 <b>${config.label}</b>\n\n💰 Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n📱 <b>CARA BAYAR QRIS:</b>\n1️⃣ Screenshot QR di atas\n2️⃣ Buka e-wallet (GoPay/OVO/DANA/ShopeePay)\n3️⃣ Scan QR atau pilih dari galeri\n4️⃣ Konfirmasi pembayaran\n\n✅ Pembayaran <b>otomatis terverifikasi</b>\n⏰ Batas waktu: 1 jam`;
+    try {
+      const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: userId, photo: qrUrl, caption, parse_mode: 'HTML', reply_markup: cancelKb })
+      });
+      const rj = await resp.json();
+      if (rj.ok) await supabase.from('premium_requests').update({ message_id: rj.result.message_id }).eq('id', premReq.id);
+    } catch (e) {
+      await sendTelegramMessage(botToken, userId, `${caption}\n\n🔗 Bayar: ${invoice.checkoutUrl}`, cancelKb);
+    }
+  } else {
+    const danaKb = { inline_keyboard: [
+      [{ text: '💙 Bayar via DANA', url: invoice.checkoutUrl! }],
+      [{ text: '❌ Batalkan', callback_data: 'cancel_premium' }]
+    ]};
+    await sendTelegramMessage(botToken, userId,
+      `💳 <b>${config.label}</b>\n\n💰 Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\nKlik tombol untuk bayar via <b>DANA</b>:\n✅ Pembayaran <b>otomatis terverifikasi</b>\n⏰ Batas waktu: 1 jam`,
+      danaKb);
+  }
 }
 
 // HELPER: Get bot setting from database
@@ -162,18 +373,7 @@ async function setBotSetting(supabase: any, key: string, value: string, updatedB
 
 // NOTE: Helper functions isUserBlocked, simpleUpsertUser, smartUpsertUser, shouldShowChannelJoin
 // telah DIHAPUS - logika sudah terintegrasi dalam comprehensive_search_action RPC
-// HELPER: Kirim foto QRIS dengan instruksi pembayaran
-interface QRISPaymentParams {
-  supabase: any;
-  botToken: string;
-  chatId: number;
-  title: string;
-  price: number;
-  uniqueCode: number;
-  totalAmount: number;
-  expiryMinutes?: number;
-  cancelCallbackData: string;
-}
+// NOTE: QRISPaymentParams & sendQRISPayment DIHAPUS - diganti Sakurupiah payment gateway
 
 // --- TARUH DI BAGIAN ATAS (setelah import) ---
 
@@ -253,89 +453,7 @@ async function sendMediaToSheet(botToken: string, message: any, supabase: any) {
   }
 }
 
-async function sendQRISPayment(params: QRISPaymentParams): Promise<number | null> {
-  const { supabase, botToken, chatId, title, price, uniqueCode, totalAmount, expiryMinutes = 30, cancelCallbackData } = params;
-  
-  // Get QRIS file_id from database
-  const qrisFileId = await getBotSetting(supabase, 'qris_file_id');
-  
-  if (!qrisFileId) {
-    // No QRIS set, send text only
-    console.error('QRIS file_id not set in bot_settings');
-    const caption = `💳 <b>${title}</b>
-
-💰 Harga: Rp ${price.toLocaleString('id-ID')}
-🔢 Kode Unik: ${uniqueCode}
-💵 <b>Total Transfer: Rp ${totalAmount.toLocaleString('id-ID')}</b>
-
-⚠️ QRIS belum diatur oleh admin. Hubungi admin untuk pembayaran.
-
-⏰ Batas waktu: ${expiryMinutes} menit`;
-
-    const cancelKeyboard = { inline_keyboard: [[{ text: '❌ Batalkan Transaksi', callback_data: cancelCallbackData }]] };
-    
-    try {
-      const resp = await fetch(`${TELEGRAM_API}${botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: caption,
-          parse_mode: 'HTML',
-          reply_markup: cancelKeyboard
-        })
-      });
-      const respJson = await resp.json();
-      if (respJson.ok) return respJson.result.message_id;
-      return null;
-    } catch (e) {
-      console.error('sendQRISPayment text fallback exception:', e);
-      return null;
-    }
-  }
-
-  const cancelKeyboard = { inline_keyboard: [[{ text: '❌ Batalkan Transaksi', callback_data: cancelCallbackData }]] };
-
-  const caption = `💳 <b>${title}</b>
-
-  💰 Harga: Rp ${price.toLocaleString('id-ID')}
-  🔢 Kode Unik: ${uniqueCode}
-  💵 <b>Total Transfer: Rp ${totalAmount.toLocaleString('id-ID')}</b>
-  
-  📸 Kirim <b>foto bukti pembayaran</b> ke chat ini.
-  
-  📱 <b>CARA PEMBAYARAN:</b>
-  1️⃣ Screenshot/simpan gambar QRIS di atas
-  2️⃣ Buka aplikasi e-wallet (GoPay/OVO/DANA/ShopeePay/dll)
-  3️⃣ Pilih menu <b>Scan QR</b> atau <b>Bayar</b>
-  4️⃣ Pilih dari galeri, lalu pilih gambar QRIS
-  5️⃣ Masukkan nominal <b>TEPAT Rp ${totalAmount.toLocaleString('id-ID')}</b>
-  6️⃣ Konfirmasi pembayaran
-
-⏰ Batas waktu: ${expiryMinutes} menit
-⚠️ Harap hubungi Admin @FizaTalkCS jika mengalami kendala`;
-
-  try {
-    const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        photo: qrisFileId,
-        caption: caption,
-        parse_mode: 'HTML',
-        reply_markup: cancelKeyboard
-      })
-    });
-    const respJson = await resp.json();
-    if (respJson.ok) {
-      return respJson.result.message_id;
-    }
-    return null;
-  } catch (e) {
-    return null;
-  }
-}
+// sendQRISPayment DIHAPUS - diganti dengan createSakurupiahInvoice + payment method selection
 
 const PROMO_FILEID_LIST = [
   'AgACAgUAAxkBAAHVILFpjh5KuWoRVLVgBVYQE-y0w5uQWQACIg9rGzfYcFQdSsNtCFJQlwEAAwIAA3kAAzoE', // Promo 1

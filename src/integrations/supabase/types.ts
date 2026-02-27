@@ -177,6 +177,7 @@ export type Database = {
           id: string
           payment_method_id: string | null
           payment_proof_url: string | null
+          sakurupiah_trx_id: string | null
           status: string
           telegram_notified: boolean | null
           total_amount: number
@@ -193,6 +194,7 @@ export type Database = {
           id?: string
           payment_method_id?: string | null
           payment_proof_url?: string | null
+          sakurupiah_trx_id?: string | null
           status?: string
           telegram_notified?: boolean | null
           total_amount: number
@@ -209,6 +211,7 @@ export type Database = {
           id?: string
           payment_method_id?: string | null
           payment_proof_url?: string | null
+          sakurupiah_trx_id?: string | null
           status?: string
           telegram_notified?: boolean | null
           total_amount?: number
@@ -246,9 +249,11 @@ export type Database = {
           duration_days: number
           id: string
           message_id: number | null
+          payment_method: string | null
           payment_proof: string | null
           price: number
           processed_at: string | null
+          sakurupiah_trx_id: string | null
           status: string
           unique_code: number
           user_id: number
@@ -258,9 +263,11 @@ export type Database = {
           duration_days: number
           id?: string
           message_id?: number | null
+          payment_method?: string | null
           payment_proof?: string | null
           price: number
           processed_at?: string | null
+          sakurupiah_trx_id?: string | null
           status?: string
           unique_code: number
           user_id: number
@@ -270,9 +277,11 @@ export type Database = {
           duration_days?: number
           id?: string
           message_id?: number | null
+          payment_method?: string | null
           payment_proof?: string | null
           price?: number
           processed_at?: string | null
+          sakurupiah_trx_id?: string | null
           status?: string
           unique_code?: number
           user_id?: number
@@ -404,8 +413,10 @@ export type Database = {
           created_at: string | null
           id: string
           message_id: number | null
+          payment_method: string | null
           payment_proof: string | null
           processed_at: string | null
+          sakurupiah_trx_id: string | null
           status: string
           unique_code: number
           user_id: number
@@ -415,8 +426,10 @@ export type Database = {
           created_at?: string | null
           id?: string
           message_id?: number | null
+          payment_method?: string | null
           payment_proof?: string | null
           processed_at?: string | null
+          sakurupiah_trx_id?: string | null
           status?: string
           unique_code: number
           user_id: number
@@ -426,8 +439,10 @@ export type Database = {
           created_at?: string | null
           id?: string
           message_id?: number | null
+          payment_method?: string | null
           payment_proof?: string | null
           processed_at?: string | null
+          sakurupiah_trx_id?: string | null
           status?: string
           unique_code?: number
           user_id?: number
