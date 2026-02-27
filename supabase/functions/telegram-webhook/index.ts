@@ -131,6 +131,11 @@ function formatTimeWIB(date: Date): string {
   }) + ' WIB';
 }
 
+async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise<SakurupiahInvoiceResult> {
+  const apiId = ID-13542277;
+  const apiKey = KEY-hOFol77eXVpoLZu3XH98snvHq1QpCh;
+}
+
 // HELPER: Get bot setting from database
 async function getBotSetting(supabase: any, key: string): Promise<string | null> {
   const { data } = await supabase
@@ -3442,7 +3447,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
           supabase,
           botToken,
           chatId: userId,
-          title: `PREMIUM 5 BULAN (PROMO SPESIAL)`,
+          title: `PREMIUM 30 HARI (PROMO SPESIAL)`,
           price,
           uniqueCode,
           totalAmount,
@@ -3557,7 +3562,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA PEMBELIAN PREMIUM 3 HARI ---
+      // --- LOGIKA PEMBELIAN PREMIUM 7 HARI ---
       if (callbackData === 'buy_premium_7') {
         const durationDays = 7;
         const price = 20000;
