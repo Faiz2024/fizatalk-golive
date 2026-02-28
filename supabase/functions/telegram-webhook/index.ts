@@ -202,6 +202,7 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
 
     if (json.status === '200' && json.data?.[0]) {
       const inv = json.data[0];
+      console.log(`[SAKURUPIAH] Invoice created: trx_id=${inv.trx_id} qr=${inv.qr ? 'YES' : 'NO'} checkout_url=${inv.checkout_url}`);
       return {
         success: true,
         trxId: inv.trx_id,
@@ -209,6 +210,7 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
         checkoutUrl: inv.checkout_url,
       };
     }
+    console.error('[SAKURUPIAH] Failed:', json.message, JSON.stringify(json));
     return { success: false, error: json.message || 'Invoice creation failed' };
   } catch (e) {
     console.error('[SAKURUPIAH] Error:', e);
@@ -305,25 +307,51 @@ async function processSakurupiahPremiumPayment(
   const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_premium' }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(invoice.qrString)}`;
-    const caption = `💳 <b>${config.label}</b>\n\n💰 Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n📱 <b>CARA BAYAR QRIS:</b>\n1️⃣ Screenshot QR di atas\n2️⃣ Buka e-wallet (GoPay/OVO/DANA/ShopeePay)\n3️⃣ Scan QR atau pilih dari galeri\n4️⃣ Konfirmasi pembayaran\n\n✅ Pembayaran <b>otomatis terverifikasi</b>\n⏰ Batas waktu: 1 jam`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=800x800&margin=40&ecc=M&format=png&data=${encodeURIComponent(invoice.qrString)}`;
+    const caption = `💳  <b>${config.label}</b>\n\n` +
+      `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `📱  <b>CARA BAYAR:</b>\n\n` +
+      `1️⃣  Screenshot QR di atas\n` +
+      `2️⃣  Buka e-wallet favorit kamu\n` +
+      `      (GoPay/OVO/DANA/ShopeePay)\n` +
+      `3️⃣  Pilih Scan QR / Bayar dari Galeri\n` +
+      `4️⃣  Konfirmasi pembayaran\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
+      `⏰  Batas waktu: <b>1 jam</b>`;
     try {
       const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: userId, photo: qrUrl, caption, parse_mode: 'HTML', reply_markup: cancelKb })
       });
       const rj = await resp.json();
-      if (rj.ok) await supabase.from('premium_requests').update({ message_id: rj.result.message_id }).eq('id', premReq.id);
+      if (rj.ok) {
+        await supabase.from('premium_requests').update({ message_id: rj.result.message_id }).eq('id', premReq.id);
+      } else {
+        console.error('[PREMIUM QRIS] sendPhoto failed:', JSON.stringify(rj));
+        // Fallback: kirim checkout URL
+        await sendTelegramMessage(botToken, userId,
+          `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
+      }
     } catch (e) {
-      await sendTelegramMessage(botToken, userId, `${caption}\n\n🔗 Bayar: ${invoice.checkoutUrl}`, cancelKb);
+      console.error('[PREMIUM QRIS] Error:', e);
+      await sendTelegramMessage(botToken, userId,
+        `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
     }
   } else {
+    console.log('[PREMIUM DANA] checkoutUrl:', invoice.checkoutUrl);
     const danaKb = { inline_keyboard: [
       [{ text: '💙 Bayar via DANA', url: invoice.checkoutUrl! }],
       [{ text: '❌ Batalkan', callback_data: 'cancel_premium' }]
     ]};
     await sendTelegramMessage(botToken, userId,
-      `💳 <b>${config.label}</b>\n\n💰 Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\nKlik tombol untuk bayar via <b>DANA</b>:\n✅ Pembayaran <b>otomatis terverifikasi</b>\n⏰ Batas waktu: 1 jam`,
+      `💳  <b>${config.label}</b>\n\n` +
+      `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `📱  Klik tombol di bawah untuk bayar via <b>DANA</b>\n\n` +
+      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
+      `⏰  Batas waktu: <b>1 jam</b>`,
       danaKb);
   }
 }
@@ -941,25 +969,50 @@ async function processSakurupiahTopupPayment(
   const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_topup' }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(invoice.qrString)}`;
-    const caption = `💰 <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n💳 Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\n📱 <b>CARA BAYAR QRIS:</b>\n1️⃣ Screenshot QR di atas\n2️⃣ Buka e-wallet (GoPay/OVO/DANA/ShopeePay)\n3️⃣ Scan QR atau pilih dari galeri\n4️⃣ Konfirmasi pembayaran\n\n✅ Pembayaran <b>otomatis terverifikasi</b>\n⏰ Batas waktu: 1 jam`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=800x800&margin=40&ecc=M&format=png&data=${encodeURIComponent(invoice.qrString)}`;
+    const caption = `💰  <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n` +
+      `💳  Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `📱  <b>CARA BAYAR:</b>\n\n` +
+      `1️⃣  Screenshot QR di atas\n` +
+      `2️⃣  Buka e-wallet favorit kamu\n` +
+      `      (GoPay/OVO/DANA/ShopeePay)\n` +
+      `3️⃣  Pilih Scan QR / Bayar dari Galeri\n` +
+      `4️⃣  Konfirmasi pembayaran\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
+      `⏰  Batas waktu: <b>1 jam</b>`;
     try {
       const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: userId, photo: qrUrl, caption, parse_mode: 'HTML', reply_markup: cancelKb })
       });
       const rj = await resp.json();
-      if (rj.ok) await supabase.from('topup_requests').update({ message_id: rj.result.message_id }).eq('id', topupReq.id);
+      if (rj.ok) {
+        await supabase.from('topup_requests').update({ message_id: rj.result.message_id }).eq('id', topupReq.id);
+      } else {
+        console.error('[TOPUP QRIS] sendPhoto failed:', JSON.stringify(rj));
+        await sendTelegramMessage(botToken, userId,
+          `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
+      }
     } catch (e) {
-      await sendTelegramMessage(botToken, userId, `${caption}\n\n🔗 Bayar: ${invoice.checkoutUrl}`, cancelKb);
+      console.error('[TOPUP QRIS] Error:', e);
+      await sendTelegramMessage(botToken, userId,
+        `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
     }
   } else {
+    console.log('[TOPUP DANA] checkoutUrl:', invoice.checkoutUrl);
     const danaKb = { inline_keyboard: [
       [{ text: '💙 Bayar via DANA', url: invoice.checkoutUrl! }],
       [{ text: '❌ Batalkan', callback_data: 'cancel_topup' }]
     ]};
     await sendTelegramMessage(botToken, userId,
-      `💰 <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n💳 Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\nKlik tombol untuk bayar via <b>DANA</b>:\n✅ Pembayaran <b>otomatis terverifikasi</b>\n⏰ Batas waktu: 1 jam`,
+      `💰  <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n` +
+      `💳  Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `📱  Klik tombol di bawah untuk bayar via <b>DANA</b>\n\n` +
+      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
+      `⏰  Batas waktu: <b>1 jam</b>`,
       danaKb);
   }
 }
@@ -1022,23 +1075,48 @@ async function processSakurupiahFinePayment(
   const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan', callback_data: 'cancel_fine' }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(invoice.qrString)}`;
-    const caption = `💸 <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n📱 <b>CARA BAYAR QRIS:</b>\n1️⃣ Screenshot QR di atas\n2️⃣ Buka e-wallet (GoPay/OVO/DANA/ShopeePay)\n3️⃣ Scan QR atau pilih dari galeri\n4️⃣ Konfirmasi pembayaran\n\n✅ Pembayaran <b>otomatis terverifikasi</b>\n⏰ Batas waktu: 1 jam`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=800x800&margin=40&ecc=M&format=png&data=${encodeURIComponent(invoice.qrString)}`;
+    const caption = `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
+      `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `📱  <b>CARA BAYAR:</b>\n\n` +
+      `1️⃣  Screenshot QR di atas\n` +
+      `2️⃣  Buka e-wallet favorit kamu\n` +
+      `      (GoPay/OVO/DANA/ShopeePay)\n` +
+      `3️⃣  Pilih Scan QR / Bayar dari Galeri\n` +
+      `4️⃣  Konfirmasi pembayaran\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
+      `⏰  Batas waktu: <b>1 jam</b>`;
     try {
       const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: userId, photo: qrUrl, caption, parse_mode: 'HTML', reply_markup: cancelKb })
       });
+      const rj = await resp.json();
+      if (!rj.ok) {
+        console.error('[FINE QRIS] sendPhoto failed:', JSON.stringify(rj));
+        await sendTelegramMessage(botToken, userId,
+          `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
+      }
     } catch (e) {
-      await sendTelegramMessage(botToken, userId, `${caption}\n\n🔗 Bayar: ${invoice.checkoutUrl}`, cancelKb);
+      console.error('[FINE QRIS] Error:', e);
+      await sendTelegramMessage(botToken, userId,
+        `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
     }
   } else {
+    console.log('[FINE DANA] checkoutUrl:', invoice.checkoutUrl);
     const danaKb = { inline_keyboard: [
       [{ text: '💙 Bayar via DANA', url: invoice.checkoutUrl! }],
       [{ text: '❌ Batalkan', callback_data: 'cancel_fine' }]
     ]};
     await sendTelegramMessage(botToken, userId,
-      `💸 <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\nKlik tombol untuk bayar via <b>DANA</b>:\n✅ Pembayaran <b>otomatis terverifikasi</b>\n⏰ Batas waktu: 1 jam`,
+      `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
+      `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `📱  Klik tombol di bawah untuk bayar via <b>DANA</b>\n\n` +
+      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
+      `⏰  Batas waktu: <b>1 jam</b>`,
       danaKb);
   }
 
