@@ -874,7 +874,9 @@ function buildPremiumNormalKeyboard(): any {
   return {
     inline_keyboard: [
       [{ text: `📦 ${PREMIUM_PACKAGES.normal['7'].label} - Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_7' }],
-      [{ text: `📦 ${PREMIUM_PACKAGES.normal['30'].label} - Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_30' }]
+      [{ text: `📦 ${PREMIUM_PACKAGES.normal['30'].label} - Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_30' }],
+      // --- TOMBOL BARU DITAMBAHKAN DI SINI ---
+      [{ text: '🎁 Gratis (15-22 Feb)', callback_data: 'promo_free_content' }]
     ]
   };
 }
@@ -1849,11 +1851,12 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
   const promoKeyboard = {
     inline_keyboard: [
       [{ text: '🔥 30 Hari / Rp10.000', callback_data: 'buy_premium_30' }],
-      [{ text: '💎 35 Hari / Rp 15.000', callback_data: 'buy_premium_35' }],
-      [{ text: '📦 7 Hari / Rp 20.000', callback_data: 'buy_premium_7' }],
-      [{ text: '📅 3 Hari / Rp 12.000', callback_data: 'buy_premium_3' }],
-      [{ text: '⚡ 1 Hari / Rp 5.000', callback_data: 'buy_premium_1' }],
-      [{ text: '🔍 Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
+      [{ text: '💎 35 Hari / Rp 20.000', callback_data: 'buy_premium_35' }],
+      [{ text: '📦 7 Hari / Rp 5.000', callback_data: 'buy_premium_7' }],
+      [{ text: '📅 3 Hari / Rp 2.000', callback_data: 'buy_premium_3' }],
+      [{ text: '⚡ 1 Hari / Rp 1.000', callback_data: 'buy_premium_1' }],
+      [{ text: '🎁 Gratis (15-22 Feb)', callback_data: 'promo_free_content' }]
+      // [{ text: '🔍 Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
     ]
   };
 
@@ -2182,6 +2185,52 @@ Deno.serve(async (req) => {
           await sendTelegramMessage(botToken, userId, `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n${nextActionText}`, keyboard);
           return new Response('OK', { status: 200 });
       }
+
+      // --- LOGIKA PROMO GRATIS KONTEN TIKTOK (EVENT 15-22 FEB) ---
+      if (callbackData === 'promo_free_content') {
+        // 1. Acknowledge callback agar loading hilang
+        await answerCallbackQuery(botToken, query.id);
+
+        // 3. Siapkan Template Pesan untuk dikirim ke Admin
+        // Menggunakan encodeURIComponent agar karakter khusus (spasi, enter) terbaca di URL
+        const templateMessage = `Halo Admin, saya ingin klaim Premium Gratis (Event 15-22 Feb).
+
+🆔 ID Telegram: ${userId}
+👤 Username TikTok: 
+🔗 Link Konten: 
+
+Mohon dicek. Terima kasih!`;
+        
+        const encodedTemplate = encodeURIComponent(templateMessage);
+        const adminUrl = `https://t.me/FizaTalkCS?text=${encodedTemplate}`;
+
+        // 4. Siapkan Pesan Instruksi
+        const instructionText = `🎁 <b>EVENT GRATIS PREMIUM (15-22 FEB)</b>
+
+Dapatkan akses <b>Premium 7 Hari</b> secara GRATIS hanya dengan membuat konten seru! 🚀
+
+📝 <b>SYARAT & KETENTUAN:</b>
+1️⃣ Buat konten TikTok tentang isi chat seru/lucu kamu di FizaTalk (minimal screensot chat).
+2️⃣ Wajib pakai hashtag: <code>#fizatalk #fizatalkbottelegram</code>
+3️⃣ Submit link konten ke admin untuk verifikasi.
+
+👇 <b>CARA KLAIM:</b>
+Klik tombol <b>"📤 Submit Konten"</b> di bawah ini. Anda akan diarahkan ke chat admin dan lengkapi <b>Username TikTok</b> dan <b>Link Video</b> lalu kirim!`;
+
+        const actionKeyboard = {
+          inline_keyboard: [
+            // Tombol URL Deeplink
+            [{ text: '📤 Submit Konten', url: adminUrl }]  
+          ]
+        };
+
+        // 5. Kirim Pesan
+        await sendTelegramMessage(botToken, userId, instructionText, actionKeyboard);
+        
+        return new Response('OK', { status: 200 });
+      }
+      // --- DI DALAM BLOK: if (update.callback_query) ---
+// Letakkan sebelum atau sesudah handler callback lainnya
 
       if (callbackData.startsWith('reveal_')) {
         // Format data: reveal_SENDERID_MESSAGEID
@@ -3467,7 +3516,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
       // --- LOGIKA PEMBELIAN PREMIUM 1 BULAN (35 HARI) ---
       if (callbackData === 'buy_premium_35') {
         const durationDays = 35;
-        const price = 15000;
+        const price = 20000;
         
         // Hapus pesan promo
         if (message) {
@@ -3560,7 +3609,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
       // --- LOGIKA PEMBELIAN PREMIUM 3 HARI ---
       if (callbackData === 'buy_premium_7') {
         const durationDays = 7;
-        const price = 20000;
+        const price = 5000;
         
         // Hapus pesan promo
         if (message) {
@@ -3653,7 +3702,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
       // --- LOGIKA PEMBELIAN PREMIUM 3 HARI ---
       if (callbackData === 'buy_premium_3') {
         const durationDays = 3;
-        const price = 12000;
+        const price = 2000;
         
         // Hapus pesan promo
         if (message) {
@@ -3746,7 +3795,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
       // --- LOGIKA PEMBELIAN PREMIUM 1 HARI  ---
       if (callbackData === 'buy_premium_1') {
         const durationDays = 1;
-        const price = 5000;
+        const price = 1000;
         
         // Hapus pesan promo
         if (message) {
