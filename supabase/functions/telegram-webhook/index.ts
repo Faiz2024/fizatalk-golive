@@ -292,7 +292,7 @@ async function processSakurupiahPremiumPayment(
 
   const invoice = await createSakurupiahInvoice({
     method, amount: config.price, merchantRef,
-    productName: config.label, customerName: userName, expired: 1,
+    productName: config.label, customerName: userName, expired: 60,
   });
 
   if (!invoice.success) {
@@ -954,7 +954,7 @@ async function processSakurupiahTopupPayment(
 
   const invoice = await createSakurupiahInvoice({
     method, amount: totalPrice, merchantRef,
-    productName: `Top-up ${amount} Koin`, customerName: userName, expired: 1,
+    productName: `Top-up ${amount} Koin`, customerName: userName, expired: 60,
   });
 
   if (!invoice.success) {
@@ -1060,7 +1060,7 @@ async function processSakurupiahFinePayment(
 
   const invoice = await createSakurupiahInvoice({
     method, amount: FINE_AMOUNT, merchantRef,
-    productName: 'Pembayaran Denda Buka Blokir', customerName: userName, expired: 1,
+    productName: 'Pembayaran Denda Buka Blokir', customerName: userName, expired: 60,
   });
 
   if (!invoice.success) {
