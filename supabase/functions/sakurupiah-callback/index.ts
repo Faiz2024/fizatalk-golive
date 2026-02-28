@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
 
   const prefix = merchant_ref.substring(0, 2);
 
-  if (status === 'berhasil' && status_kode === 1) {
+  if (status === 'berhasil' && (status_kode === 1 || status_kode === '1')) {
     if (prefix === 'p_') {
       await handlePremiumSuccess(supabase, botToken, merchant_ref);
     } else if (prefix === 't_') {
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     } else if (prefix === 'f_') {
       await handleFineSuccess(supabase, botToken, merchant_ref);
     }
-  } else if (status === 'expired' && status_kode === 2) {
+  } else if (status === 'expired' && (status_kode === 2 || status_kode === '2')) {
     await handleExpired(supabase, botToken, prefix, merchant_ref);
   }
 
