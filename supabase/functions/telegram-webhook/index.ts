@@ -222,7 +222,7 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
 function buildPaymentMethodKeyboard(qrisCallback: string, danaCallback: string, cancelCallback?: string): any {
   const kb: any[][] = [
     [{ text: '📱 QRIS (Semua E-Wallet & Bank)', callback_data: qrisCallback }],
-    [{ text: '💙 DANA', callback_data: danaCallback }],
+    // [{ text: '💙 DANA', callback_data: danaCallback }],
   ];
   if (cancelCallback) kb.push([{ text: '❌ Batalkan', callback_data: cancelCallback }]);
   return { inline_keyboard: kb };
