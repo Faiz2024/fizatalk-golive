@@ -300,6 +300,7 @@ async function processSakurupiahPremiumPayment(
     }).select('id').single();
 
   if (insertErr || !premReq) {
+    console.error('[PREMIUM] Insert error:', JSON.stringify(insertErr));
     await sendTelegramMessage(botToken, userId, '❌ Gagal membuat transaksi. Coba lagi.');
     return;
   }
@@ -940,6 +941,7 @@ async function processSakurupiahTopupPayment(
     }).select('id').single();
 
   if (insertErr || !topupReq) {
+    console.error('[TOPUP] Insert error:', JSON.stringify(insertErr));
     await sendTelegramMessage(botToken, userId, '❌ Gagal membuat transaksi. Coba lagi.');
     return;
   }
@@ -1027,6 +1029,7 @@ async function processSakurupiahFinePayment(
     }).select('id').single();
 
   if (insertErr || !fineReq) {
+    console.error('[FINE] Insert error:', JSON.stringify(insertErr));
     await sendTelegramMessage(botToken, userId, '❌ Gagal membuat transaksi. Coba lagi.');
     return;
   }
