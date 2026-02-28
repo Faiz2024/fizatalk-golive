@@ -266,30 +266,10 @@ async function processSakurupiahPremiumPayment(
     .select('premium_until, first_name, username')
     .eq('id', userId).single();
 
-  if (userData?.premium_until && new Date(userData.premium_until) > new Date()) {
-    await answerCallbackQuery(botToken, queryId, '⚠️ Kamu sudah Premium!');
-    await sendTelegramMessage(botToken, userId,
-      `✨ Kamu sudah Premium!\n📅 Hingga: ${formatDateWIB(new Date(userData.premium_until))}`);
-    return;
-  }
-
-  // Cancel old pending without trx_id
+  // Cancel ALL old pending premium transactions so user can always create new one
   await supabase.from('premium_requests')
     .update({ status: 'cancelled' })
-    .eq('user_id', userId).eq('status', 'pending')
-    .is('sakurupiah_trx_id', null).is('payment_proof', null);
-
-  const { count } = await supabase.from('premium_requests')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId).eq('status', 'pending')
-    .not('sakurupiah_trx_id', 'is', null);
-
-  if (count && count > 0) {
-    await answerCallbackQuery(botToken, queryId, '⚠️ Transaksi pending!');
-    await sendTelegramMessage(botToken, userId,
-      '⚠️ Kamu punya transaksi premium aktif. Selesaikan pembayaran atau tunggu expired.');
-    return;
-  }
+    .eq('user_id', userId).eq('status', 'pending');
 
   await answerCallbackQuery(botToken, queryId, '✅ Memproses pembayaran...');
 
@@ -919,18 +899,11 @@ async function processSakurupiahTopupPayment(
     .eq('user_id', userId).eq('status', 'pending')
     .is('sakurupiah_trx_id', null);
 
-  // Check existing pending with trx_id
-  const { count } = await supabase.from('topup_requests')
-    .select('*', { count: 'exact', head: true })
+  // Cancel ALL old pending topup transactions
+  await supabase.from('topup_requests')
+    .update({ status: 'cancelled' })
     .eq('user_id', userId).eq('status', 'pending')
     .not('sakurupiah_trx_id', 'is', null);
-
-  if (count && count > 0) {
-    await answerCallbackQuery(botToken, queryId, '⚠️ Transaksi pending!');
-    await sendTelegramMessage(botToken, userId,
-      '⚠️ Kamu punya transaksi top-up aktif. Selesaikan pembayaran atau tunggu expired.');
-    return;
-  }
 
   await answerCallbackQuery(botToken, queryId, '✅ Memproses pembayaran...');
 
@@ -1006,18 +979,11 @@ async function processSakurupiahFinePayment(
     .eq('user_id', userId).eq('status', 'pending').eq('admin_notes', 'FINE_PAYMENT')
     .is('sakurupiah_trx_id', null);
 
-  // Check existing pending with trx_id
-  const { count } = await supabase.from('pending_transactions')
-    .select('*', { count: 'exact', head: true })
+  // Cancel ALL old pending fine transactions
+  await supabase.from('pending_transactions')
+    .update({ status: 'cancelled' })
     .eq('user_id', userId).eq('status', 'pending').eq('admin_notes', 'FINE_PAYMENT')
     .not('sakurupiah_trx_id', 'is', null);
-
-  if (count && count > 0) {
-    await answerCallbackQuery(botToken, queryId, '⚠️ Transaksi pending!');
-    await sendTelegramMessage(botToken, userId,
-      '⚠️ Kamu punya transaksi denda aktif. Selesaikan pembayaran atau tunggu expired.');
-    return;
-  }
 
   await answerCallbackQuery(botToken, queryId, '✅ Memproses pembayaran...');
 
