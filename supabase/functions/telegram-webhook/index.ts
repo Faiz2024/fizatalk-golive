@@ -307,8 +307,7 @@ async function processSakurupiahPremiumPayment(
   const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_premium' }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=800x800&margin=40&ecc=M&format=png&data=${encodeURIComponent(invoice.qrString)}`;
-    const caption = `💳  <b>${config.label}</b>\n\n` +
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=15&ecc=L&format=png&data=${encodeURIComponent(invoice.qrString)}`;    const caption = `💳  <b>${config.label}</b>\n\n` +
       `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  <b>CARA BAYAR:</b>\n\n` +
@@ -977,8 +976,7 @@ async function processSakurupiahTopupPayment(
   const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_topup' }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=800x800&margin=40&ecc=M&format=png&data=${encodeURIComponent(invoice.qrString)}`;
-    const caption = `💰  <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n` +
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=15&ecc=L&format=png&data=${encodeURIComponent(invoice.qrString)}`;    const caption = `💰  <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n` +
       `💳  Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  <b>CARA BAYAR:</b>\n\n` +
@@ -1083,8 +1081,7 @@ async function processSakurupiahFinePayment(
   const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan', callback_data: 'cancel_fine' }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=800x800&margin=40&ecc=M&format=png&data=${encodeURIComponent(invoice.qrString)}`;
-    const caption = `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=15&ecc=L&format=png&data=${encodeURIComponent(invoice.qrString)}`;    const caption = `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
       `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  <b>CARA BAYAR:</b>\n\n` +
