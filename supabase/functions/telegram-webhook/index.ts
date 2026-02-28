@@ -1607,10 +1607,13 @@ const BUTTON_COOLDOWNS: Record<string, number> = {
   'send_gift': 3000,         // 3 detik - kirim gift
   'init_topup': 4000,        // 4 detik - init topup
   'buy_premium': 4000,       // 4 detik - beli premium
+  'prem_pay': 4000,          // 4 detik - proses bayar premium
+  'topup_pay': 4000,         // 4 detik - proses bayar topup
+  'fine_pay': 4000,          // 4 detik - proses bayar denda
   'report_user': 3000,       // 3 detik - lapor user
   'rate_asik': 3000,         // 3 detik - rate asik
   'reconnect': 4000,         // 4 detik - reconnect partner
-  'pay_fine': 4000,          // 4 detik - bayar denda
+  'pay_fine': 4000,          // 4 detik - bayar denda (show menu)
   'cancel_topup': 2000,      // 2 detik - cancel topup
   'cancel_premium': 2000,    // 2 detik - cancel premium
   'cancel_fine': 2000,       // 2 detik - cancel fine
@@ -1668,9 +1671,9 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('send_gift_')) return 'send_gift';
   if (callbackData.startsWith('init_topup_')) return 'init_topup';
   if (callbackData.startsWith('buy_premium_')) return 'buy_premium';
-  if (callbackData.startsWith('prem_pay_')) return 'buy_premium';
-  if (callbackData.startsWith('topup_pay_')) return 'init_topup';
-  if (callbackData.startsWith('fine_pay_')) return 'pay_fine';
+  if (callbackData.startsWith('prem_pay_')) return 'prem_pay';
+  if (callbackData.startsWith('topup_pay_')) return 'topup_pay';
+  if (callbackData.startsWith('fine_pay_')) return 'fine_pay';
   if (callbackData.startsWith('report_user_')) return 'report_user';
   if (callbackData.startsWith('rate_asik_')) return 'rate_asik';
   if (callbackData.startsWith('reconnect_')) return 'reconnect';
