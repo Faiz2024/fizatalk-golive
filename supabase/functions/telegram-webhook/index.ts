@@ -2442,6 +2442,7 @@ Deno.serve(async (req) => {
       // (awaiting_payment check DIHAPUS - pembayaran otomatis via callback)
 
       // --- LOGIKA PEMBATALAN SEMUA TRANSAKSI (UNIFIED) ---
+      const paymentAllowedCallbacks = ['cancel_topup', 'cancel_premium', 'cancel_fine'];
       if (paymentAllowedCallbacks.includes(callbackData)) {
           await answerCallbackQuery(botToken, query.id, '🚫 Membatalkan transaksi...');
 
