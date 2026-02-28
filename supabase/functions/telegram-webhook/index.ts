@@ -179,7 +179,7 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
   formData.append('amount', params.amount.toString());
   formData.append('merchant_fee', '1');
   formData.append('merchant_ref', params.merchantRef);
-  formData.append('expired', (params.expired || 1).toString());
+  formData.append('expired', (params.expired || 60).toString());
   formData.append('produk[]', params.productName);
   formData.append('qty[]', '1');
   formData.append('harga[]', params.amount.toString());
@@ -319,7 +319,7 @@ async function processSakurupiahPremiumPayment(
       `4️⃣  Konfirmasi pembayaran\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>1 jam</b>`;
+      `⏰  Batas waktu: <b>60 menit</b>`;
     try {
       const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -330,14 +330,22 @@ async function processSakurupiahPremiumPayment(
         await supabase.from('premium_requests').update({ message_id: rj.result.message_id }).eq('id', premReq.id);
       } else {
         console.error('[PREMIUM QRIS] sendPhoto failed:', JSON.stringify(rj));
-        // Fallback: kirim checkout URL
+        // Fallback: kirim checkout URL sebagai link
+        const fallbackKb = { inline_keyboard: [
+          [{ text: '🔗 Buka Halaman Pembayaran', url: invoice.checkoutUrl! }],
+          [{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_premium' }]
+        ]};
         await sendTelegramMessage(botToken, userId,
-          `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
+          `${caption}\n\n🔗 Klik tombol di bawah untuk membayar:`, fallbackKb);
       }
     } catch (e) {
       console.error('[PREMIUM QRIS] Error:', e);
+      const fallbackKb = { inline_keyboard: [
+        [{ text: '🔗 Buka Halaman Pembayaran', url: invoice.checkoutUrl! }],
+        [{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_premium' }]
+      ]};
       await sendTelegramMessage(botToken, userId,
-        `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
+        `${caption}\n\n🔗 Klik tombol di bawah untuk membayar:`, fallbackKb);
     }
   } else {
     console.log('[PREMIUM DANA] checkoutUrl:', invoice.checkoutUrl);
@@ -351,7 +359,7 @@ async function processSakurupiahPremiumPayment(
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  Klik tombol di bawah untuk bayar via <b>DANA</b>\n\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>1 jam</b>`,
+      `⏰  Batas waktu: <b>60 menit</b>`,
       danaKb);
   }
 }
@@ -726,7 +734,7 @@ const FEMALE_WARNINGS = [
   "Ramadhan itu singkat, jangan habiskan buat dengerin gombalan receh. ⏳",
   "Jaga hati, jaga pandangan, jaga ketikan di FizaTalk ya, sis! 📱",
   "Partner chat yang sopan adalah cerminan dirimu yang berkelas. 💎",
-  "Jangan mau dijadikan pelampiasan nafsu cowok yang nggak tahan puasa. 🌬️",
+  "Jangan mau dijadakan pelampiasan nafsu cowok yang nggak tahan puasa. 🌬️",
   "Mending sharing resep masakan buat lebaran daripada sharing hal pribadi. 🥘",
   "Cowok sholeh nggak bakal ngetik hal yang bikin kamu risih. 🛡️",
   "Hati-hati sama trik 'curhat masalah agama' padahal mau modus. 🐍",
@@ -981,7 +989,7 @@ async function processSakurupiahTopupPayment(
       `4️⃣  Konfirmasi pembayaran\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>1 jam</b>`;
+      `⏰  Batas waktu: <b>60 menit</b>`;
     try {
       const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1012,7 +1020,7 @@ async function processSakurupiahTopupPayment(
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  Klik tombol di bawah untuk bayar via <b>DANA</b>\n\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>1 jam</b>`,
+      `⏰  Batas waktu: <b>60 menit</b>`,
       danaKb);
   }
 }
@@ -1087,7 +1095,7 @@ async function processSakurupiahFinePayment(
       `4️⃣  Konfirmasi pembayaran\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>1 jam</b>`;
+      `⏰  Batas waktu: <b>60 menit</b>`;
     try {
       const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1116,7 +1124,7 @@ async function processSakurupiahFinePayment(
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  Klik tombol di bawah untuk bayar via <b>DANA</b>\n\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>1 jam</b>`,
+      `⏰  Batas waktu: <b>60 menit</b>`,
       danaKb);
   }
 
@@ -1609,9 +1617,9 @@ function buildSearchMessageWithReputation(
 <b>Troll:</b> Skip chat terus-menerus tanpa interaksi.
 
 <b>Cara lepas dari peringatan dan menghindari blokir:</b>
-1️⃣ Hentikan semua perilaku di atas segera.
-2️⃣ Berinteraksi dengan partner secara sopan dan ramah.
-3️⃣ Dapatkan feedback positif dari partner.`;
+1️⃣  Hentikan semua perilaku di atas segera.
+2️⃣  Berinteraksi dengan partner secara sopan dan ramah.
+3️⃣  Dapatkan feedback positif dari partner.`;
   }
   
   // Default fallback - masih tampilkan jika penalty >= 40 tapi status tidak dikenali
@@ -2108,7 +2116,6 @@ async function showTargetGenderPremiumOffer(supabase: any, botToken: string, use
 }
 
 // LEGACY: pairUsers - sekarang menggunakan RPC, fungsi ini hanya untuk backward compatibility
-// Tidak digunakan lagi karena logika sudah di database RPC find_and_pair_partner
 
 // Helper: Kirim promo yang status 'waiting_idle' ke user tertentu saat kembali idle
 // Helper: Send promo to single user (optimized) - MUST be defined before sendPendingPromoToUser
