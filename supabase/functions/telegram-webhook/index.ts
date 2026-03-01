@@ -35,6 +35,7 @@ interface TelegramMessage {
   animation?: any; // Representasi GIF
   video_note?: any; // Representasi video note
   reply_to_message?: TelegramMessage; // Untuk fitur reply
+  successful_payment?: SuccessfulPayment; // Telegram Stars payment
   // Tambahkan tipe media lain jika diperlukan
 }
 
@@ -78,12 +79,29 @@ interface ChatMemberUpdate {
   new_chat_member: { status: string; user: { id: number; first_name: string; username?: string } };
 }
 
+interface PreCheckoutQuery {
+  id: string;
+  from: { id: number; first_name: string; username?: string };
+  currency: string;
+  total_amount: number;
+  invoice_payload: string;
+}
+
+interface SuccessfulPayment {
+  currency: string;
+  total_amount: number;
+  invoice_payload: string;
+  telegram_payment_charge_id: string;
+  provider_payment_charge_id: string;
+}
+
 interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
   message_reaction?: MessageReaction;
   callback_query?: CallbackQuery;
   chat_member?: ChatMemberUpdate;
+  pre_checkout_query?: PreCheckoutQuery;
 }
 
 interface Gift {
@@ -177,7 +195,7 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
   formData.append('name', params.customerName || 'FizaTalk User');
   formData.append('phone', '6280000000000');
   formData.append('amount', params.amount.toString());
-  formData.append('merchant_fee', '1');
+  formData.append('merchant_fee', '2'); // 2 = biaya fee ditanggung pelanggan
   formData.append('merchant_ref', params.merchantRef);
   formData.append('expired', (params.expired || 60).toString());
   formData.append('produk[]', params.productName);
@@ -220,9 +238,12 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
 
 // === PAYMENT METHOD SELECTION HELPER ===
 function buildPaymentMethodKeyboard(qrisCallback: string, danaCallback: string, cancelCallback?: string): any {
+  // Derive Stars callback from QRIS callback (replace _QRIS with _STARS)
+  const starsCallback = qrisCallback.replace('_QRIS', '_STARS');
   const kb: any[][] = [
     [{ text: '📱 QRIS (Semua E-Wallet & Bank)', callback_data: qrisCallback }],
     // [{ text: '💙 DANA', callback_data: danaCallback }],
+    [{ text: '⭐ Telegram Stars', callback_data: starsCallback }],
   ];
   if (cancelCallback) kb.push([{ text: '❌ Batalkan', callback_data: cancelCallback }]);
   return { inline_keyboard: kb };
@@ -248,6 +269,288 @@ const BUY_PREMIUM_MAP: Record<string, string> = {
   'buy_premium_normal_7': 'n7',
   'buy_premium_normal_30': 'n30',
 };
+
+// === TELEGRAM STARS PAYMENT ===
+// 1 Star ≈ $0.013 gross, Telegram takes ~35% → net $0.00845/Star
+// At 1 USD ≈ 16,300 IDR → 1 Star net ≈ Rp 137
+// Use Rp 125/Star for profit margin after conversion volatility
+const STARS_NET_VALUE_IDR = 125;
+
+function calculateStarsPrice(priceIDR: number): number {
+  return Math.ceil(priceIDR / STARS_NET_VALUE_IDR);
+}
+
+async function sendStarsInvoice(
+  botToken: string, chatId: number,
+  title: string, description: string,
+  payload: string, starsAmount: number
+): Promise<boolean> {
+  try {
+    const resp = await fetch(`${TELEGRAM_API}${botToken}/sendInvoice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        title,
+        description,
+        payload,
+        currency: 'XTR',
+        prices: [{ label: title, amount: starsAmount }],
+      })
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      console.error('[STARS] sendInvoice failed:', JSON.stringify(data));
+    }
+    return data.ok;
+  } catch (e) {
+    console.error('[STARS] sendInvoice error:', e);
+    return false;
+  }
+}
+
+// Process Stars payment for premium
+async function processStarsPremiumPayment(
+  botToken: string, userId: number, configKey: string,
+  queryId: string, message: any
+): Promise<void> {
+  const config = PREMIUM_PAY_CONFIG[configKey];
+  if (!config) {
+    await answerCallbackQuery(botToken, queryId, '❌ Paket tidak valid');
+    return;
+  }
+
+  if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+  await answerCallbackQuery(botToken, queryId, '⭐ Membuka pembayaran Stars...');
+
+  const starsPrice = calculateStarsPrice(config.price);
+  const payload = JSON.stringify({ t: 'p', k: configKey, u: userId });
+
+  const sent = await sendStarsInvoice(
+    botToken, userId,
+    config.label,
+    `Premium ${config.days} hari - Rp ${config.price.toLocaleString('id-ID')}`,
+    payload, starsPrice
+  );
+
+  if (!sent) {
+    await sendTelegramMessage(botToken, userId, '❌ Gagal membuat invoice Stars. Coba lagi atau pilih metode lain.');
+  }
+}
+
+// Process Stars payment for topup
+async function processStarsTopupPayment(
+  botToken: string, userId: number, amount: number,
+  queryId: string, message: any
+): Promise<void> {
+  const COIN_PRICE = 10;
+  const totalPrice = amount * COIN_PRICE;
+
+  if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+  await answerCallbackQuery(botToken, queryId, '⭐ Membuka pembayaran Stars...');
+
+  const starsPrice = calculateStarsPrice(totalPrice);
+  const payload = JSON.stringify({ t: 'tu', a: amount, u: userId });
+
+  const sent = await sendStarsInvoice(
+    botToken, userId,
+    `Top-up ${amount.toLocaleString('id-ID')} Koin`,
+    `${amount} koin - Rp ${totalPrice.toLocaleString('id-ID')}`,
+    payload, starsPrice
+  );
+
+  if (!sent) {
+    await sendTelegramMessage(botToken, userId, '❌ Gagal membuat invoice Stars. Coba lagi atau pilih metode lain.');
+  }
+}
+
+// Process Stars payment for fine
+async function processStarsFinePayment(
+  botToken: string, userId: number,
+  queryId: string, message: any
+): Promise<void> {
+  const FINE_AMOUNT = 10000;
+
+  if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+  await answerCallbackQuery(botToken, queryId, '⭐ Membuka pembayaran Stars...');
+
+  const starsPrice = calculateStarsPrice(FINE_AMOUNT);
+  const payload = JSON.stringify({ t: 'f', u: userId });
+
+  const sent = await sendStarsInvoice(
+    botToken, userId,
+    'Pembayaran Denda - Buka Blokir',
+    `Denda Rp ${FINE_AMOUNT.toLocaleString('id-ID')}`,
+    payload, starsPrice
+  );
+
+  if (!sent) {
+    await sendTelegramMessage(botToken, userId, '❌ Gagal membuat invoice Stars. Coba lagi atau pilih metode lain.');
+  }
+}
+
+// Helper: Process successful Stars payment (called from successful_payment handler)
+async function handleSuccessfulStarsPayment(
+  supabase: any, botToken: string,
+  userId: number, payloadStr: string,
+  chargeId: string, starsAmount: number
+): Promise<void> {
+  try {
+    const payload = JSON.parse(payloadStr);
+    const type = payload.t;
+
+    if (type === 'p') {
+      // PREMIUM PAYMENT
+      const configKey = payload.k;
+      const config = PREMIUM_PAY_CONFIG[configKey];
+      if (!config) {
+        console.error('[STARS] Invalid premium config:', configKey);
+        return;
+      }
+
+      // Get existing premium
+      const { data: userData } = await supabase
+        .from('telegram_users')
+        .select('premium_until')
+        .eq('id', userId).single();
+
+      let premiumEndDate: Date;
+      const existing = userData?.premium_until;
+      if (existing && new Date(existing) > new Date()) {
+        premiumEndDate = new Date(existing);
+        premiumEndDate.setDate(premiumEndDate.getDate() + config.days);
+      } else {
+        premiumEndDate = new Date();
+        premiumEndDate.setDate(premiumEndDate.getDate() + config.days);
+      }
+
+      // Update user
+      await supabase.from('telegram_users')
+        .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0 })
+        .eq('id', userId);
+
+      // Unblock if blocked
+      await supabase.from('blocked_users')
+        .update({ is_active: false })
+        .eq('user_id', userId);
+
+      // Record in premium_requests
+      await supabase.from('premium_requests').insert({
+        user_id: userId, duration_days: config.days, price: config.price,
+        unique_code: 0, status: 'approved', payment_method: 'STARS',
+        sakurupiah_trx_id: chargeId,
+        processed_at: new Date().toISOString(),
+      });
+
+      // Record transaction
+      await supabase.from('coin_transactions').insert({
+        user_id: userId, amount: -config.price, type: 'purchase',
+        description: `Premium ${config.days} hari via Stars (${starsAmount}⭐)`
+      });
+
+      const formattedDate = premiumEndDate.toLocaleDateString('id-ID', {
+        timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric'
+      });
+
+      await sendTelegramMessage(botToken, userId,
+        `🎉 <b>SELAMAT! PREMIUM AKTIF!</b>\n\n` +
+        `✨ Kamu sekarang user Premium!\n` +
+        `📅 Berlaku hingga: ${formattedDate}\n` +
+        `⭐ Dibayar: ${starsAmount} Stars\n\n` +
+        `🎯 Gunakan /target untuk pilih gender chat!\n\nTerima kasih! 💎`
+      );
+
+    } else if (type === 'tu') {
+      // TOPUP PAYMENT
+      const coinAmount = payload.a;
+      const COIN_PRICE = 10;
+      const totalPrice = coinAmount * COIN_PRICE;
+
+      // Add coins
+      const { data: userData } = await supabase
+        .from('telegram_users')
+        .select('coins')
+        .eq('id', userId).single();
+
+      const newBalance = (userData?.coins || 0) + coinAmount;
+      await supabase.from('telegram_users')
+        .update({ coins: newBalance })
+        .eq('id', userId);
+
+      // Record in topup_requests
+      await supabase.from('topup_requests').insert({
+        user_id: userId, amount: coinAmount, unique_code: 0,
+        status: 'approved', payment_method: 'STARS',
+        sakurupiah_trx_id: chargeId,
+        processed_at: new Date().toISOString(),
+      });
+
+      // Record transaction
+      await supabase.from('coin_transactions').insert({
+        user_id: userId, amount: coinAmount, type: 'topup',
+        description: `Top-up ${coinAmount} koin via Stars (${starsAmount}⭐)`
+      });
+
+      await sendTelegramMessage(botToken, userId,
+        `✅ <b>TOP-UP BERHASIL!</b>\n\n` +
+        `💰 +${coinAmount.toLocaleString('id-ID')} koin\n` +
+        `💳 Saldo baru: ${newBalance.toLocaleString('id-ID')} koin\n` +
+        `⭐ Dibayar: ${starsAmount} Stars\n\nTerima kasih! 🎉`
+      );
+
+    } else if (type === 'f') {
+      // FINE PAYMENT
+      const FINE_AMOUNT = 10000;
+
+      // Unblock user
+      await supabase.from('blocked_users')
+        .update({ is_active: false, unblocked_at: new Date().toISOString() })
+        .eq('user_id', userId);
+
+      // Reset penalty
+      await supabase.from('telegram_users')
+        .update({ penalty_points: 0 })
+        .eq('id', userId);
+
+      // Record in pending_transactions
+      await supabase.from('pending_transactions').insert({
+        user_id: userId, amount: FINE_AMOUNT, unique_code: 0,
+        total_amount: FINE_AMOUNT, status: 'approved',
+        admin_notes: 'FINE_PAYMENT', payment_method: 'STARS',
+        sakurupiah_trx_id: chargeId,
+        approved_at: new Date().toISOString(),
+      });
+
+      // Record transaction
+      await supabase.from('coin_transactions').insert({
+        user_id: userId, amount: -FINE_AMOUNT, type: 'fine_payment',
+        description: `Denda buka blokir via Stars (${starsAmount}⭐)`
+      });
+
+      const welcomeKeyboard = {
+        inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]]
+      };
+
+      await sendTelegramMessage(botToken, userId,
+        `✅ <b>AKUN TELAH DIBUKA BLOKIR!</b>\n\n` +
+        `🎉 Pembayaran denda berhasil!\n` +
+        `⭐ Dibayar: ${starsAmount} Stars\n\n` +
+        `Silakan mulai chat:`,
+        welcomeKeyboard
+      );
+
+      // Notify admin
+      const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+      if (csChatId) {
+        await sendTelegramMessage(botToken, parseInt(csChatId),
+          `✅ <b>DENDA DIBAYAR VIA STARS</b>\n\n🆔 User: <code>${userId}</code>\n⭐ Stars: ${starsAmount}\n💰 Denda: Rp ${FINE_AMOUNT.toLocaleString('id-ID')}\n\n✅ Auto-approved`
+        );
+      }
+    }
+  } catch (e) {
+    console.error('[STARS] handleSuccessfulStarsPayment error:', e);
+  }
+}
 
 // Helper: Process Sakurupiah payment for premium
 async function processSakurupiahPremiumPayment(
@@ -2418,6 +2721,18 @@ Deno.serve(async (req) => {
       
       return new Response('OK', { status: 200 });
     }
+    // Handle pre_checkout_query (Telegram Stars)
+    if (update.pre_checkout_query) {
+      const pcq = update.pre_checkout_query;
+      console.log(`[STARS] pre_checkout_query from ${pcq.from.id}: ${pcq.invoice_payload}`);
+      await fetch(`${TELEGRAM_API}${botToken}/answerPreCheckoutQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pre_checkout_query_id: pcq.id, ok: true })
+      });
+      return new Response('OK', { status: 200 });
+    }
+
     // Handle callback queries (emoji rating & NEW: cancel topup)
     if (update.callback_query) {
       const query = update.callback_query;
@@ -2602,10 +2917,14 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- HANDLER PROSES PEMBAYARAN DENDA VIA SAKURUPIAH ---
+      // --- HANDLER PROSES PEMBAYARAN DENDA VIA SAKURUPIAH/STARS ---
       if (callbackData.startsWith('fine_pay_')) {
-        const method = callbackData.replace('fine_pay_', '') as 'QRIS' | 'DANA';
-        await processSakurupiahFinePayment(supabase, botToken, userId, method, query.id, message);
+        const method = callbackData.replace('fine_pay_', '') as 'QRIS' | 'DANA' | 'STARS';
+        if (method === 'STARS') {
+          await processStarsFinePayment(botToken, userId, query.id, message);
+        } else {
+          await processSakurupiahFinePayment(supabase, botToken, userId, method as 'QRIS' | 'DANA', query.id, message);
+        }
         return new Response('OK', { status: 200 });
       }
 
@@ -3062,13 +3381,17 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- HANDLER PROSES TOPUP VIA SAKURUPIAH ---
+      // --- HANDLER PROSES TOPUP VIA SAKURUPIAH/STARS ---
       if (callbackData.startsWith('topup_pay_')) {
-        // Format: topup_pay_100_QRIS or topup_pay_100_DANA
+        // Format: topup_pay_100_QRIS or topup_pay_100_DANA or topup_pay_100_STARS
         const parts = callbackData.replace('topup_pay_', '').split('_');
         const amount = parseInt(parts[0]);
-        const method = parts[1] as 'QRIS' | 'DANA';
-        await processSakurupiahTopupPayment(supabase, botToken, userId, amount, method, query.id, message);
+        const method = parts[1] as 'QRIS' | 'DANA' | 'STARS';
+        if (method === 'STARS') {
+          await processStarsTopupPayment(botToken, userId, amount, query.id, message);
+        } else {
+          await processSakurupiahTopupPayment(supabase, botToken, userId, amount, method as 'QRIS' | 'DANA', query.id, message);
+        }
         return new Response('OK', { status: 200 });
       }
 
@@ -3686,14 +4009,18 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         return new Response('OK', { status: 200 });
       }
 
-      // === HANDLER PROSES PEMBAYARAN PREMIUM VIA SAKURUPIAH ===
+      // === HANDLER PROSES PEMBAYARAN PREMIUM VIA SAKURUPIAH/STARS ===
       if (callbackData.startsWith('prem_pay_')) {
-        // Format: prem_pay_30_QRIS or prem_pay_n7_DANA
+        // Format: prem_pay_30_QRIS or prem_pay_n7_DANA or prem_pay_30_STARS
         const payload = callbackData.replace('prem_pay_', '');
         const lastUnderscore = payload.lastIndexOf('_');
         const configKey = payload.substring(0, lastUnderscore);
-        const method = payload.substring(lastUnderscore + 1) as 'QRIS' | 'DANA';
-        await processSakurupiahPremiumPayment(supabase, botToken, userId, configKey, method, query.id, message);
+        const method = payload.substring(lastUnderscore + 1) as 'QRIS' | 'DANA' | 'STARS';
+        if (method === 'STARS') {
+          await processStarsPremiumPayment(botToken, userId, configKey, query.id, message);
+        } else {
+          await processSakurupiahPremiumPayment(supabase, botToken, userId, configKey, method as 'QRIS' | 'DANA', query.id, message);
+        }
         return new Response('OK', { status: 200 });
       }
 
@@ -4085,6 +4412,15 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
     // ************************************************
     // START LOGIKA PESAN/COMMAND
     // ************************************************
+
+    // Handle successful Stars payment
+    if (update.message?.successful_payment) {
+      const sp = update.message.successful_payment;
+      const spUserId = update.message.from.id;
+      console.log(`[STARS] successful_payment from ${spUserId}: ${sp.invoice_payload} amount=${sp.total_amount} XTR`);
+      await handleSuccessfulStarsPayment(supabase, botToken, spUserId, sp.invoice_payload, sp.telegram_payment_charge_id, sp.total_amount);
+      return new Response('OK', { status: 200 });
+    }
 
     // Pastikan ada pesan masuk
     if (!update.message?.from) {
