@@ -2515,9 +2515,10 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 
   const promoKeyboard = {
     inline_keyboard: [
-      [{ text: '🔥 30 Hari / Rp28.000', callback_data: 'buy_premium_30' }],
+      [{ text: '🔥 30 Hari/<i><s>Rp 60.000</s></i>➡️Rp28.000', callback_data: 'buy_premium_30' }],
+      // [{ text: '🔥 30 Hari/𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶➡️Rp28.000', callback_data: 'buy_premium_30' }],
+      [{ text: '📦 7 Hari/𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶➡️Rp19.000', callback_data: 'buy_premium_7' }],
       [{ text: '💎 35 Hari / Rp 30.000', callback_data: 'buy_premium_35' }],
-      [{ text: '📦 7 Hari / Rp 19.000', callback_data: 'buy_premium_7' }],
       [{ text: '📅 3 Hari / Rp 10.000', callback_data: 'buy_premium_3' }],
       [{ text: '⚡ 1 Hari / Rp 5.000', callback_data: 'buy_premium_1' }],
       [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
