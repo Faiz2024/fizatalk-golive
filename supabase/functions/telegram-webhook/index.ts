@@ -136,7 +136,7 @@ function formatDateTimeWIB(date: Date): string {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-    hour: ' git',
+    hour: '2-digit',
     minute: '2-digit'
   }) + ' WIB';
 }
@@ -1516,11 +1516,13 @@ function getPremiumBenefitsText(): string {
 • 🚀 Prioritas matching`;
 }
 
-// Helper function to build premium offer message for non-premium users
-function buildPremiumOfferMessage(featureName: string): string {
-  return `❌ <b>Fitur Premium Only!</b>
+// Helper function to build premium offer message for non-premium users (filter habis)
+function buildFilterExhaustedMessage(): string {
+  return `⚠️ <b>Kesempatan Filter Gratis Habis!</b>
 
-Fitur ${featureName} hanya tersedia untuk user <b>Premium</b>.
+Kesempatan 10x filter gratis kamu hari ini sudah habis. Kuota akan di-reset setiap pukul <b>00:00 WIB</b>.
+
+💎 <b>Upgrade ke Premium</b> untuk filter <b>TANPA BATAS</b>!
 
 ${getPremiumBenefitsText()}
 
@@ -1528,7 +1530,13 @@ ${getPremiumBenefitsText()}
 📦 <b>1 MINGGU:</b> Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}
 📦 <b>1 BULAN:</b> Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}
 
-💎 Beli sekarang untuk menikmati fitur eksklusif!`;
+💎 Beli sekarang untuk menikmati filter tanpa batas!`;
+}
+
+// Legacy: keep old function for compatibility
+function buildPremiumOfferMessage(featureName: string): string {
+  return buildFilterExhaustedMessage();
+}
 }
 
 // Helper function to build premium purchase keyboard (normal prices)
@@ -1889,27 +1897,44 @@ interface ComprehensiveSearchResult {
 function buildSearchMessageWithReputation(
   reputation?: ComprehensiveSearchResult['reputation'], 
   isNext: boolean = false,
-  skipIfLowPenalty: boolean = false
+  skipIfLowPenalty: boolean = false,
+  filterInfo?: { target_gender?: string | null; target_location?: string | null }
 ): string | null {
   const baseAction = isNext ? '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>' : '🔍 Mencari partner untuk kamu...';
   
+  // Build filter info text
+  let filterText = '';
+  if (filterInfo) {
+    const parts: string[] = [];
+    if (filterInfo.target_gender && filterInfo.target_gender !== 'semua') {
+      const gLabel = filterInfo.target_gender === 'cowok' ? '👦 Cowok' : '👧 Cewek';
+      parts.push(`🎯 Gender: <b>${gLabel}</b>`);
+    }
+    if (filterInfo.target_location && filterInfo.target_location !== 'semua') {
+      parts.push(`📍 Lokasi: <b>${filterInfo.target_location}</b>`);
+    }
+    if (parts.length > 0) {
+      filterText = '\n' + parts.join('\n');
+    }
+  }
+
   // Jika tidak ada reputation atau penalty di bawah 40
   if (!reputation || reputation.penalty_points < 40) {
     // Jika skipIfLowPenalty = true, tidak perlu kirim pesan
     if (skipIfLowPenalty) {
       return null;
     }
-    return `${baseAction}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}`; 
+    return `${baseAction}${filterText}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}`; 
    }
   
   // Penalty 40-69: Status Peringatan
   if (reputation.status === 'warning') {
-    return `${baseAction}\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message || 'Anda mendapat beberapa laporan negatif dari pengguna lain.'} Harap perbaiki sikap atau akun berisiko dibatasi.\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.`;
+    return `${baseAction}${filterText}\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message || 'Anda mendapat beberapa laporan negatif dari pengguna lain.'} Harap perbaiki sikap atau akun berisiko dibatasi.\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.`;
   }
   
   // Penalty 70-99: Status Kritis
   if (reputation.status === 'critical') {
-    return `${baseAction}\n\n🔞 <b>Status: Kritis</b>\n\n${reputation.message || 'Akun Anda dalam kondisi kritis.'} Satu laporan lagi dan Anda akan dibanned.\n\n🚫 DAFTAR PELANGGARAN KERAS:
+    return `${baseAction}${filterText}\n\n🔞 <b>Status: Kritis</b>\n\n${reputation.message || 'Akun Anda dalam kondisi kritis.'} Satu laporan lagi dan Anda akan dibanned.\n\n🚫 DAFTAR PELANGGARAN KERAS:
 
 <b>NSFW / Sange:</b> Chat seks, meminta pap, atau pembahasan vulgar.
 
@@ -1926,7 +1951,7 @@ function buildSearchMessageWithReputation(
   }
   
   // Default fallback - masih tampilkan jika penalty >= 40 tapi status tidak dikenali
-  return `${baseAction}\n\nMohon tunggu sebentar!`;
+  return `${baseAction}${filterText}\n\nMohon tunggu sebentar!`;
 }
 
 // HELPER: Kirim pesan pencarian dengan reputasi (1 pesan gabungan)
@@ -1937,9 +1962,10 @@ async function sendSearchingMessage(
   reputation?: ComprehensiveSearchResult['reputation'], 
   isNext: boolean = false,
   skipIfLowPenalty: boolean = false,
-  replyMarkup?: any // Tambahkan parameter ini
+  replyMarkup?: any,
+  filterInfo?: { target_gender?: string | null; target_location?: string | null }
 ): Promise<void> {
-  const message = buildSearchMessageWithReputation(reputation, isNext, skipIfLowPenalty);
+  const message = buildSearchMessageWithReputation(reputation, isNext, skipIfLowPenalty, filterInfo);
   if (message) {
     await sendTelegramMessage(botToken, userId, message, replyMarkup);
   }
@@ -2190,6 +2216,17 @@ async function handleComprehensiveSearchResult(
 ): Promise<void> {
   const penaltyPoints = result.reputation?.penalty_points || 0;
 
+  // Ambil filter info user untuk pesan "Mencari..."
+  const { data: filterUserData } = await supabase
+    .from('telegram_users')
+    .select('target_gender, target_location')
+    .eq('id', userId)
+    .single();
+  const filterInfo = filterUserData ? {
+    target_gender: filterUserData.target_gender,
+    target_location: filterUserData.target_location
+  } : undefined;
+
   // Buat keyboard "Laporkan" & "Asik" jika user menekan Next dan penalti < 40
   let endChatKeyboard = undefined;
   if (isNext && result.old_partner_id && penaltyPoints < 40) {
@@ -2208,7 +2245,7 @@ async function handleComprehensiveSearchResult(
     
     // Untuk tombol Next: selalu tampilkan pesan "Mengakhiri chat..." (dengan peringatan jika >= 40)
     // Untuk tombol Cari Partner: tampilkan pesan mencari (dengan peringatan jika >= 40)
-    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard);
+    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard, filterInfo);
     return;
   }
   
@@ -2218,7 +2255,7 @@ async function handleComprehensiveSearchResult(
   // Jika penalty >= 40: TETAP tampilkan pesan pencarian + peringatan walaupun langsung dapat partner
   // skipIfLowPenalty = true: jika penalty < 40 dan matched, lewati pesan pencarian
   if (isNext || penaltyPoints >= 40) {
-    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard);
+    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard, filterInfo);
     await new Promise(resolve => setTimeout(resolve, 600));
   }
   // Jika penalty < 40 dan matched: langsung ke notifikasi pairing (lewati pesan pencarian)
@@ -2240,8 +2277,22 @@ async function handleComprehensiveSearchResult(
 // ============================================
 
 async function autoSearchPartner(supabase: any, botToken: string, userId: number): Promise<void> {
-    // 1. Kirim pesan UI "Mencari..." di awal
-    await sendSearchingMessage(botToken, userId, undefined, false, false, undefined);
+    // 0. Ambil filter info user untuk ditampilkan di pesan mencari
+    const { data: filterData } = await supabase
+      .from('telegram_users')
+      .select('target_gender, target_location, premium_until')
+      .eq('id', userId)
+      .single();
+    
+    const isPremium = filterData?.premium_until && new Date(filterData.premium_until) > new Date();
+    // Hanya tampilkan filter info jika user premium (karena non-premium filter tidak aktif di matching)
+    const filterInfo = (isPremium || filterData?.target_gender || filterData?.target_location) ? {
+      target_gender: filterData?.target_gender,
+      target_location: filterData?.target_location
+    } : undefined;
+
+    // 1. Kirim pesan UI "Mencari..." di awal (dengan filter info)
+    await sendSearchingMessage(botToken, userId, undefined, false, false, undefined, filterInfo);
 
     // 2. Panggil RPC (Otomatis match atau masuk queue)
     const { data, error } = await supabase.rpc('find_and_pair_partner', {
@@ -3118,24 +3169,33 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA CHANGE LOCATION (INLINE BUTTON - PREMIUM ONLY) ---
+      // --- LOGIKA CHANGE LOCATION (INLINE BUTTON) ---
       if (callbackData === 'change_location') {
-        // Cek apakah user premium
-        const { data: userData } = await supabase
-          .from('telegram_users')
-          .select('premium_until, target_location')
-          .eq('id', userId)
-          .single();
+        // Cek filter usage via RPC (premium = unlimited, non-premium = 10x/hari)
+        const { data: filterCheck } = await supabase.rpc('check_and_use_filter', { p_user_id: userId });
 
-        const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
-
-        if (!isPremium) {
+        if (!filterCheck?.allowed) {
+          // Kesempatan habis - tampilkan pesan filter exhausted
           await answerCallbackQuery(botToken, query.id);
-          await showLocationFilterPremiumOffer(supabase, botToken, userId);
+          const exhaustedMsg = buildFilterExhaustedMessage();
+          const keyboard = buildPremiumNormalKeyboard();
+          const premiumFileId = await getPremiumFileId(supabase);
+          if (premiumFileId) {
+            try {
+              await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: userId, photo: premiumFileId, caption: exhaustedMsg, parse_mode: 'HTML', reply_markup: keyboard })
+              });
+            } catch (e) {
+              await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
+            }
+          } else {
+            await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
+          }
           return new Response('OK', { status: 200 });
         }
 
-        // Buat keyboard lokasi untuk premium (dengan opsi Semua di atas)
+        // Buat keyboard lokasi (dengan opsi Semua di atas)
         const locationButtons = [[{ text: '🌏 Semua Lokasi', callback_data: 'target_loc_semua' }]];
         for (let i = 0; i < LOCATION_LIST.length; i += 3) {
           const row = [];
@@ -3146,19 +3206,16 @@ Deno.serve(async (req) => {
           locationButtons.push(row);
         }
 
-        const locationKeyboard = {
-          inline_keyboard: locationButtons
-        };
+        const locationKeyboard = { inline_keyboard: locationButtons };
 
-        const currentTarget = userData?.target_location 
-          ? (userData.target_location === 'semua' ? 'Semua 🌏' : `📍 ${userData.target_location}`) 
-          : 'Semua 🌏';
+        const tl = filterCheck?.target_location;
+        const currentTarget = tl ? (tl === 'semua' ? 'Semua 🌏' : `📍 ${tl}`) : 'Semua 🌏';
+        const remainingText = filterCheck?.is_premium ? '' : `\n\n📊 Sisa kesempatan filter: <b>${filterCheck?.remaining ?? 0}x</b> (reset 00:00 WIB)`;
 
         await answerCallbackQuery(botToken, query.id);
         await sendTelegramMessage(
-          botToken,
-          userId,
-          `📍 <b>Pilih Target Lokasi Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>\n\nPilih lokasi partner yang ingin kamu ajak chat:`,
+          botToken, userId,
+          `📍 <b>Pilih Target Lokasi Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>${remainingText}\n\nPilih lokasi partner yang ingin kamu ajak chat:`,
           locationKeyboard
         );
 
@@ -3511,22 +3568,31 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHANGE TARGET (INLINE BUTTON) ---
       if (callbackData === 'change_target') {
-        // Cek apakah user premium
-        const { data: userData } = await supabase
-          .from('telegram_users')
-          .select('premium_until, target_gender')
-          .eq('id', userId)
-          .single();
+        // Cek filter usage via RPC (premium = unlimited, non-premium = 10x/hari)
+        const { data: filterCheck } = await supabase.rpc('check_and_use_filter', { p_user_id: userId });
 
-        const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
-
-        if (!isPremium) {
+        if (!filterCheck?.allowed) {
+          // Kesempatan habis - tampilkan pesan filter exhausted
           await answerCallbackQuery(botToken, query.id);
-          await showTargetGenderPremiumOffer(supabase, botToken, userId);
+          const exhaustedMsg = buildFilterExhaustedMessage();
+          const keyboard = buildPremiumNormalKeyboard();
+          const premiumFileId = await getPremiumFileId(supabase);
+          if (premiumFileId) {
+            try {
+              await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: userId, photo: premiumFileId, caption: exhaustedMsg, parse_mode: 'HTML', reply_markup: keyboard })
+              });
+            } catch (e) {
+              await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
+            }
+          } else {
+            await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
+          }
           return new Response('OK', { status: 200 });
         }
 
-        // Tampilkan pilihan target gender untuk user premium
+        // Tampilkan pilihan target gender
         const targetKeyboard = {
           inline_keyboard: [
             [
@@ -3539,15 +3605,14 @@ Deno.serve(async (req) => {
           ]
         };
 
-        const currentTarget = userData?.target_gender 
-          ? (userData.target_gender === 'cowok' ? 'Cowok 👦' : userData.target_gender === 'cewek' ? 'Cewek 👧' : 'Semua 👥') 
-          : 'Semua 👥';
+        const tg = filterCheck?.target_gender;
+        const currentTarget = tg ? (tg === 'cowok' ? 'Cowok 👦' : tg === 'cewek' ? 'Cewek 👧' : 'Semua 👥') : 'Semua 👥';
+        const remainingText = filterCheck?.is_premium ? '' : `\n\n📊 Sisa kesempatan filter: <b>${filterCheck?.remaining ?? 0}x</b> (reset 00:00 WIB)`;
 
         await answerCallbackQuery(botToken, query.id);
         await sendTelegramMessage(
-          botToken,
-          userId,
-          `🎯 <b>Pilih Target Gender Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>\n\nPilih siapa yang ingin kamu ajak chat:`,
+          botToken, userId,
+          `🎯 <b>Pilih Target Gender Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>${remainingText}\n\nPilih siapa yang ingin kamu ajak chat:`,
           targetKeyboard
         );
 
