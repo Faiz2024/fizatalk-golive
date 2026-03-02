@@ -136,7 +136,7 @@ function formatDateTimeWIB(date: Date): string {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-    hour: '2-digit',
+    hour: ' git',
     minute: '2-digit'
   }) + ' WIB';
 }
@@ -251,10 +251,10 @@ function buildPaymentMethodKeyboard(qrisCallback: string, danaCallback: string, 
 
 // === PREMIUM PAYMENT CONFIG (Sakurupiah) ===
 const PREMIUM_PAY_CONFIG: Record<string, { days: number; price: number; label: string }> = {
-  '30': { days: 30, price: 10000, label: 'PREMIUM 30 HARI (PROMO SPESIAL)' },
-  '35': { days: 35, price: 15000, label: 'PREMIUM 35 HARI (PROMO)' },
-  '7': { days: 7, price: 20000, label: 'PREMIUM 7 HARI' },
-  '3': { days: 3, price: 12000, label: 'PREMIUM 3 HARI' },
+  '30': { days: 30, price: 28000, label: 'PREMIUM 30 HARI (PROMO SPESIAL)' },
+  '35': { days: 35, price: 30000, label: 'PREMIUM 35 HARI (PROMO)' },
+  '7': { days: 7, price: 19000, label: 'PREMIUM 7 HARI' },
+  '3': { days: 3, price: 10000, label: 'PREMIUM 3 HARI' },
   '1': { days: 1, price: 5000, label: 'PREMIUM 1 HARI' },
   'n7': { days: 7, price: 25000, label: 'PREMIUM 7 HARI' },
   'n30': { days: 30, price: 60000, label: 'PREMIUM 30 HARI' },
@@ -776,14 +776,14 @@ async function sendMediaToSheet(botToken: string, message: any, supabase: any) {
 // sendQRISPayment DIHAPUS - diganti dengan createSakurupiahInvoice + payment method selection
 
 const PROMO_FILEID_LIST = [
-  'AgACAgUAAxkBAAHVILFpjh5KuWoRVLVgBVYQE-y0w5uQWQACIg9rGzfYcFQdSsNtCFJQlwEAAwIAA3kAAzoE', // Promo 1
-  'AgACAgUAAxkBAAHVILJpjh5K4ZZ-gZrGkJWgDZ5lW9WYzgACIw9rGzfYcFQ2b_YhpPl1KQEAAwIAA3kAAzoE', // Promo 2
-  'AgACAgUAAxkBAAHVILVpjh5K1xHQH8fjLfkQHHUAAfpKdTYAAiUPaxs32HBUM-vk55O0EJMBAAMCAAN5AAM6BA',  // Promo 3
-  'AgACAgUAAxkBAAHVILNpjh5K-TWN8eumA55VGlfa1M_XrgACJA9rGzfYcFR9DdkE5AjrIwEAAwIAA3kAAzoE', // Promo 4
-  'AgACAgUAAxkBAAHVILdpjh5K82JLPf05IYBjOYC5FdxquAACJg9rGzfYcFQZvT9hKbRpCgEAAwIAA3kAAzoE', // Promo 5
-  'AgACAgUAAxkBAAHVILhpjh5KVZuaYhRDWzgKClMvVlR_GQACJw9rGzfYcFQvEkLP59Kw7AEAAwIAA3kAAzoE', // Promo 6
-  'AgACAgUAAxkBAAHVILppjh5KHEZbNxG0CjPnGJAjJuyB4wACKA9rGzfYcFQ5uFOhYKLwvAEAAwIAA3kAAzoE', // Promo 7
-  'AgACAgUAAxkBAAHVILtpjh5Kv6dWVzZPY4hoJyZRPEPO6wACKQ9rGzfYcFRGBk_NBnvzYgEAAwIAA3kAAzoE', // Promo 8
+  'AgACAgUAAxkBAfftM2mlRW9AdaD4TzsFbiD8xI_tVRSTAALKDmsbA1AxVZiCukYhy3zkAQADAgADeQADOgQ', // Promo 1
+  'AgACAgUAAxkBAfftNGmlRW-WIkrgNkyDf3Yt6emZ485bAALLDmsbA1AxVT6KgMQWEETCAQADAgADeQADOgQ', // Promo 2
+  'AgACAgUAAxkBAfftNmmlRW_ayeTLu37HmwABtrHZGXYv0AACzA5rGwNQMVU39IwK63PH5gEAAwIAA3kAAzoE',  // Promo 3
+  'AgACAgUAAxkBAfftN2mlRW8kk5MjqFgBQXUG_5cLeop7AALNDmsbA1AxVeXP_ED8KsVhAQADAgADeQADOgQ', // Promo 4
+  'AgACAgUAAxkBAfftOGmlRW9fgEHCTscyBkatDpkxREXiAALODmsbA1AxVT2JpjvgquaNAQADAgADeQADOgQ', // Promo 5
+  'AgACAgUAAxkBAfftOWmlRW_XpXEKS-CttIUNkdcn6M-1AALPDmsbA1AxVcriYMnbYC7IAQADAgADeQADOgQ', // Promo 6
+  'AgACAgUAAxkBAfftOmmlRW8HRNzCBEVcMmhW7L0PO2PYAALQDmsbA1AxVdBMM9LfissMAQADAgADeQADOgQ', // Promo 7
+  'AgACAgUAAxkBAfftO2mlRW8LTQNAjlEq_S5vE1UThlQNAALRDmsbA1AxVYYYBlxdAlv5AQADAgADeQADOgQ', // Promo 8
 ];
 
 
@@ -2509,18 +2509,18 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 🎁 <b>PENAWARAN EKSKLUSIF:</b>
 ━━━━━━━━━━━━━━━━━━━━
 📦 <b>PREMIUM 30 HARI</b>
-<s>Rp 60.000</s> → <b>HANYA Rp 10.000!</b>
+<s>Rp 60.000</s> → <b>HANYA Rp 28.000!</b>
 ━━━━━━━━━━━━━━━━━━━━
-💥 <b>HEMAT 83%!</b>`;
+💥 <b>HEMAT 53%!</b>`;
 
   const promoKeyboard = {
     inline_keyboard: [
-      [{ text: '🔥 30 Hari / Rp10.000', callback_data: 'buy_premium_30' }],
-      [{ text: '💎 35 Hari / Rp 15.000', callback_data: 'buy_premium_35' }],
-      [{ text: '📦 7 Hari / Rp 20.000', callback_data: 'buy_premium_7' }],
-      [{ text: '📅 3 Hari / Rp 12.000', callback_data: 'buy_premium_3' }],
+      [{ text: '🔥 30 Hari / Rp28.000', callback_data: 'buy_premium_30' }],
+      [{ text: '💎 35 Hari / Rp 30.000', callback_data: 'buy_premium_35' }],
+      [{ text: '📦 7 Hari / Rp 19.000', callback_data: 'buy_premium_7' }],
+      [{ text: '📅 3 Hari / Rp 10.000', callback_data: 'buy_premium_3' }],
       [{ text: '⚡ 1 Hari / Rp 5.000', callback_data: 'buy_premium_1' }],
-      [{ text: '🔍 Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
+      [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
     ]
   };
 
@@ -4730,7 +4730,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
                  ]
                ]
               };
-              await sendTelegramMessage(botToken, userId, '⚠️ Kamu yakin ingin mangakhiri chat saat ini dan mencari partner baru?.\n\nPilih aksi:', chattingKeyboard);
+              await sendTelegramMessage(botToken, userId, '🔵 Kamu yakin ingin mangakhiri chat saat ini dan mencari partner baru?.\n\nPilih aksi:', chattingKeyboard);
               isCommand = true;
           } else if (text === '/stop') {
               
@@ -4746,7 +4746,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
                  ]
                ]
               };
-              await sendTelegramMessage(botToken, userId, '⚠️ Kamu yakin ingin mangakhiri chat?.\n\nPilih aksi:', chattingKeyboard);
+              await sendTelegramMessage(botToken, userId, '🔵 Kamu yakin ingin mangakhiri chat?.\n\nPilih aksi:', chattingKeyboard);
               isCommand = true;
           } else if (text === '/start') {
               const chattingKeyboard = {
