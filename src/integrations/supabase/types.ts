@@ -346,8 +346,6 @@ export type Database = {
           chat_end_count: number | null
           coins: number
           created_at: string
-          filter_uses_date: string
-          filter_uses_today: number
           first_name: string | null
           gender: string | null
           id: number
@@ -369,8 +367,6 @@ export type Database = {
           chat_end_count?: number | null
           coins?: number
           created_at?: string
-          filter_uses_date?: string
-          filter_uses_today?: number
           first_name?: string | null
           gender?: string | null
           id: number
@@ -392,8 +388,6 @@ export type Database = {
           chat_end_count?: number | null
           coins?: number
           created_at?: string
-          filter_uses_date?: string
-          filter_uses_today?: number
           first_name?: string | null
           gender?: string | null
           id?: number
@@ -495,7 +489,6 @@ export type Database = {
       cancel_fine_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_premium_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_topup_transaction: { Args: { p_user_id: number }; Returns: Json }
-      check_and_use_filter: { Args: { p_user_id: number }; Returns: Json }
       cleanup_inactive_users: { Args: never; Returns: undefined }
       comprehensive_search_action: {
         Args: {
