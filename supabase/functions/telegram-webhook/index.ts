@@ -2279,13 +2279,20 @@ async function autoSearchPartner(supabase: any, botToken: string, userId: number
     // 0. Ambil filter info user untuk ditampilkan di pesan mencari
     const { data: filterData } = await supabase
       .from('telegram_users')
-      .select('target_gender, target_location, premium_until')
+      .select('target_gender, target_location, premium_until, filter_uses_today, filter_uses_date')
       .eq('id', userId)
       .single();
     
     const isPremium = filterData?.premium_until && new Date(filterData.premium_until) > new Date();
-    // Hanya tampilkan filter info jika user premium (karena non-premium filter tidak aktif di matching)
-    const filterInfo = (isPremium || filterData?.target_gender || filterData?.target_location) ? {
+    
+    // Cek apakah filter masih berlaku (premium atau kuota belum habis)
+    const todayWIB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+    const todayStr = `${todayWIB.getFullYear()}-${String(todayWIB.getMonth()+1).padStart(2,'0')}-${String(todayWIB.getDate()).padStart(2,'0')}`;
+    const filterUsesToday = (filterData?.filter_uses_date === todayStr) ? (filterData?.filter_uses_today || 0) : 0;
+    const filterAllowed = isPremium || filterUsesToday < 10;
+    
+    // Hanya tampilkan filter info jika user berhak menggunakan filter
+    const filterInfo = filterAllowed ? {
       target_gender: filterData?.target_gender,
       target_location: filterData?.target_location
     } : undefined;
