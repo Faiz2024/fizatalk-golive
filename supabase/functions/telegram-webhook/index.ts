@@ -1537,7 +1537,6 @@ ${getPremiumBenefitsText()}
 function buildPremiumOfferMessage(featureName: string): string {
   return buildFilterExhaustedMessage();
 }
-}
 
 // Helper function to build premium purchase keyboard (normal prices)
 function buildPremiumNormalKeyboard(): any {
