@@ -2572,9 +2572,8 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 
   const promoKeyboard = {
     inline_keyboard: [
-      [{ text: '🔥 30 Hari/<i><s>Rp 60.000</s></i>➡️Rp28.000', callback_data: 'buy_premium_30' }],
-      // [{ text: '🔥 30 Hari/𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶➡️Rp28.000', callback_data: 'buy_premium_30' }],
-      [{ text: '📦 7 Hari/𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶➡️Rp19.000', callback_data: 'buy_premium_7' }],
+      [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 28.000', callback_data: 'buy_premium_30' }],
+      [{ text: '📦 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 19.000', callback_data: 'buy_premium_7' }],
       [{ text: '💎 35 Hari / Rp 30.000', callback_data: 'buy_premium_35' }],
       [{ text: '📅 3 Hari / Rp 10.000', callback_data: 'buy_premium_3' }],
       [{ text: '⚡ 1 Hari / Rp 5.000', callback_data: 'buy_premium_1' }],
@@ -3201,8 +3200,11 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
 
+        // Buat keyboard lokasi untuk premium (dengan opsi Semua di atas)
+        const locationButtons = [[{ text: '🇮🇩 Semua Lokasi', callback_data: 'target_loc_semua' }]];
+
+  
         // Buat keyboard lokasi (dengan opsi Semua di atas)
-        const locationButtons = [[{ text: '🌏 Semua Lokasi', callback_data: 'target_loc_semua' }]];
         for (let i = 0; i < LOCATION_LIST.length; i += 3) {
           const row = [];
           for (let j = 0; j < 3 && i + j < LOCATION_LIST.length; j++) {
