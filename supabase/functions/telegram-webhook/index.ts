@@ -1901,20 +1901,14 @@ function buildSearchMessageWithReputation(
 ): string | null {
   const baseAction = isNext ? '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>' : '🔍 Mencari partner untuk kamu...';
   
-  // Build filter info text
+  // Build filter info text - tampilkan semua info filter jika filterInfo ada
   let filterText = '';
   if (filterInfo) {
-    const parts: string[] = [];
-    if (filterInfo.target_gender && filterInfo.target_gender !== 'semua') {
-      const gLabel = filterInfo.target_gender === 'cowok' ? '👦 Cowok' : '👧 Cewek';
-      parts.push(`🎯 Gender: <b>${gLabel}</b>`);
-    }
-    if (filterInfo.target_location && filterInfo.target_location !== 'semua') {
-      parts.push(`📍 Lokasi: <b>${filterInfo.target_location}</b>`);
-    }
-    if (parts.length > 0) {
-      filterText = '\n' + parts.join('\n');
-    }
+    const genderVal = filterInfo.target_gender || 'semua';
+    const gLabel = genderVal === 'cowok' ? '👦 Cowok' : genderVal === 'cewek' ? '👧 Cewek' : '👥 Semua';
+    const locVal = filterInfo.target_location || 'semua';
+    const locLabel = locVal === 'semua' ? '🌏 Semua' : `📍 ${locVal}`;
+    filterText = `\n🎯 Gender: <b>${gLabel}</b>\n📍 Lokasi: <b>${locLabel}</b>`;
   }
 
   // Jika tidak ada reputation atau penalty di bawah 40
