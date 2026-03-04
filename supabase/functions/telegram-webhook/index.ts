@@ -2209,16 +2209,31 @@ async function handleComprehensiveSearchResult(
 ): Promise<void> {
   const penaltyPoints = result.reputation?.penalty_points || 0;
 
-  // Ambil filter info user untuk pesan "Mencari..."
+  // Ambil filter info user untuk pesan "Mencari..." + cek eligibility
   const { data: filterUserData } = await supabase
     .from('telegram_users')
-    .select('target_gender, target_location')
+    .select('target_gender, target_location, filter_uses_today, filter_uses_date, premium_until')
     .eq('id', userId)
     .single();
-  const filterInfo = filterUserData ? {
-    target_gender: filterUserData.target_gender,
-    target_location: filterUserData.target_location
-  } : undefined;
+  
+  // Cek apakah user berhak menampilkan filter info
+  let filterInfo: { target_gender?: string | null; target_location?: string | null } | undefined = undefined;
+  if (filterUserData) {
+    const now = new Date();
+    const todayWIB = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+    const todayStr = `${todayWIB.getFullYear()}-${String(todayWIB.getMonth()+1).padStart(2,'0')}-${String(todayWIB.getDate()).padStart(2,'0')}`;
+    const isPremium = filterUserData.premium_until && new Date(filterUserData.premium_until) > now;
+    const filterUsesToday = (filterUserData.filter_uses_date === todayStr) ? (filterUserData.filter_uses_today || 0) : 0;
+    const filterAllowed = isPremium || filterUsesToday < 10;
+    
+    if (filterAllowed) {
+      filterInfo = {
+        target_gender: filterUserData.target_gender,
+        target_location: filterUserData.target_location
+      };
+    }
+    // Jika tidak filterAllowed, filterInfo tetap undefined → pesan pencarian biasa tanpa target
+  }
 
   // Buat keyboard "Laporkan" & "Asik" jika user menekan Next dan penalti < 40
   let endChatKeyboard = undefined;
