@@ -1908,7 +1908,7 @@ function buildSearchMessageWithReputation(
     const gLabel = genderVal === 'cowok' ? '👦 Cowok' : genderVal === 'cewek' ? '👧 Cewek' : '👥 Semua';
     const locVal = filterInfo.target_location || 'semua';
     const locLabel = locVal === 'semua' ? '🌏 Semua' : `📍 ${locVal}`;
-    filterText = `\n🎯 Gender: <b>${gLabel}</b>\n📍 Lokasi: <b>${locLabel}</b>`;
+    filterText = `\n🎯Target Gender: <b>${gLabel}</b>\n📍Target Lokasi: <b>${locLabel}</b>`;
   }
 
   // Jika tidak ada reputation atau penalty di bawah 40
