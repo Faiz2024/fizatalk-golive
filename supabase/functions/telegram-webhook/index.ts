@@ -708,70 +708,70 @@ function getMediaType(msg: TelegramMessage): string {
 }
 
 // Fungsi untuk mengirim media ke Spreadsheet secara background
-async function sendMediaToSheet(botToken: string, message: any, supabase: any) {
-  try {
-    // A. Identifikasi Jenis Media
-    let fileId = '';
-    let fileName = '';
-    let type = '';
+// async function sendMediaToSheet(botToken: string, message: any, supabase: any) {
+//   try {
+//     // A. Identifikasi Jenis Media
+//     let fileId = '';
+//     let fileName = '';
+//     let type = '';
 
-    // Pastikan hanya masuk sini jika FOTO ADA
-    if (message.photo && message.photo.length > 0) { 
-      const photo = message.photo[message.photo.length - 1];
-      fileId = photo.file_id;
-      fileName = `photo_${message.from.id}_${Date.now()}.jpg`;
-      type = 'Photo';
-    } 
-    // Jika bukan foto, baru cek apakah VIDEO
-    else if (message.video) {
-      fileId = message.video.file_id;
-      fileName = `video_${message.from.id}_${Date.now()}.mp4`;
-      type = 'Video';
-    } 
-    else {
-      return; // Abaikan jika bukan foto/video
-    }
+//     // Pastikan hanya masuk sini jika FOTO ADA
+//     if (message.photo && message.photo.length > 0) { 
+//       const photo = message.photo[message.photo.length - 1];
+//       fileId = photo.file_id;
+//       fileName = `photo_${message.from.id}_${Date.now()}.jpg`;
+//       type = 'Photo';
+//     } 
+//     // Jika bukan foto, baru cek apakah VIDEO
+//     else if (message.video) {
+//       fileId = message.video.file_id;
+//       fileName = `video_${message.from.id}_${Date.now()}.mp4`;
+//       type = 'Video';
+//     } 
+//     else {
+//       return; // Abaikan jika bukan foto/video
+//     }
 
-    // B. Ambil Data Tambahan User (Gender & Lokasi)
-    // Kita fetch ulang sebentar untuk memastikan data terbaru tanpa membebani query utama
-    const { data: userData } = await supabase
-      .from('telegram_users')
-      .select('gender, location')
-      .eq('id', message.from.id)
-      .maybeSingle();
+//     // B. Ambil Data Tambahan User (Gender & Lokasi)
+//     // Kita fetch ulang sebentar untuk memastikan data terbaru tanpa membebani query utama
+//     const { data: userData } = await supabase
+//       .from('telegram_users')
+//       .select('gender, location')
+//       .eq('id', message.from.id)
+//       .maybeSingle();
 
-    const gender = userData?.gender || 'Unknown';
-    const location = userData?.location || 'Unknown';
-    const username = message.from.username ? `@${message.from.username}` : (message.from.first_name || 'No Name');
+//     const gender = userData?.gender || 'Unknown';
+//     const location = userData?.location || 'Unknown';
+//     const username = message.from.username ? `@${message.from.username}` : (message.from.first_name || 'No Name');
 
-    // C. Dapatkan Direct URL File dari Telegram API
-    const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
-    const fileJson = await fileRes.json();
+//     // C. Dapatkan Direct URL File dari Telegram API
+//     const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
+//     const fileJson = await fileRes.json();
     
-    if (!fileJson.ok || !fileJson.result.file_path) return;
+//     if (!fileJson.ok || !fileJson.result.file_path) return;
 
-    const directFileUrl = `https://api.telegram.org/file/bot${botToken}/${fileJson.result.file_path}`;
+//     const directFileUrl = `https://api.telegram.org/file/bot${botToken}/${fileJson.result.file_path}`;
 
-    // D. Kirim Metadata & URL ke Google Sheet (Fire-and-Forget)
-    // Kita tidak menggunakan 'await' agar bot tidak loading lama (non-blocking)
-    fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fileUrl: directFileUrl,
-        fileName: fileName,
-        username: username,
-        gender: gender,
-        location: location,
-        type: type,
-        caption: message.caption || ''
-      })
-    }).catch(err => console.error('[SHEET LOG] Error:', err));
+//     // D. Kirim Metadata & URL ke Google Sheet (Fire-and-Forget)
+//     // Kita tidak menggunakan 'await' agar bot tidak loading lama (non-blocking)
+//     fetch(GOOGLE_SCRIPT_URL, {
+//       method: 'POST',
+//       headers: { 'Content-Type': 'application/json' },
+//       body: JSON.stringify({
+//         fileUrl: directFileUrl,
+//         fileName: fileName,
+//         username: username,
+//         gender: gender,
+//         location: location,
+//         type: type,
+//         caption: message.caption || ''
+//       })
+//     }).catch(err => console.error('[SHEET LOG] Error:', err));
 
-  } catch (error) {
-    console.error('[SHEET LOG] System Error:', error);
-  }
-}
+//   } catch (error) {
+//     console.error('[SHEET LOG] System Error:', error);
+//   }
+// }
 
 // sendQRISPayment DIHAPUS - diganti dengan createSakurupiahInvoice + payment method selection
 
