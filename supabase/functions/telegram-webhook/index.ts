@@ -3969,11 +3969,16 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         }
         
         // Handle hasil RPC
+        // Handle hasil RPC
         if (!reportResult?.success) {
           if (reportResult?.error === 'already_reported') {
             await answerCallbackQuery(botToken, query.id, '⚠️ Kamu sudah memberi rating ke partner ini!', true);
           } else if (reportResult?.error === 'rate_limit_exceeded') {
             await answerCallbackQuery(botToken, query.id, '⚠️ Batas 3 rating per jam tercapai!', true);
+          } else if (reportResult?.error === 'partner_not_recent') {
+            await answerCallbackQuery(botToken, query.id, '⚠️ Gagal: Kamu hanya bisa memberi rating pada 2 partner terakhir!', true);
+          } else if (reportResult?.error === 'reputation_too_low') {
+            await answerCallbackQuery(botToken, query.id, '⚠️ Reputasimu terlalu rendah untuk melapor!', true);
           } else {
             await answerCallbackQuery(botToken, query.id, '❌ Gagal mengirim rating');
           }
