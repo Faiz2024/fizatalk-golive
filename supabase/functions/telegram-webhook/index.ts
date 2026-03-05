@@ -237,15 +237,25 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
 }
 
 // === PAYMENT METHOD SELECTION HELPER ===
-function buildPaymentMethodKeyboard(qrisCallback: string, danaCallback: string, cancelCallback?: string): any {
+function buildPaymentMethodKeyboard(qrisCallback: string, danaCallback: string, cancelCallback?: string, amountIDR: number = 0): any {
   // Derive Stars callback from QRIS callback (replace _QRIS with _STARS)
   const starsCallback = qrisCallback.replace('_QRIS', '_STARS');
+  
   const kb: any[][] = [
-    [{ text: '📱 QRIS (Semua E-Wallet & Bank)', callback_data: qrisCallback }],
-    // [{ text: '💙 DANA', callback_data: danaCallback }],
-    [{ text: '⭐ Telegram Stars', callback_data: starsCallback }],
+    [{ text: '📱 QRIS (Semua E-Wallet & Bank)', callback_data: qrisCallback }]
+    // [{ text: '💙 DANA', callback_data: danaCallback }], // Uncomment jika DANA diaktifkan
   ];
+
+  // Langsung tampilkan konversi harga Stars di tombol jika amountIDR diberikan
+  if (amountIDR > 0) {
+    const starsPrice = calculateStarsPrice(amountIDR);
+    kb.push([{ text: `⭐ Telegram Stars (${starsPrice} ⭐)`, callback_data: starsCallback }]);
+  } else {
+    kb.push([{ text: '⭐ Telegram Stars', callback_data: starsCallback }]);
+  }
+
   if (cancelCallback) kb.push([{ text: '❌ Batalkan', callback_data: cancelCallback }]);
+  
   return { inline_keyboard: kb };
 }
 
@@ -2990,9 +3000,11 @@ Deno.serve(async (req) => {
         await answerCallbackQuery(botToken, query.id);
         if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
         
+        const FINE_AMOUNT = 10000; // Pastikan sesuai nominal denda
+        
         await sendTelegramMessage(botToken, userId,
-          `💸 <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n💰 Total: <b>Rp 10.000</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard('fine_pay_QRIS', 'fine_pay_DANA', 'cancel_fine')
+          `💸 <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
+          buildPaymentMethodKeyboard('fine_pay_QRIS', 'fine_pay_DANA', 'cancel_fine', FINE_AMOUNT)
         );
         return new Response('OK', { status: 200 });
       }
@@ -3461,10 +3473,10 @@ Deno.serve(async (req) => {
         // Hapus menu Top Up
         if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
 
-        // Tampilkan pilihan metode pembayaran
+        // Tampilkan pilihan metode pembayaran beserta harga Stars
         await sendTelegramMessage(botToken, userId,
           `💰 <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n💳 Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard(`topup_pay_${amount}_QRIS`, `topup_pay_${amount}_DANA`, 'cancel_topup')
+          buildPaymentMethodKeyboard(`topup_pay_${amount}_QRIS`, `topup_pay_${amount}_DANA`, 'cancel_topup', totalPrice)
         );
 
         return new Response('OK', { status: 200 });
@@ -4126,10 +4138,10 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         await answerCallbackQuery(botToken, query.id);
         if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
 
-        // Tampilkan pilihan metode pembayaran
+        // Tampilkan pilihan metode pembayaran beserta harga Stars
         await sendTelegramMessage(botToken, userId,
           `💎 <b>${config.label}</b>\n\n💰 Harga: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n📅 Durasi: <b>${config.days} hari</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard(`prem_pay_${configKey}_QRIS`, `prem_pay_${configKey}_DANA`, 'cancel_premium')
+          buildPaymentMethodKeyboard(`prem_pay_${configKey}_QRIS`, `prem_pay_${configKey}_DANA`, 'cancel_premium', config.price)
         );
         return new Response('OK', { status: 200 });
       }
