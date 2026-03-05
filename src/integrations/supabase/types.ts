@@ -343,6 +343,7 @@ export type Database = {
       }
       telegram_users: {
         Row: {
+          blocked_until: string | null
           chat_end_count: number | null
           coins: number
           created_at: string
@@ -366,6 +367,7 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          blocked_until?: string | null
           chat_end_count?: number | null
           coins?: number
           created_at?: string
@@ -389,6 +391,7 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          blocked_until?: string | null
           chat_end_count?: number | null
           coins?: number
           created_at?: string
