@@ -1883,6 +1883,7 @@ interface ComprehensiveSearchResult {
   should_check_channel?: boolean;
   is_new_user?: boolean;
   blocked_message?: string;
+  blocked_until?: string;
   reputation?: {
     status: string;
     message: string | null;
@@ -2131,6 +2132,19 @@ async function comprehensiveSearchAction(
       userId,
       blockedMessage,
       blockedKeyboard
+    );
+    return { success: false, handled: true, result };
+  }
+  
+  // Handle jika user premium kena temp ban (blocked_until)
+  if (!result.success && result.error === 'user_temp_banned') {
+    const blockedUntil = result.blocked_until ? new Date(result.blocked_until) : null;
+    const blockedUntilStr = blockedUntil ? formatDateTimeWIB(blockedUntil) : '00:00 WIB';
+    
+    await sendTelegramMessage(
+      botToken,
+      userId,
+      `⏳ <b>AKUN DIBATASI SEMENTARA</b>\n\n⚠️ Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda.\n\n🔓 Akun Anda akan dapat digunakan kembali pada:\n📅 <b>${blockedUntilStr}</b>\n\n💡 Gunakan waktu ini untuk merefleksikan perilaku chat Anda. Hindari spam, konten NSFW, perilaku toksik, dan trolling.`
     );
     return { success: false, handled: true, result };
   }
@@ -4042,7 +4056,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         
         // Jika user di-ban karena penalty >= 100, kirim notifikasi
         if (reportResult?.is_banned) {
-          // Kirim notifikasi ke admin
+          // Non-premium: permanent ban
           const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
           if (csChatId) {
             await sendTelegramMessage(
@@ -4051,6 +4065,29 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
               `🚨 <b>USER DIBLOKIR OTOMATIS (PENALTY 100+)</b>\n\n🆔 User ID: <code>${reportedId}</code>\n⚠️ Alasan: Terlalu banyak laporan negatif dari pengguna lain\n📊 Penalty: ${reportResult.new_penalty} poin\n\n⏰ Waktu: ${formatDateTimeWIB(new Date())}`
             );
           }
+        }
+        
+        // Jika user premium kena temp ban
+        if (reportResult?.is_temp_banned) {
+          const blockedUntil = reportResult.blocked_until ? new Date(reportResult.blocked_until) : null;
+          const blockedUntilStr = blockedUntil ? formatDateTimeWIB(blockedUntil) : '00:00 WIB';
+          
+          // Notifikasi ke admin
+          const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+          if (csChatId) {
+            await sendTelegramMessage(
+              botToken,
+              parseInt(csChatId),
+              `⏳ <b>USER PREMIUM DIBATASI SEMENTARA (PENALTY 100+)</b>\n\n🆔 User ID: <code>${reportedId}</code>\n⚠️ Alasan: Terlalu banyak laporan negatif\n🔓 Dibatasi sampai: <b>${blockedUntilStr}</b>\n📊 Penalty direset ke 0\n\n⏰ Waktu: ${formatDateTimeWIB(new Date())}`
+            );
+          }
+          
+          // Notifikasi ke user yang kena temp ban
+          await sendTelegramMessage(
+            botToken,
+            reportedId,
+            `⏳ <b>AKUN DIBATASI SEMENTARA</b>\n\n⚠️ Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda.\n\n🔓 Akun Anda akan dapat digunakan kembali pada:\n📅 <b>${blockedUntilStr}</b>\n\n💡 Hindari spam, konten NSFW, perilaku toksik, dan trolling agar akun tidak dibatasi lagi.`
+          );
         }
         
         return new Response('OK', { status: 200 });
