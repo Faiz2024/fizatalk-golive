@@ -154,7 +154,7 @@ const SAKURUPIAH_API_URL = 'https://sakurupiah.id/api/create.php';
 const SAKURUPIAH_CALLBACK_URL = 'https://chwopnsmykwzqflqozvf.supabase.co/functions/v1/sakurupiah-callback';
 
 interface SakurupiahInvoiceParams {
-  method: 'QRIS' | 'DANA';
+  method: 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO';
   amount: number;
   merchantRef: string;
   productName: string;
@@ -238,21 +238,27 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
 
 // === PAYMENT METHOD SELECTION HELPER ===
 function buildPaymentMethodKeyboard(
-  qrisCallback: string,
-  danaCallback: string,
-  cancelCallback?: string,
-  amountIDR: number = 0,
+  baseCallback: string, 
+  cancelCallback: string, 
+  amountIDR: number = 0, 
   starsInvoiceUrl?: string
 ): any {
-  // Derive Stars callback from QRIS callback (replace _QRIS with _STARS)
-  const starsCallback = qrisCallback.replace('_QRIS', '_STARS');
+  // Derive Stars callback dari baseCallback
+  const starsCallback = `${baseCallback}_STARS`;
   
   const kb: any[][] = [
-    [{ text: '📱 QRIS (Semua E-Wallet & Bank)', callback_data: qrisCallback }]
-    // [{ text: '💙 DANA', callback_data: danaCallback }], // Uncomment jika DANA diaktifkan
+    [{ text: '📱 QRIS (Scan Semua E-Wallet & Bank)', callback_data: `${baseCallback}_QRIS` }],
+    [
+      { text: '💙 DANA', callback_data: `${baseCallback}_DANA` },
+      { text: '🟢 GoPay', callback_data: `${baseCallback}_GOPAY` }
+    ],
+    [
+      { text: '🟠 ShopeePay', callback_data: `${baseCallback}_SHOPEEPAY` },
+      { text: '💜 OVO', callback_data: `${baseCallback}_OVO` }
+    ]
   ];
 
-  // Tombol Stars: prioritaskan URL invoice langsung agar popup payment terbuka tanpa langkah tambahan
+  // Tombol Stars
   if (amountIDR > 0) {
     const starsPrice = calculateStarsPrice(amountIDR);
     kb.push([starsInvoiceUrl
@@ -575,7 +581,7 @@ async function handleSuccessfulStarsPayment(
 // Helper: Process Sakurupiah payment for premium
 async function processSakurupiahPremiumPayment(
   supabase: any, botToken: string, userId: number,
-  configKey: string, method: 'QRIS' | 'DANA',
+  configKey: string, method: 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO', // Update tipe data di sini 
   queryId: string, message: any
 ): Promise<void> {
   const config = PREMIUM_PAY_CONFIG[configKey];
@@ -671,19 +677,34 @@ async function processSakurupiahPremiumPayment(
         `${caption}\n\n🔗 Klik tombol di bawah untuk membayar:`, fallbackKb);
     }
   } else {
-    console.log('[PREMIUM DANA] checkoutUrl:', invoice.checkoutUrl);
-    const danaKb = { inline_keyboard: [
-      [{ text: '💙 Bayar via DANA', url: invoice.checkoutUrl! }],
+    // --- LOGIKA E-WALLET BARU ---
+    console.log(`[PREMIUM ${method}] checkoutUrl:`, invoice.checkoutUrl);
+    
+    // Konfigurasi visual UI UX E-Wallet
+    const eWalletConfig: Record<string, { name: string, emoji: string }> = {
+      'DANA': { name: 'DANA', emoji: '💙' },
+      'GOPAY': { name: 'GoPay', emoji: '🟢' },
+      'SHOPEEPAY': { name: 'ShopeePay', emoji: '🟠' },
+      'OVO': { name: 'OVO', emoji: '💜' }
+    };
+    
+    const walletInfo = eWalletConfig[method] || { name: method, emoji: '💳' };
+    
+    // Menggunakan URL bawaan API. Jika API dikonfigurasi dengan benar dari Sakurupiah,
+    // URL ini akan men-trigger deep link otomatis ke aplikasi masing-masing.
+    const walletKb = { inline_keyboard: [
+      [{ text: `${walletInfo.emoji} Buka Aplikasi ${walletInfo.name}`, url: invoice.checkoutUrl! }],
       [{ text: '❌ Batalkan', callback_data: 'cancel_premium' }]
     ]};
+
     await sendTelegramMessage(botToken, userId,
       `💳  <b>${config.label}</b>\n\n` +
       `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
-      `📱  Klik tombol di bawah untuk bayar via <b>DANA</b>\n\n` +
+      `📱  Klik tombol di bawah untuk membayar langsung via aplikasi <b>${walletInfo.name}</b>\n\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
       `⏰  Batas waktu: <b>60 menit</b>`,
-      danaKb);
+      walletKb);
   }
 }
 
@@ -1332,19 +1353,34 @@ async function processSakurupiahTopupPayment(
         `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
     }
   } else {
-    console.log('[TOPUP DANA] checkoutUrl:', invoice.checkoutUrl);
-    const danaKb = { inline_keyboard: [
-      [{ text: '💙 Bayar via DANA', url: invoice.checkoutUrl! }],
-      [{ text: '❌ Batalkan', callback_data: 'cancel_topup' }]
+    // --- LOGIKA E-WALLET BARU ---
+    console.log(`[PREMIUM ${method}] checkoutUrl:`, invoice.checkoutUrl);
+    
+    // Konfigurasi visual UI UX E-Wallet
+    const eWalletConfig: Record<string, { name: string, emoji: string }> = {
+      'DANA': { name: 'DANA', emoji: '💙' },
+      'GOPAY': { name: 'GoPay', emoji: '🟢' },
+      'SHOPEEPAY': { name: 'ShopeePay', emoji: '🟠' },
+      'OVO': { name: 'OVO', emoji: '💜' }
+    };
+    
+    const walletInfo = eWalletConfig[method] || { name: method, emoji: '💳' };
+    
+    // Menggunakan URL bawaan API. Jika API dikonfigurasi dengan benar dari Sakurupiah,
+    // URL ini akan men-trigger deep link otomatis ke aplikasi masing-masing.
+    const walletKb = { inline_keyboard: [
+      [{ text: `${walletInfo.emoji} Buka Aplikasi ${walletInfo.name}`, url: invoice.checkoutUrl! }],
+      [{ text: '❌ Batalkan', callback_data: 'cancel_premium' }]
     ]};
+
     await sendTelegramMessage(botToken, userId,
-      `💰  <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n` +
-      `💳  Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\n` +
+      `💳  <b>${config.label}</b>\n\n` +
+      `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
-      `📱  Klik tombol di bawah untuk bayar via <b>DANA</b>\n\n` +
+      `📱  Klik tombol di bawah untuk membayar langsung via aplikasi <b>${walletInfo.name}</b>\n\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
       `⏰  Batas waktu: <b>60 menit</b>`,
-      danaKb);
+      walletKb);
   }
 }
 
@@ -1436,19 +1472,34 @@ async function processSakurupiahFinePayment(
         `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
     }
   } else {
-    console.log('[FINE DANA] checkoutUrl:', invoice.checkoutUrl);
-    const danaKb = { inline_keyboard: [
-      [{ text: '💙 Bayar via DANA', url: invoice.checkoutUrl! }],
-      [{ text: '❌ Batalkan', callback_data: 'cancel_fine' }]
+    // --- LOGIKA E-WALLET BARU ---
+    console.log(`[PREMIUM ${method}] checkoutUrl:`, invoice.checkoutUrl);
+    
+    // Konfigurasi visual UI UX E-Wallet
+    const eWalletConfig: Record<string, { name: string, emoji: string }> = {
+      'DANA': { name: 'DANA', emoji: '💙' },
+      'GOPAY': { name: 'GoPay', emoji: '🟢' },
+      'SHOPEEPAY': { name: 'ShopeePay', emoji: '🟠' },
+      'OVO': { name: 'OVO', emoji: '💜' }
+    };
+    
+    const walletInfo = eWalletConfig[method] || { name: method, emoji: '💳' };
+    
+    // Menggunakan URL bawaan API. Jika API dikonfigurasi dengan benar dari Sakurupiah,
+    // URL ini akan men-trigger deep link otomatis ke aplikasi masing-masing.
+    const walletKb = { inline_keyboard: [
+      [{ text: `${walletInfo.emoji} Buka Aplikasi ${walletInfo.name}`, url: invoice.checkoutUrl! }],
+      [{ text: '❌ Batalkan', callback_data: 'cancel_premium' }]
     ]};
+
     await sendTelegramMessage(botToken, userId,
-      `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
-      `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
+      `💳  <b>${config.label}</b>\n\n` +
+      `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
-      `📱  Klik tombol di bawah untuk bayar via <b>DANA</b>\n\n` +
+      `📱  Klik tombol di bawah untuk membayar langsung via aplikasi <b>${walletInfo.name}</b>\n\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
       `⏰  Batas waktu: <b>60 menit</b>`,
-      danaKb);
+      walletKb);
   }
 
   // Notify admin
