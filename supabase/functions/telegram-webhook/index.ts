@@ -290,17 +290,16 @@ function calculateStarsPrice(priceIDR: number): number {
   return Math.ceil(priceIDR / STARS_NET_VALUE_IDR);
 }
 
-async function sendStarsInvoice(
-  botToken: string, chatId: number,
+async function createStarsInvoiceLink(
+  botToken: string,
   title: string, description: string,
   payload: string, starsAmount: number
-): Promise<boolean> {
+): Promise<string | null> {
   try {
-    const resp = await fetch(`${TELEGRAM_API}${botToken}/sendInvoice`, {
+    const resp = await fetch(`${TELEGRAM_API}${botToken}/createInvoiceLink`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: chatId,
         title,
         description,
         payload,
@@ -310,12 +309,13 @@ async function sendStarsInvoice(
     });
     const data = await resp.json();
     if (!data.ok) {
-      console.error('[STARS] sendInvoice failed:', JSON.stringify(data));
+      console.error('[STARS] createInvoiceLink failed:', JSON.stringify(data));
+      return null;
     }
-    return data.ok;
+    return data.result as string;
   } catch (e) {
-    console.error('[STARS] sendInvoice error:', e);
-    return false;
+    console.error('[STARS] createInvoiceLink error:', e);
+    return null;
   }
 }
 
@@ -330,21 +330,21 @@ async function processStarsPremiumPayment(
     return;
   }
 
-  if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-  await answerCallbackQuery(botToken, queryId, '⭐ Membuka pembayaran Stars...');
-
   const starsPrice = calculateStarsPrice(config.price);
   const payload = JSON.stringify({ t: 'p', k: configKey, u: userId });
 
-  const sent = await sendStarsInvoice(
-    botToken, userId,
+  const invoiceLink = await createStarsInvoiceLink(
+    botToken,
     config.label,
     `Premium ${config.days} hari - Rp ${config.price.toLocaleString('id-ID')}`,
     payload, starsPrice
   );
 
-  if (!sent) {
-    await sendTelegramMessage(botToken, userId, '❌ Gagal membuat invoice Stars. Coba lagi atau pilih metode lain.');
+  if (invoiceLink) {
+    if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+    await answerCallbackQuery(botToken, queryId, '', false, invoiceLink);
+  } else {
+    await answerCallbackQuery(botToken, queryId, '❌ Gagal membuat invoice Stars. Coba lagi.');
   }
 }
 
@@ -356,21 +356,21 @@ async function processStarsTopupPayment(
   const COIN_PRICE = 10;
   const totalPrice = amount * COIN_PRICE;
 
-  if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-  await answerCallbackQuery(botToken, queryId, '⭐ Membuka pembayaran Stars...');
-
   const starsPrice = calculateStarsPrice(totalPrice);
   const payload = JSON.stringify({ t: 'tu', a: amount, u: userId });
 
-  const sent = await sendStarsInvoice(
-    botToken, userId,
+  const invoiceLink = await createStarsInvoiceLink(
+    botToken,
     `Top-up ${amount.toLocaleString('id-ID')} Koin`,
     `${amount} koin - Rp ${totalPrice.toLocaleString('id-ID')}`,
     payload, starsPrice
   );
 
-  if (!sent) {
-    await sendTelegramMessage(botToken, userId, '❌ Gagal membuat invoice Stars. Coba lagi atau pilih metode lain.');
+  if (invoiceLink) {
+    if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+    await answerCallbackQuery(botToken, queryId, '', false, invoiceLink);
+  } else {
+    await answerCallbackQuery(botToken, queryId, '❌ Gagal membuat invoice Stars. Coba lagi.');
   }
 }
 
@@ -381,21 +381,21 @@ async function processStarsFinePayment(
 ): Promise<void> {
   const FINE_AMOUNT = 10000;
 
-  if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-  await answerCallbackQuery(botToken, queryId, '⭐ Membuka pembayaran Stars...');
-
   const starsPrice = calculateStarsPrice(FINE_AMOUNT);
   const payload = JSON.stringify({ t: 'f', u: userId });
 
-  const sent = await sendStarsInvoice(
-    botToken, userId,
+  const invoiceLink = await createStarsInvoiceLink(
+    botToken,
     'Pembayaran Denda - Buka Blokir',
     `Denda Rp ${FINE_AMOUNT.toLocaleString('id-ID')}`,
     payload, starsPrice
   );
 
-  if (!sent) {
-    await sendTelegramMessage(botToken, userId, '❌ Gagal membuat invoice Stars. Coba lagi atau pilih metode lain.');
+  if (invoiceLink) {
+    if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+    await answerCallbackQuery(botToken, queryId, '', false, invoiceLink);
+  } else {
+    await answerCallbackQuery(botToken, queryId, '❌ Gagal membuat invoice Stars. Coba lagi.');
   }
 }
 
@@ -1727,16 +1727,18 @@ async function sendTelegramMessage(botToken: string, chatId: number, text: strin
   return false;
 }
 
-async function answerCallbackQuery(botToken: string, callbackQueryId: string, text?: string, showAlert: boolean = false) {
-  const url = `${TELEGRAM_API}${botToken}/answerCallbackQuery`;
-  await fetch(url, {
+async function answerCallbackQuery(botToken: string, callbackQueryId: string, text?: string, showAlert: boolean = false, url?: string) {
+  const apiUrl = `${TELEGRAM_API}${botToken}/answerCallbackQuery`;
+  const body: any = {
+    callback_query_id: callbackQueryId,
+    show_alert: showAlert
+  };
+  if (text) body.text = text;
+  if (url) body.url = url;
+  await fetch(apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      callback_query_id: callbackQueryId,
-      text,
-      show_alert: showAlert
-    })
+    body: JSON.stringify(body)
   });
 }
 
