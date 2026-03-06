@@ -237,7 +237,13 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
 }
 
 // === PAYMENT METHOD SELECTION HELPER ===
-function buildPaymentMethodKeyboard(qrisCallback: string, danaCallback: string, cancelCallback?: string, amountIDR: number = 0): any {
+function buildPaymentMethodKeyboard(
+  qrisCallback: string,
+  danaCallback: string,
+  cancelCallback?: string,
+  amountIDR: number = 0,
+  starsInvoiceUrl?: string
+): any {
   // Derive Stars callback from QRIS callback (replace _QRIS with _STARS)
   const starsCallback = qrisCallback.replace('_QRIS', '_STARS');
   
@@ -246,12 +252,18 @@ function buildPaymentMethodKeyboard(qrisCallback: string, danaCallback: string, 
     // [{ text: '💙 DANA', callback_data: danaCallback }], // Uncomment jika DANA diaktifkan
   ];
 
-  // Langsung tampilkan konversi harga Stars di tombol jika amountIDR diberikan
+  // Tombol Stars: prioritaskan URL invoice langsung agar popup payment terbuka tanpa langkah tambahan
   if (amountIDR > 0) {
     const starsPrice = calculateStarsPrice(amountIDR);
-    kb.push([{ text: `⭐ Telegram Stars (${starsPrice} ⭐)`, callback_data: starsCallback }]);
+    kb.push([starsInvoiceUrl
+      ? { text: `⭐ Telegram Stars (${starsPrice} ⭐)`, url: starsInvoiceUrl }
+      : { text: `⭐ Telegram Stars (${starsPrice} ⭐)`, callback_data: starsCallback }
+    ]);
   } else {
-    kb.push([{ text: '⭐ Telegram Stars', callback_data: starsCallback }]);
+    kb.push([starsInvoiceUrl
+      ? { text: '⭐ Telegram Stars', url: starsInvoiceUrl }
+      : { text: '⭐ Telegram Stars', callback_data: starsCallback }
+    ]);
   }
 
   if (cancelCallback) kb.push([{ text: '❌ Batalkan', callback_data: cancelCallback }]);
@@ -312,6 +324,7 @@ async function createStarsInvoiceLink(
       console.error('[STARS] createInvoiceLink failed:', JSON.stringify(data));
       return null;
     }
+    console.log(`[STARS] createInvoiceLink success: title="${title}" stars=${starsAmount}`);
     return data.result as string;
   } catch (e) {
     console.error('[STARS] createInvoiceLink error:', e);
@@ -342,7 +355,6 @@ async function processStarsPremiumPayment(
 
   if (invoiceLink) {
     await answerCallbackQuery(botToken, queryId, '', false, invoiceLink);
-    if (message) deleteTelegramMessage(botToken, message.chat.id, message.message_id);
   } else {
     await answerCallbackQuery(botToken, queryId, '❌ Gagal membuat invoice Stars. Coba lagi.');
   }
@@ -368,7 +380,6 @@ async function processStarsTopupPayment(
 
   if (invoiceLink) {
     await answerCallbackQuery(botToken, queryId, '', false, invoiceLink);
-    if (message) deleteTelegramMessage(botToken, message.chat.id, message.message_id);
   } else {
     await answerCallbackQuery(botToken, queryId, '❌ Gagal membuat invoice Stars. Coba lagi.');
   }
@@ -393,7 +404,6 @@ async function processStarsFinePayment(
 
   if (invoiceLink) {
     await answerCallbackQuery(botToken, queryId, '', false, invoiceLink);
-    if (message) deleteTelegramMessage(botToken, message.chat.id, message.message_id);
   } else {
     await answerCallbackQuery(botToken, queryId, '❌ Gagal membuat invoice Stars. Coba lagi.');
   }
@@ -3003,10 +3013,20 @@ Deno.serve(async (req) => {
         if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
         
         const FINE_AMOUNT = 10000; // Pastikan sesuai nominal denda
+        const fineStarsPrice = calculateStarsPrice(FINE_AMOUNT);
+        const fineStarsPayload = JSON.stringify({ t: 'f', u: userId });
+        const fineStarsInvoiceLink = await createStarsInvoiceLink(
+          botToken,
+          'Pembayaran Denda - Buka Blokir',
+          `Denda Rp ${FINE_AMOUNT.toLocaleString('id-ID')}`,
+          fineStarsPayload,
+          fineStarsPrice
+        );
+        console.log(`[STARS] fine payment button mode: ${fineStarsInvoiceLink ? 'url' : 'callback_fallback'}`);
         
         await sendTelegramMessage(botToken, userId,
           `💸 <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard('fine_pay_QRIS', 'fine_pay_DANA', 'cancel_fine', FINE_AMOUNT)
+          buildPaymentMethodKeyboard('fine_pay_QRIS', 'fine_pay_DANA', 'cancel_fine', FINE_AMOUNT, fineStarsInvoiceLink || undefined)
         );
         return new Response('OK', { status: 200 });
       }
@@ -3475,10 +3495,21 @@ Deno.serve(async (req) => {
         // Hapus menu Top Up
         if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
 
+        const topupStarsPrice = calculateStarsPrice(totalPrice);
+        const topupStarsPayload = JSON.stringify({ t: 'tu', a: amount, u: userId });
+        const topupStarsInvoiceLink = await createStarsInvoiceLink(
+          botToken,
+          `Top-up ${amount.toLocaleString('id-ID')} Koin`,
+          `${amount} koin - Rp ${totalPrice.toLocaleString('id-ID')}`,
+          topupStarsPayload,
+          topupStarsPrice
+        );
+        console.log(`[STARS] topup payment button mode: ${topupStarsInvoiceLink ? 'url' : 'callback_fallback'}`);
+
         // Tampilkan pilihan metode pembayaran beserta harga Stars
         await sendTelegramMessage(botToken, userId,
           `💰 <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n💳 Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard(`topup_pay_${amount}_QRIS`, `topup_pay_${amount}_DANA`, 'cancel_topup', totalPrice)
+          buildPaymentMethodKeyboard(`topup_pay_${amount}_QRIS`, `topup_pay_${amount}_DANA`, 'cancel_topup', totalPrice, topupStarsInvoiceLink || undefined)
         );
 
         return new Response('OK', { status: 200 });
@@ -4140,10 +4171,21 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         await answerCallbackQuery(botToken, query.id);
         if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
 
+        const premiumStarsPrice = calculateStarsPrice(config.price);
+        const premiumStarsPayload = JSON.stringify({ t: 'p', k: configKey, u: userId });
+        const premiumStarsInvoiceLink = await createStarsInvoiceLink(
+          botToken,
+          config.label,
+          `Premium ${config.days} hari - Rp ${config.price.toLocaleString('id-ID')}`,
+          premiumStarsPayload,
+          premiumStarsPrice
+        );
+        console.log(`[STARS] premium payment button mode: ${premiumStarsInvoiceLink ? 'url' : 'callback_fallback'} (${configKey})`);
+
         // Tampilkan pilihan metode pembayaran beserta harga Stars
         await sendTelegramMessage(botToken, userId,
           `💎 <b>${config.label}</b>\n\n💰 Harga: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n📅 Durasi: <b>${config.days} hari</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard(`prem_pay_${configKey}_QRIS`, `prem_pay_${configKey}_DANA`, 'cancel_premium', config.price)
+          buildPaymentMethodKeyboard(`prem_pay_${configKey}_QRIS`, `prem_pay_${configKey}_DANA`, 'cancel_premium', config.price, premiumStarsInvoiceLink || undefined)
         );
         return new Response('OK', { status: 200 });
       }
