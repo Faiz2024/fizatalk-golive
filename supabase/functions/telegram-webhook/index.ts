@@ -1861,14 +1861,14 @@ function buildEndChatKeyboard(partnerId: number): any {
   return {
     inline_keyboard: [
       [
+        { text: '🚩 Laporkan', callback_data: `report_user_${partnerId}`},
+        { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
+      ],
+      [
         { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
       ],
       [
         { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${partnerId}` }
-      ],
-      [
-        { text: '🚩 Laporkan', callback_data: `report_user_${partnerId}`},
-        { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
       ]
     ]
   };
