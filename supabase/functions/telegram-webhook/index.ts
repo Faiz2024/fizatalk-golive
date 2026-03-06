@@ -341,8 +341,8 @@ async function processStarsPremiumPayment(
   );
 
   if (invoiceLink) {
-    if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
     await answerCallbackQuery(botToken, queryId, '', false, invoiceLink);
+    if (message) deleteTelegramMessage(botToken, message.chat.id, message.message_id);
   } else {
     await answerCallbackQuery(botToken, queryId, '❌ Gagal membuat invoice Stars. Coba lagi.');
   }
@@ -367,8 +367,8 @@ async function processStarsTopupPayment(
   );
 
   if (invoiceLink) {
-    if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
     await answerCallbackQuery(botToken, queryId, '', false, invoiceLink);
+    if (message) deleteTelegramMessage(botToken, message.chat.id, message.message_id);
   } else {
     await answerCallbackQuery(botToken, queryId, '❌ Gagal membuat invoice Stars. Coba lagi.');
   }
@@ -392,8 +392,8 @@ async function processStarsFinePayment(
   );
 
   if (invoiceLink) {
-    if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
     await answerCallbackQuery(botToken, queryId, '', false, invoiceLink);
+    if (message) deleteTelegramMessage(botToken, message.chat.id, message.message_id);
   } else {
     await answerCallbackQuery(botToken, queryId, '❌ Gagal membuat invoice Stars. Coba lagi.');
   }
