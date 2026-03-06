@@ -3077,7 +3077,7 @@ Deno.serve(async (req) => {
         
         await sendTelegramMessage(botToken, userId,
           `💸 <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard('fine_pay_QRIS', 'fine_pay_DANA', 'cancel_fine', FINE_AMOUNT, fineStarsInvoiceLink || undefined)
+          buildPaymentMethodKeyboard('fine_pay', 'cancel_fine', FINE_AMOUNT, fineStarsInvoiceLink || undefined)
         );
         return new Response('OK', { status: 200 });
       }
@@ -3560,7 +3560,7 @@ Deno.serve(async (req) => {
         // Tampilkan pilihan metode pembayaran beserta harga Stars
         await sendTelegramMessage(botToken, userId,
           `💰 <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n💳 Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard(`topup_pay_${amount}_QRIS`, `topup_pay_${amount}_DANA`, 'cancel_topup', totalPrice, topupStarsInvoiceLink || undefined)
+          buildPaymentMethodKeyboard(`topup_pay_${amount}`, 'cancel_topup', totalPrice, topupStarsInvoiceLink || undefined)
         );
 
         return new Response('OK', { status: 200 });
@@ -4236,7 +4236,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         // Tampilkan pilihan metode pembayaran beserta harga Stars
         await sendTelegramMessage(botToken, userId,
           `💎 <b>${config.label}</b>\n\n💰 Harga: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n📅 Durasi: <b>${config.days} hari</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard(`prem_pay_${configKey}_QRIS`, `prem_pay_${configKey}_DANA`, 'cancel_premium', config.price, premiumStarsInvoiceLink || undefined)
+          buildPaymentMethodKeyboard(`prem_pay_${configKey}`, 'cancel_premium', config.price, premiumStarsInvoiceLink || undefined)
         );
         return new Response('OK', { status: 200 });
       }
