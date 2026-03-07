@@ -272,7 +272,7 @@ function buildPaymentMethodKeyboard(
     ]);
   }
 
-  if (cancelCallback) kb.push([{ text: '❌ Batalkan', callback_data: cancelCallback }]);
+  if (cancelCallback) kb.push([{ text: '⬅️ Kembali', callback_data: cancelCallback }]);
   
   return { inline_keyboard: kb };
 }
@@ -1370,12 +1370,12 @@ async function processSakurupiahTopupPayment(
     // URL ini akan men-trigger deep link otomatis ke aplikasi masing-masing.
     const walletKb = { inline_keyboard: [
       [{ text: `${walletInfo.emoji} Buka Aplikasi ${walletInfo.name}`, url: invoice.checkoutUrl! }],
-      [{ text: '❌ Batalkan', callback_data: 'cancel_premium' }]
+      [{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_topup' }]
     ]};
 
     await sendTelegramMessage(botToken, userId,
-      `💳  <b>${config.label}</b>\n\n` +
-      `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
+      `💰  <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n` +
+      `💳  Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  Klik tombol di bawah untuk membayar langsung via aplikasi <b>${walletInfo.name}</b>\n\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
@@ -1489,12 +1489,12 @@ async function processSakurupiahFinePayment(
     // URL ini akan men-trigger deep link otomatis ke aplikasi masing-masing.
     const walletKb = { inline_keyboard: [
       [{ text: `${walletInfo.emoji} Buka Aplikasi ${walletInfo.name}`, url: invoice.checkoutUrl! }],
-      [{ text: '❌ Batalkan', callback_data: 'cancel_premium' }]
+      [{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_fine' }]
     ]};
 
     await sendTelegramMessage(botToken, userId,
-      `💳  <b>${config.label}</b>\n\n` +
-      `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
+      `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
+      `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  Klik tombol di bawah untuk membayar langsung via aplikasi <b>${walletInfo.name}</b>\n\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
@@ -2979,26 +2979,42 @@ Deno.serve(async (req) => {
               supabase.rpc('cancel_fine_transaction', { p_user_id: userId })
           ]);
 
-          // Hapus pesan QRIS atau pesan Warning
-          if (message) {
-              await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-          }
-
           // Dapatkan state terbaru dari user
           const { data: user } = await supabase.from('telegram_users').select('state').eq('id', userId).single();
-          const newState = user?.state || 'idle';
 
-          // UX Pesan balasan
-          let nextActionText = newState === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Gunakan menu /start untuk memulai kembali.';
-          let keyboard = undefined;
+          // Edit pesan menjadi notifikasi pembatalan
+          if (message) {
+            let editText = `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n`;
+            let editKeyboard: any = undefined;
 
-          // Khusus jika yang dibatalkan adalah denda (UI UX consideration)
-          if (callbackData === 'cancel_fine') {
+            if (callbackData === 'cancel_fine') {
+              editText += 'Akun Anda masih dalam status diblokir.\n\n💰 Bayar denda Rp10.000 untuk membuka blokir.';
+              editKeyboard = { inline_keyboard: [[{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]] };
+            } else {
+              const newState = user?.state || 'idle';
+              editText += newState === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Gunakan menu /start untuk memulai kembali.';
+            }
+
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message.chat.id,
+                message_id: message.message_id,
+                text: editText,
+                parse_mode: 'HTML',
+                reply_markup: editKeyboard
+              })
+            });
+          } else {
+            let nextActionText = (user?.state || 'idle') === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Gunakan menu /start untuk memulai kembali.';
+            let keyboard = undefined;
+            if (callbackData === 'cancel_fine') {
               nextActionText = 'Akun Anda masih dalam status diblokir.\n\n💰 Bayar denda Rp10.000 untuk membuka blokir.';
               keyboard = { inline_keyboard: [[{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]] };
+            }
+            await sendTelegramMessage(botToken, userId, `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n${nextActionText}`, keyboard);
           }
-
-          await sendTelegramMessage(botToken, userId, `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n${nextActionText}`, keyboard);
           return new Response('OK', { status: 200 });
       }
 
@@ -3061,9 +3077,8 @@ Deno.serve(async (req) => {
       // --- LOGIKA BAYAR DENDA (BUKA BLOKIR) - SHOW PAYMENT METHOD ---
       if (callbackData === 'pay_fine') {
         await answerCallbackQuery(botToken, query.id);
-        if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
         
-        const FINE_AMOUNT = 10000; // Pastikan sesuai nominal denda
+        const FINE_AMOUNT = 10000;
         const fineStarsPrice = calculateStarsPrice(FINE_AMOUNT);
         const fineStarsPayload = JSON.stringify({ t: 'f', u: userId });
         const fineStarsInvoiceLink = await createStarsInvoiceLink(
@@ -3075,10 +3090,25 @@ Deno.serve(async (req) => {
         );
         console.log(`[STARS] fine payment button mode: ${fineStarsInvoiceLink ? 'url' : 'callback_fallback'}`);
         
-        await sendTelegramMessage(botToken, userId,
-          `💸 <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard('fine_pay', 'cancel_fine', FINE_AMOUNT, fineStarsInvoiceLink || undefined)
-        );
+        // Edit pesan menjadi pilihan metode pembayaran
+        if (message) {
+          await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: message.chat.id,
+              message_id: message.message_id,
+              text: `💸 <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
+              parse_mode: 'HTML',
+              reply_markup: buildPaymentMethodKeyboard('fine_pay', 'cancel_fine', FINE_AMOUNT, fineStarsInvoiceLink || undefined)
+            })
+          });
+        } else {
+          await sendTelegramMessage(botToken, userId,
+            `💸 <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
+            buildPaymentMethodKeyboard('fine_pay', 'cancel_fine', FINE_AMOUNT, fineStarsInvoiceLink || undefined)
+          );
+        }
         return new Response('OK', { status: 200 });
       }
 
@@ -3543,8 +3573,7 @@ Deno.serve(async (req) => {
         const COIN_PRICE = 10;
         const totalPrice = amount * COIN_PRICE;
 
-        // Hapus menu Top Up
-        if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+        // Edit menu Top Up menjadi pilihan metode pembayaran (tidak hapus pesan)
 
         const topupStarsPrice = calculateStarsPrice(totalPrice);
         const topupStarsPayload = JSON.stringify({ t: 'tu', a: amount, u: userId });
@@ -3557,11 +3586,25 @@ Deno.serve(async (req) => {
         );
         console.log(`[STARS] topup payment button mode: ${topupStarsInvoiceLink ? 'url' : 'callback_fallback'}`);
 
-        // Tampilkan pilihan metode pembayaran beserta harga Stars
-        await sendTelegramMessage(botToken, userId,
-          `💰 <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n💳 Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard(`topup_pay_${amount}`, 'cancel_topup', totalPrice, topupStarsInvoiceLink || undefined)
-        );
+        // Edit pesan menjadi pilihan metode pembayaran
+        if (message) {
+          await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: message.chat.id,
+              message_id: message.message_id,
+              text: `💰 <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n💳 Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
+              parse_mode: 'HTML',
+              reply_markup: buildPaymentMethodKeyboard(`topup_pay_${amount}`, 'cancel_topup', totalPrice, topupStarsInvoiceLink || undefined)
+            })
+          });
+        } else {
+          await sendTelegramMessage(botToken, userId,
+            `💰 <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n💳 Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
+            buildPaymentMethodKeyboard(`topup_pay_${amount}`, 'cancel_topup', totalPrice, topupStarsInvoiceLink || undefined)
+          );
+        }
 
         return new Response('OK', { status: 200 });
       }
@@ -4220,7 +4263,6 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         }
 
         await answerCallbackQuery(botToken, query.id);
-        if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
 
         const premiumStarsPrice = calculateStarsPrice(config.price);
         const premiumStarsPayload = JSON.stringify({ t: 'p', k: configKey, u: userId });
@@ -4233,11 +4275,25 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         );
         console.log(`[STARS] premium payment button mode: ${premiumStarsInvoiceLink ? 'url' : 'callback_fallback'} (${configKey})`);
 
-        // Tampilkan pilihan metode pembayaran beserta harga Stars
-        await sendTelegramMessage(botToken, userId,
-          `💎 <b>${config.label}</b>\n\n💰 Harga: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n📅 Durasi: <b>${config.days} hari</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard(`prem_pay_${configKey}`, 'cancel_premium', config.price, premiumStarsInvoiceLink || undefined)
-        );
+        // Edit pesan menjadi pilihan metode pembayaran
+        if (message) {
+          await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: message.chat.id,
+              message_id: message.message_id,
+              text: `💎 <b>${config.label}</b>\n\n💰 Harga: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n📅 Durasi: <b>${config.days} hari</b>\n\nPilih metode pembayaran:`,
+              parse_mode: 'HTML',
+              reply_markup: buildPaymentMethodKeyboard(`prem_pay_${configKey}`, 'cancel_premium', config.price, premiumStarsInvoiceLink || undefined)
+            })
+          });
+        } else {
+          await sendTelegramMessage(botToken, userId,
+            `💎 <b>${config.label}</b>\n\n💰 Harga: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n📅 Durasi: <b>${config.days} hari</b>\n\nPilih metode pembayaran:`,
+            buildPaymentMethodKeyboard(`prem_pay_${configKey}`, 'cancel_premium', config.price, premiumStarsInvoiceLink || undefined)
+          );
+        }
         return new Response('OK', { status: 200 });
       }
 
