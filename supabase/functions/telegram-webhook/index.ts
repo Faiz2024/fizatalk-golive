@@ -253,11 +253,11 @@ function buildPaymentMethodKeyboard(
     [
       { text: '💙 DANA', callback_data: `${baseCallback}_DANA` },
       { text: '🟢 GoPay', callback_data: `${baseCallback}_GOPAY` }
-    ],
-    [
-      { text: '🟠 ShopeePay', callback_data: `${baseCallback}_SHOPEEPAY` },
-      { text: '💜 OVO', callback_data: `${baseCallback}_OVO` }
     ]
+    // [
+    //   { text: '🟠 ShopeePay', callback_data: `${baseCallback}_SHOPEEPAY` },
+    //   { text: '💜 OVO', callback_data: `${baseCallback}_OVO` }
+    // ]
   ];
 
   // Tombol Stars
