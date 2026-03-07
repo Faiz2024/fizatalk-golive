@@ -2979,6 +2979,9 @@ Deno.serve(async (req) => {
               supabase.rpc('cancel_fine_transaction', { p_user_id: userId })
           ]);
 
+          // Dapatkan state terbaru dari user
+          const { data: user } = await supabase.from('telegram_users').select('state').eq('id', userId).single();
+
           // Edit pesan menjadi notifikasi pembatalan
           if (message) {
             let editText = `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n`;
