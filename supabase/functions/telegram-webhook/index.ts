@@ -2979,26 +2979,39 @@ Deno.serve(async (req) => {
               supabase.rpc('cancel_fine_transaction', { p_user_id: userId })
           ]);
 
-          // Hapus pesan QRIS atau pesan Warning
+          // Edit pesan menjadi notifikasi pembatalan
           if (message) {
-              await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-          }
+            let editText = `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n`;
+            let editKeyboard: any = undefined;
 
-          // Dapatkan state terbaru dari user
-          const { data: user } = await supabase.from('telegram_users').select('state').eq('id', userId).single();
-          const newState = user?.state || 'idle';
+            if (callbackData === 'cancel_fine') {
+              editText += 'Akun Anda masih dalam status diblokir.\n\n💰 Bayar denda Rp10.000 untuk membuka blokir.';
+              editKeyboard = { inline_keyboard: [[{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]] };
+            } else {
+              const newState = user?.state || 'idle';
+              editText += newState === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Gunakan menu /start untuk memulai kembali.';
+            }
 
-          // UX Pesan balasan
-          let nextActionText = newState === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Gunakan menu /start untuk memulai kembali.';
-          let keyboard = undefined;
-
-          // Khusus jika yang dibatalkan adalah denda (UI UX consideration)
-          if (callbackData === 'cancel_fine') {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message.chat.id,
+                message_id: message.message_id,
+                text: editText,
+                parse_mode: 'HTML',
+                reply_markup: editKeyboard
+              })
+            });
+          } else {
+            let nextActionText = (user?.state || 'idle') === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Gunakan menu /start untuk memulai kembali.';
+            let keyboard = undefined;
+            if (callbackData === 'cancel_fine') {
               nextActionText = 'Akun Anda masih dalam status diblokir.\n\n💰 Bayar denda Rp10.000 untuk membuka blokir.';
               keyboard = { inline_keyboard: [[{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]] };
+            }
+            await sendTelegramMessage(botToken, userId, `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n${nextActionText}`, keyboard);
           }
-
-          await sendTelegramMessage(botToken, userId, `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n${nextActionText}`, keyboard);
           return new Response('OK', { status: 200 });
       }
 
