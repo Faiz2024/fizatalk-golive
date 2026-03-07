@@ -1489,12 +1489,12 @@ async function processSakurupiahFinePayment(
     // URL ini akan men-trigger deep link otomatis ke aplikasi masing-masing.
     const walletKb = { inline_keyboard: [
       [{ text: `${walletInfo.emoji} Buka Aplikasi ${walletInfo.name}`, url: invoice.checkoutUrl! }],
-      [{ text: '❌ Batalkan', callback_data: 'cancel_premium' }]
+      [{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_fine' }]
     ]};
 
     await sendTelegramMessage(botToken, userId,
-      `💳  <b>${config.label}</b>\n\n` +
-      `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
+      `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
+      `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  Klik tombol di bawah untuk membayar langsung via aplikasi <b>${walletInfo.name}</b>\n\n` +
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
