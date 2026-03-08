@@ -3004,7 +3004,7 @@ Deno.serve(async (req) => {
 
           // 2. Eksekusi Pengubahan UI
           if (message) {
-              if (message.photo) {
+              if ((message as any).photo) {
                   // Fallback: Jika UI sebelumnya adalah QRIS (Foto), API Telegram tidak bisa mengedit tipe pesannya menjadi teks.
                   // Terpaksa gunakan Delete -> Send
                   await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
