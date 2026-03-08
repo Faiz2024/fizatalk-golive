@@ -642,8 +642,7 @@ async function processSakurupiahPremiumPayment(
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  <b>CARA BAYAR:</b>\n\n` +
       `1️⃣  Screenshot QR di atas\n` +
-      `2️⃣  Buka e-wallet favorit kamu\n` +
-      `      (GoPay/OVO/DANA/ShopeePay)\n` +
+      `2️⃣  Buka E-Wallet/M-Banking favorit kamu\n` +
       `3️⃣  Pilih Scan QR / Bayar dari Galeri\n` +
       `4️⃣  Konfirmasi pembayaran\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
@@ -1320,8 +1319,7 @@ async function processSakurupiahTopupPayment(
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  <b>CARA BAYAR:</b>\n\n` +
       `1️⃣  Screenshot QR di atas\n` +
-      `2️⃣  Buka e-wallet favorit kamu\n` +
-      `      (GoPay/OVO/DANA/ShopeePay)\n` +
+      `2️⃣  Buka E-Wallet/M-Banking favorit kamu\n` +
       `3️⃣  Pilih Scan QR / Bayar dari Galeri\n` +
       `4️⃣  Konfirmasi pembayaran\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
@@ -1441,8 +1439,7 @@ async function processSakurupiahFinePayment(
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  <b>CARA BAYAR:</b>\n\n` +
       `1️⃣  Screenshot QR di atas\n` +
-      `2️⃣  Buka e-wallet favorit kamu\n` +
-      `      (GoPay/OVO/DANA/ShopeePay)\n` +
+      `2️⃣  Buka E-Wallet/M-Banking favorit kamu\n` +
       `3️⃣  Pilih Scan QR / Bayar dari Galeri\n` +
       `4️⃣  Konfirmasi pembayaran\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
