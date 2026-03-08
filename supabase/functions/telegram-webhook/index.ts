@@ -274,8 +274,7 @@ function buildPaymentMethodKeyboard(
     ]);
   }
 
-  if (cancelCallback) kb.push([{ text: '❌ Batalkan', callback_data: cancelCallback }]);
-  
+  if (cancelCallback) kb.push([{ text: '🔙 Kembali', callback_data: cancelCallback }]);  
   return { inline_keyboard: kb };
 }
 
@@ -635,8 +634,7 @@ async function processSakurupiahPremiumPayment(
   await supabase.from('premium_requests')
     .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', premReq.id);
 
-  const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_premium' }]] };
-
+  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: 'cancel_premium' }]] };
   if (method === 'QRIS' && invoice.qrString) {
       const qrUrl = invoice.qrString;
       const caption = `💳  <b>${config.label}</b>\n\n` +
@@ -703,8 +701,7 @@ async function processSakurupiahPremiumPayment(
     if (invoice.paymentNo && invoice.checkoutUrl) {
       walletButtons.push([{ text: '🔗 Buka Web Invoice (Alternatif)', url: invoice.checkoutUrl }]);
     }
-    walletButtons.push([{ text: '❌ Batalkan', callback_data: 'cancel_premium' }]);
-
+    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_premium' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
     const walletKb = { inline_keyboard: walletButtons };
 
     await sendTelegramMessage(botToken, userId,
@@ -1328,7 +1325,7 @@ async function processSakurupiahTopupPayment(
   await supabase.from('topup_requests')
     .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', topupReq.id);
 
-  const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_topup' }]] };
+  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: 'cancel_topup' }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
       const qrUrl = invoice.qrString;
@@ -1381,8 +1378,7 @@ async function processSakurupiahTopupPayment(
     if (invoice.paymentNo && invoice.checkoutUrl) {
       walletButtons.push([{ text: '🔗 Buka Web Invoice (Alternatif)', url: invoice.checkoutUrl }]);
     }
-    walletButtons.push([{ text: '❌ Batalkan', callback_data: 'cancel_topup' }]);
-
+    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_topup' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
     const walletKb = { inline_keyboard: walletButtons };
 
     await sendTelegramMessage(botToken, userId,
@@ -1452,7 +1448,7 @@ async function processSakurupiahFinePayment(
   await supabase.from('pending_transactions')
     .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', fineReq.id);
 
-  const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan', callback_data: 'cancel_fine' }]] };
+  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: 'cancel_fine' }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
       const qrUrl = invoice.qrString;
@@ -1503,8 +1499,7 @@ async function processSakurupiahFinePayment(
     if (invoice.paymentNo && invoice.checkoutUrl) {
       walletButtons.push([{ text: '🔗 Buka Web Invoice (Alternatif)', url: invoice.checkoutUrl }]);
     }
-    walletButtons.push([{ text: '❌ Batalkan', callback_data: 'cancel_fine' }]);
-
+    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_fine' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
     const walletKb = { inline_keyboard: walletButtons };
 
     await sendTelegramMessage(botToken, userId,
@@ -2985,39 +2980,69 @@ Deno.serve(async (req) => {
       // ============================================
       // (awaiting_payment check DIHAPUS - pembayaran otomatis via callback)
 
-      // --- LOGIKA PEMBATALAN SEMUA TRANSAKSI (UNIFIED) ---
+      // --- LOGIKA PEMBATALAN SEMUA TRANSAKSI (UNIFIED & OPTIMIZED) ---
       const paymentAllowedCallbacks = ['cancel_topup', 'cancel_premium', 'cancel_fine'];
       if (paymentAllowedCallbacks.includes(callbackData)) {
-          await answerCallbackQuery(botToken, query.id, '🚫 Membatalkan transaksi...');
+          await answerCallbackQuery(botToken, query.id, '🔄 Kembali ke menu...');
 
-          // Eksekusi semua RPC pembatalan secara paralel (Sangat cepat & hemat biaya cloud)
-          // Hanya RPC dari transaksi yang nyangkut yang akan mengubah database.
+          // Eksekusi RPC pembatalan secara paralel (Cepat & hemat)
           await Promise.all([
               supabase.rpc('cancel_topup_transaction', { p_user_id: userId }),
               supabase.rpc('cancel_premium_transaction', { p_user_id: userId }),
               supabase.rpc('cancel_fine_transaction', { p_user_id: userId })
-          ]);
+          ]).catch(e => console.error('[CANCEL ERROR]', e));
 
-          // Hapus pesan QRIS atau pesan Warning
+          // 1. Tentukan Pesan & Keyboard tujuan (Back Navigation)
+          let backText = '';
+          let backKeyboard: any = undefined;
+
+          if (callbackData === 'cancel_topup') {
+              const { data: userData } = await supabase.from('telegram_users').select('coins').eq('id', userId).single();
+              const balance = userData?.coins || 0;
+              backText = `➕ <b>Top Up Saldo Koin</b>\n\n💰 Saldo saat ini: <b>${balance} koin</b>\n\nSilakan pilih nominal top up (100 koin = Rp 1.000):`;
+              backKeyboard = buildTopupKeyboard();
+              
+          } else if (callbackData === 'cancel_premium') {
+              // Kembali ke penawaran premium
+              backText = `💎 <b>Upgrade ke Premium</b>\n\n✨ <b>KEUNTUNGAN PREMIUM:</b>\n• 🎯 Pilih target gender chat\n• 📍 Pilih target lokasi chat\n• ⭐ Badge Premium\n• 🚀 Prioritas matching\n\n💰 <b>HARGA PREMIUM:</b>\n📦 <b>1 MINGGU:</b> Rp 25.000\n📦 <b>1 BULAN:</b> Rp 60.000\n\nPilih paket di bawah ini:`;
+              backKeyboard = buildPremiumNormalKeyboard();
+              
+          } else if (callbackData === 'cancel_fine') {
+              // Kembali ke halaman peringatan blokir
+              backText = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ Akses chat Anda dinonaktifkan karena pelanggaran.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ <b>Bayar Denda Pelanggaran</b>\nBayar denda sebesar <b>Rp 10.000</b>.`;
+              backKeyboard = { inline_keyboard: [[{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }]] };
+          }
+
+          // 2. Eksekusi Pengubahan UI
           if (message) {
-              await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+              if (message.photo) {
+                  // Fallback: Jika UI sebelumnya adalah QRIS (Foto), API Telegram tidak bisa mengedit tipe pesannya menjadi teks.
+                  // Terpaksa gunakan Delete -> Send
+                  await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+                  await sendTelegramMessage(botToken, userId, backText, backKeyboard);
+              } else {
+                  // Mode Hemat Biaya & Fast UI: Edit teks langsung
+                  try {
+                      await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                              chat_id: message.chat.id,
+                              message_id: message.message_id,
+                              text: backText,
+                              parse_mode: 'HTML',
+                              reply_markup: backKeyboard
+                          })
+                      });
+                  } catch (e) {
+                      console.error('[EDIT UI ERROR]', e);
+                  }
+              }
+          } else {
+              // Fallback jika objek message hilang
+              await sendTelegramMessage(botToken, userId, backText, backKeyboard);
           }
 
-          // Dapatkan state terbaru dari user
-          const { data: user } = await supabase.from('telegram_users').select('state').eq('id', userId).single();
-          const newState = user?.state || 'idle';
-
-          // UX Pesan balasan
-          let nextActionText = newState === 'chatting' ? 'Anda dapat melanjutkan chat Anda.' : 'Gunakan menu /start untuk memulai kembali.';
-          let keyboard = undefined;
-
-          // Khusus jika yang dibatalkan adalah denda (UI UX consideration)
-          if (callbackData === 'cancel_fine') {
-              nextActionText = 'Akun Anda masih dalam status diblokir.\n\n💰 Bayar denda Rp10.000 untuk membuka blokir.';
-              keyboard = { inline_keyboard: [[{ text: '💰 Bayar Denda Rp10.000', callback_data: 'pay_fine' }]] };
-          }
-
-          await sendTelegramMessage(botToken, userId, `🚫 <b>TRANSAKSI DIBATALKAN</b>\n\n${nextActionText}`, keyboard);
           return new Response('OK', { status: 200 });
       }
 
