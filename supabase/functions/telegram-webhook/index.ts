@@ -694,13 +694,10 @@ async function processSakurupiahPremiumPayment(
     const payUrl = invoice.paymentNo || invoice.checkoutUrl!;
     
     const walletButtons: any[][] = [
-      [{ text: `${walletInfo.emoji} Buka Aplikasi ${walletInfo.name}`, url: payUrl }]
+      [{ text: `${walletInfo.emoji} Bayar via ${walletInfo.name}`, url: payUrl }]
     ];
     
-    // Tambahkan tombol fallback invoice web jika paymentNo tersedia
-    if (invoice.paymentNo && invoice.checkoutUrl) {
-      walletButtons.push([{ text: '🔗 Buka Web Invoice (Alternatif)', url: invoice.checkoutUrl }]);
-    }
+
     walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_premium' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
     const walletKb = { inline_keyboard: walletButtons };
 
@@ -1361,12 +1358,10 @@ async function processSakurupiahTopupPayment(
     const payUrl = invoice.paymentNo || invoice.checkoutUrl!;
     
     const walletButtons: any[][] = [
-      [{ text: `${walletInfo.emoji} Buka Aplikasi ${walletInfo.name}`, url: payUrl }]
+      [{ text: `${walletInfo.emoji} Bayar via ${walletInfo.name}`, url: payUrl }]
     ];
     
-    if (invoice.paymentNo && invoice.checkoutUrl) {
-      walletButtons.push([{ text: '🔗 Buka Web Invoice (Alternatif)', url: invoice.checkoutUrl }]);
-    }
+
     walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_topup' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
     const walletKb = { inline_keyboard: walletButtons };
 
@@ -1482,12 +1477,9 @@ async function processSakurupiahFinePayment(
     const payUrl = invoice.paymentNo || invoice.checkoutUrl!;
     
     const walletButtons: any[][] = [
-      [{ text: `${walletInfo.emoji} Buka Aplikasi ${walletInfo.name}`, url: payUrl }]
+      [{ text: `${walletInfo.emoji} Bayar via ${walletInfo.name}`, url: payUrl }]
     ];
     
-    if (invoice.paymentNo && invoice.checkoutUrl) {
-      walletButtons.push([{ text: '🔗 Buka Web Invoice (Alternatif)', url: invoice.checkoutUrl }]);
-    }
     walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_fine' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
     const walletKb = { inline_keyboard: walletButtons };
 
