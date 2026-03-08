@@ -697,6 +697,9 @@ async function processSakurupiahPremiumPayment(
     ];
     
 
+    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_premium' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
+    const walletKb = { inline_keyboard: walletButtons };
+
     await sendTelegramMessage(botToken, userId,
       `💳  <b>${config.label}</b>\n\n` +
       `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
@@ -1355,6 +1358,10 @@ async function processSakurupiahTopupPayment(
     const walletButtons: any[][] = [
       [{ text: `${walletInfo.emoji} Bayar via ${walletInfo.name}`, url: payUrl }]
     ];
+    
+
+    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_topup' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
+    const walletKb = { inline_keyboard: walletButtons };
 
     await sendTelegramMessage(botToken, userId,
       `💰  <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n` +
@@ -1470,6 +1477,9 @@ async function processSakurupiahFinePayment(
       [{ text: `${walletInfo.emoji} Bayar via ${walletInfo.name}`, url: payUrl }]
     ];
     
+    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_fine' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
+    const walletKb = { inline_keyboard: walletButtons };
+
     await sendTelegramMessage(botToken, userId,
       `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
       `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
