@@ -712,6 +712,13 @@ async function processSakurupiahPremiumPayment(
       `⏰  Batas waktu: <b>60 menit</b>`,
       walletKb);
   }
+  // Notify admin (Pembayaran Premium)
+  const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+  if (csChatId) {
+    await sendTelegramMessage(botToken, parseInt(csChatId),
+      `💎 <b>PEMBAYARAN PREMIUM DIMULAI</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n📦 Paket: ${config.label}\n💵 Total: Rp ${config.price.toLocaleString('id-ID')}\n📱 Via: ${method}\n\n⏳ Menunggu pembayaran (auto-verify)...`
+    );
+  }
 }
 
 // HELPER: Get bot setting from database
@@ -1374,6 +1381,13 @@ async function processSakurupiahTopupPayment(
       `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
       `⏰  Batas waktu: <b>60 menit</b>`,
       walletKb);
+  }
+  // Notify admin (Pembayaran Top Up)
+  const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+  if (csChatId) {
+    await sendTelegramMessage(botToken, parseInt(csChatId),
+      `💰 <b>PEMBAYARAN TOP-UP DIMULAI</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n🪙 Nominal: ${amount.toLocaleString('id-ID')} Koin\n💵 Total: Rp ${totalPrice.toLocaleString('id-ID')}\n📱 Via: ${method}\n\n⏳ Menunggu pembayaran (auto-verify)...`
+    );
   }
 }
 
