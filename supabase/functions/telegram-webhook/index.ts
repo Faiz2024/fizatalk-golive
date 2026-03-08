@@ -1258,17 +1258,6 @@ function getMessageByGender(gender: string | null) {
   }
 }
 
-// HELPER: Kirim peringatan user sedang dalam pembayaran (LEGACY - kept for compatibility)
-async function sendAwaitingPaymentWarning(botToken: string, userId: number) {
-  const text = `⚠️ <b>Kamu punya transaksi pending!</b>\n\nSelesaikan pembayaran atau tunggu hingga expired.\n\nJika ingin membatalkan transaksi, klik tombol di bawah.`;
-  const keyboard = {
-      inline_keyboard: [
-          [{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_all_payment' }]
-      ]
-  };
-  await sendTelegramMessage(botToken, userId, text, keyboard);
-}
-
 // === SAKURUPIAH TOPUP PAYMENT HELPER ===
 async function processSakurupiahTopupPayment(
   supabase: any, botToken: string, userId: number,
