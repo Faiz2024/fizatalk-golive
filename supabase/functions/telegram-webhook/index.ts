@@ -1940,6 +1940,7 @@ function buildEndChatKeyboard(partnerId: number): any {
     inline_keyboard: [
       [
         { text: '🚩 Laporkan', callback_data: `report_user_${partnerId}`},
+        { text: '👍 Baik', callback_data: `rate_baik_${partnerId}` },
         { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
       ],
       [
@@ -2078,6 +2079,7 @@ const BUTTON_COOLDOWNS: Record<string, number> = {
   'fine_pay': 4000,          // 4 detik - proses bayar denda
   'report_user': 3000,       // 3 detik - lapor user
   'rate_asik': 3000,         // 3 detik - rate asik
+  'rate_baik': 3000,         // 3 detik - rate baik
   'reconnect': 4000,         // 4 detik - reconnect partner
   'pay_fine': 4000,          // 4 detik - bayar denda (show menu)
   'cancel_topup': 2000,      // 2 detik - cancel topup
@@ -2142,6 +2144,7 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('fine_pay_')) return 'fine_pay';
   if (callbackData.startsWith('report_user_')) return 'report_user';
   if (callbackData.startsWith('rate_asik_')) return 'rate_asik';
+  if (callbackData.startsWith('rate_baik_')) return 'rate_baik';
   if (callbackData.startsWith('reconnect_')) return 'reconnect';
   if (callbackData === 'pay_fine') return 'pay_fine';
   if (callbackData === 'cancel_topup') return 'cancel_topup';
@@ -2344,6 +2347,7 @@ async function handleComprehensiveSearchResult(
       inline_keyboard: [
         [
           { text: '🚩 Laporkan', callback_data: `report_user_${result.old_partner_id}` },
+          { text: '👍 Baik', callback_data: `rate_baik_${result.old_partner_id}` },
           { text: '😎 Asik', callback_data: `rate_asik_${result.old_partner_id}` }
         ]
       ]
@@ -4121,6 +4125,9 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         } else if (rateType === 'sange') {
           ratingEmoji = '🔞';
           ratingLabel = 'Sange';
+        } else if (rateType === 'baik') {
+          ratingEmoji = '👍';
+          ratingLabel = 'Baik';
         } else if (rateType === 'asik') {
           ratingEmoji = '😎';
           ratingLabel = 'Asik';
@@ -4143,7 +4150,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
 
           // Tentukan pesan berdasarkan jenis rating
           let thanksText = "";
-          if (rateType === 'asik') {
+          if (rateType === 'asik' || rateType === 'baik') {
              thanksText = `✅ <b>Terima Kasih!</b>\n\nKamu memberi rating <b>${ratingEmoji} ${ratingLabel}</b> ke partner ini. Semoga partner selanjutnya juga asik ya!`;
           } else {
              thanksText = `✅ <b>Laporan Diterima</b>\n\nTerima kasih atas laporan <b>${ratingEmoji} ${ratingLabel}</b> Anda. Kami akan meninjau akun tersebut.`;
