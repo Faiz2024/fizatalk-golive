@@ -634,7 +634,10 @@ async function processSakurupiahPremiumPayment(
   await supabase.from('premium_requests')
     .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', premReq.id);
 
-  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: 'cancel_premium' }]] };
+  // Mencari callback_data original yang memicu menu payment method (misal: buy_premium_30)
+  const origCallback = Object.keys(BUY_PREMIUM_MAP).find(k => BUY_PREMIUM_MAP[k] === configKey) || 'cancel_premium';
+  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: origCallback }]] };
+    
   if (method === 'QRIS' && invoice.qrString) {
       const qrUrl = invoice.qrString;
       const caption = `💳  <b>${config.label}</b>\n\n` +
@@ -697,7 +700,7 @@ async function processSakurupiahPremiumPayment(
     ];
     
 
-    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_premium' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
+    walletButtons.push([{ text: '🔙 Kembali', callback_data: origCallback }]);
     const walletKb = { inline_keyboard: walletButtons };
 
     await sendTelegramMessage(botToken, userId,
@@ -1310,7 +1313,7 @@ async function processSakurupiahTopupPayment(
   await supabase.from('topup_requests')
     .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', topupReq.id);
 
-  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: 'cancel_topup' }]] };
+  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: `init_topup_${amount}` }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
       const qrUrl = invoice.qrString;
@@ -1360,7 +1363,7 @@ async function processSakurupiahTopupPayment(
     ];
     
 
-    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_topup' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
+    walletButtons.push([{ text: '🔙 Kembali', callback_data: `init_topup_${amount}` }]);
     const walletKb = { inline_keyboard: walletButtons };
 
     await sendTelegramMessage(botToken, userId,
@@ -1430,7 +1433,7 @@ async function processSakurupiahFinePayment(
   await supabase.from('pending_transactions')
     .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', fineReq.id);
 
-  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: 'cancel_fine' }]] };
+  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: 'pay_fine' }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
       const qrUrl = invoice.qrString;
@@ -1477,7 +1480,7 @@ async function processSakurupiahFinePayment(
       [{ text: `${walletInfo.emoji} Bayar via ${walletInfo.name}`, url: payUrl }]
     ];
     
-    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'cancel_fine' }]); // Sesuaikan 'cancel_topup' / 'cancel_fine' di fungsinya masing-masing
+    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'pay_fine' }]);
     const walletKb = { inline_keyboard: walletButtons };
 
     await sendTelegramMessage(botToken, userId,
