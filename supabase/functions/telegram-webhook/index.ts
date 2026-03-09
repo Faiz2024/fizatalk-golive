@@ -4783,6 +4783,14 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
               return new Response('OK', { status: 200 }); 
           }
         }
+
+        // === DETEKSI SPAM UNTUK SEMUA JENIS PESAN ===
+        let spamMarkup = undefined;
+        if (hasSpamEntities(message)) {
+            spamMarkup = {
+                inline_keyboard: [[ { text: '🚩 Laporkan spam', callback_data: `reportspam_${userId}` } ]]
+            };
+        }
        
         
 
@@ -4801,10 +4809,10 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                 if (isReply) {
                     // Gabungkan Quote + Pesan Baru
                     const finalMessage = `${visualQuote}${text}`;
-                    await sendTelegramMessage(botToken, partnerId, finalMessage);
+                    await sendTelegramMessage(botToken, partnerId, finalMessage, spamMarkup);
                 } else {
                     // Copy message biasa
-                    await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
+                    await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
                 }
             } 
             // B. Jika USER MENGIRIM STICKER (Handling Khusus)
