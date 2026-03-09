@@ -3158,16 +3158,16 @@ Deno.serve(async (req) => {
         const spammerId = parseInt(callbackData.split('_')[1]);
         const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
         
-        await answerCallbackQuery(botToken, callbackQuery.id, 'Laporan diteruskan ke Admin. Terima kasih!', true);
+        await answerCallbackQuery(botToken, query.id, 'Laporan diteruskan ke Admin. Terima kasih!', true);
         
         // Hapus tombol spam dari pesan agar partner tidak double-klik
-        if (callbackQuery.message) {
+        if (message) {
             await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    chat_id: chatId,
-                    message_id: callbackQuery.message.message_id,
+                    chat_id: userId,
+                    message_id: message.message_id,
                     reply_markup: { inline_keyboard: [] }
                 })
             });
@@ -3186,9 +3186,8 @@ Deno.serve(async (req) => {
             };
             await sendTelegramMessage(botToken, parseInt(adminChatId), adminMsg, adminKb);
             
-            if (callbackQuery.message) {
-              // Teruskan bukti otentik pesan ke admin secara aman
-              await copyTelegramMessage(botToken, parseInt(adminChatId), chatId, callbackQuery.message.message_id);
+            if (message) {
+              await copyTelegramMessage(botToken, parseInt(adminChatId), userId, message.message_id);
             }
         }
         return new Response('OK');
@@ -3197,16 +3196,16 @@ Deno.serve(async (req) => {
       // Eksekusi Peringatan
       if (callbackData.startsWith('admin_warn_')) {
         const targetId = parseInt(callbackData.split('_')[2]);
-        await handleAdminSpamAction(supabase, botToken, targetId, 'warn', callbackQuery.message, chatId);
-        await answerCallbackQuery(botToken, callbackQuery.id, 'Peringatan berhasil diberikan.');
+        await handleAdminSpamAction(supabase, botToken, targetId, 'warn', message, userId);
+        await answerCallbackQuery(botToken, query.id, 'Peringatan berhasil diberikan.');
         return new Response('OK');
       }
 
       // Eksekusi Blokir
       if (callbackData.startsWith('admin_block_')) {
         const targetId = parseInt(callbackData.split('_')[2]);
-        await handleAdminSpamAction(supabase, botToken, targetId, 'block', callbackQuery.message, chatId);
-        await answerCallbackQuery(botToken, callbackQuery.id, 'User telah diblokir.');
+        await handleAdminSpamAction(supabase, botToken, targetId, 'block', message, userId);
+        await answerCallbackQuery(botToken, query.id, 'User telah diblokir.');
         return new Response('OK');
       }
 
