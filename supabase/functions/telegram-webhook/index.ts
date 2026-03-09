@@ -37,6 +37,8 @@ interface TelegramMessage {
   reply_to_message?: TelegramMessage; // Untuk fitur reply
   successful_payment?: SuccessfulPayment; // Telegram Stars payment
   // Tambahkan tipe media lain jika diperlukan
+  entities?: Array<{ type: string; offset: number; length: number; url?: string }>;
+  caption_entities?: Array<{ type: string; offset: number; length: number; url?: string }>;
 }
 
 interface TelegramReaction {
@@ -1774,6 +1776,110 @@ function getReplyPreview(replyMsg: any, currentUserId: number): string {
   return `<blockquote><b>${senderName}:</b>\n${previewText}</blockquote>\n`;
 }
 
+// Helper untuk mendeteksi pesan yang bisa di-klik (link, mention, command)
+function hasSpamEntities(message: TelegramMessage): boolean {
+  const entities = message.entities || message.caption_entities || [];
+  for (const ent of entities) {
+    if (['url', 'text_link', 'mention', 'bot_command'].includes(ent.type)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Helper untuk aksi eksekusi pemblokiran & peringatan oleh Admin
+async function handleAdminSpamAction(supabase: any, botToken: string, targetId: number, action: 'warn' | 'block', adminMsg: any, adminChatId: number) {
+    const { data: user } = await supabase.from('telegram_users')
+        .select('premium_until, spam_warnings, spam_warning_until, penalty_points')
+        .eq('id', targetId).single();
+        
+    if (!user) return;
+    
+    const isPremium = user.premium_until && new Date(user.premium_until) > new Date();
+    let warnings = user.spam_warnings || 0;
+    const warningUntil = user.spam_warning_until ? new Date(user.spam_warning_until) : null;
+    
+    // Reset peringatan jika sudah melewati masa 30 hari
+    if (warningUntil && new Date() > warningUntil) {
+        warnings = 0;
+    }
+    
+    // Tetapkan logika penambahan point & status
+    if (action === 'warn') {
+        warnings += 1;
+    } else {
+        warnings = 4; // Auto-Trigger block max
+    }
+    
+    const newWarningDate = new Date();
+    newWarningDate.setDate(newWarningDate.getDate() + 30); // Reset timer 30 hari
+    
+    if (warnings >= 4) {
+        // ----- LOGIKA MENCAPAI 4 PERINGATAN (BLOKIR) -----
+        if (isPremium) {
+            const blockedUntil = new Date();
+            blockedUntil.setDate(blockedUntil.getDate() + 1); // Blokir 1 hari (temp)
+            await supabase.from('telegram_users').update({ 
+                spam_warnings: warnings, 
+                spam_warning_until: newWarningDate.toISOString(),
+                penalty_points: 100, 
+                blocked_until: blockedUntil.toISOString()
+            }).eq('id', targetId);
+            
+            await sendTelegramMessage(botToken, targetId, `⏳ <b>AKUN DIBATASI SEMENTARA</b>\n\nAnda mencapai batas peringatan (4/4). Akun diistirahatkan sementara.`);
+        } else {
+            await supabase.from('telegram_users').update({ 
+                spam_warnings: warnings, 
+                spam_warning_until: newWarningDate.toISOString(),
+                penalty_points: 100
+            }).eq('id', targetId);
+            
+            await supabase.from('blocked_users').upsert({
+                user_id: targetId,
+                reason: 'spam_block',
+                blocked_message: 'Akun diblokir karena melakukan spam link / pelanggaran keras.',
+                is_active: true
+            });
+            
+            // Gunakan UI Blokir Existing
+            const blockedKeyboard = {
+              inline_keyboard: [
+                [{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }],
+                [{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_normal_7' }]
+              ]
+            };
+            const blockedMsg = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ <b>Alasan:</b> Anda telah mencapai batas peringatan SPAM (4/4). Demi kenyamanan, akses chat Anda <b>dinonaktifkan</b>.\n\nPilih opsi di bawah untuk memulihkan akun:`;
+            await sendTelegramMessage(botToken, targetId, blockedMsg, blockedKeyboard);
+        }
+    } else {
+        // ----- LOGIKA HANYA PERINGATAN (1/4 - 3/4) -----
+        await supabase.from('telegram_users').update({ 
+            spam_warnings: warnings, 
+            spam_warning_until: newWarningDate.toISOString(),
+            penalty_points: (user.penalty_points || 0) + 10 // Tambah penalty poin
+        }).eq('id', targetId);
+        
+        // Peringatan HANYA jika bukan premium
+        if (!isPremium) {
+            const warnMsg = `⚠️ <b>PERINGATAN (${warnings}/4)</b>\n\nKami mendeteksi aktivitas SPAM atau konten dilarang di akun Anda.\n\n🚫 <b>HIMBAUAN:</b>\nJangan menyebar spam link, mengirim stiker 18+, atau media 18+.\n\n<i>Peringatan ini akan hilang seiring banyaknya partner yang suka berinteraksi dengan Anda.</i>\n\n💎 <b>Beli Premium</b> untuk menghindari peringatan ini dan blokir permanen.`;
+            const premiumKb = buildPremiumNormalKeyboard(); 
+            await sendTelegramMessage(botToken, targetId, warnMsg, premiumKb);
+        }
+    }
+    
+    // Ubah UI pesan Admin agar tidak diklik dua kali
+    if (adminMsg) {
+        await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: adminMsg.message_id,
+                text: adminMsg.text + `\n\n✅ <b>Tindakan:</b> ${action === 'warn' ? 'Diberi Peringatan' : 'Diblokir'} (${warnings}/4)`
+            })
+        });
+    }
+}
 
 async function sendTelegramMessage(botToken: string, chatId: number, text: string, replyMarkup?: any, retries = 2): Promise<boolean> {
   const url = `${TELEGRAM_API}${botToken}/sendMessage`;
@@ -1809,16 +1915,21 @@ async function answerCallbackQuery(botToken: string, callbackQueryId: string, te
 }
 
 // FUNGSI BARU: Menggunakan copyMessage untuk meneruskan SEMUA JENIS PESAN tanpa tag "diteruskan oleh"
-async function copyTelegramMessage(botToken: string, chatId: number, fromChatId: number, messageId: number) {
+async function copyTelegramMessage(botToken: string, chatId: number, fromChatId: number, messageId: number, replyMarkup?: any) {
   const url = `${TELEGRAM_API}${botToken}/copyMessage`;
+  const body: any = {
+    chat_id: chatId,
+    from_chat_id: fromChatId,
+    message_id: messageId
+  };
+  // TAMBAHKAN INI UNTUK MENDUKUNG TOMBOL
+  if (replyMarkup) {
+    body.reply_markup = replyMarkup;
+  }
   await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      from_chat_id: fromChatId,
-      message_id: messageId
-    })
+    body: JSON.stringify(body)
   });
 }
 
@@ -3039,6 +3150,64 @@ Deno.serve(async (req) => {
           }
 
           return new Response('OK', { status: 200 });
+      }
+
+      // >>> ROUTE PENANGANAN SPAM <<<
+      if (callbackData.startsWith('reportspam_')) {
+        if (isButtonOnCooldown(userId, 'report_user')) return new Response('OK');
+        const spammerId = parseInt(callbackData.split('_')[1]);
+        const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+        
+        await answerCallbackQuery(botToken, callbackQuery.id, 'Laporan diteruskan ke Admin. Terima kasih!', true);
+        
+        // Hapus tombol spam dari pesan agar partner tidak double-klik
+        if (callbackQuery.message) {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    message_id: callbackQuery.message.message_id,
+                    reply_markup: { inline_keyboard: [] }
+                })
+            });
+        }
+
+        // Notifikasi ke CS / Admin
+        if (adminChatId) {
+            const adminMsg = `🚨 <b>LAPORAN SPAM/LINK</b>\n\nTerlapor ID: <code>${spammerId}</code>\nPelapor ID: <code>${userId}</code>\n\nPilih tindakan (Bukti pesan di bawah):`;
+            const adminKb = {
+                inline_keyboard: [
+                    [
+                        { text: '⚠️ Beri Peringatan', callback_data: `admin_warn_${spammerId}` },
+                        { text: '🚫 Blokir Langsung', callback_data: `admin_block_${spammerId}` }
+                    ]
+                ]
+            };
+            await sendTelegramMessage(botToken, parseInt(adminChatId), adminMsg, adminKb);
+            
+            if (callbackQuery.message) {
+              // Teruskan bukti otentik pesan ke admin secara aman
+              await copyTelegramMessage(botToken, parseInt(adminChatId), chatId, callbackQuery.message.message_id);
+            }
+        }
+        return new Response('OK');
+      }
+
+      // Eksekusi Peringatan
+      if (callbackData.startsWith('admin_warn_')) {
+        const targetId = parseInt(callbackData.split('_')[2]);
+        await handleAdminSpamAction(supabase, botToken, targetId, 'warn', callbackQuery.message, chatId);
+        await answerCallbackQuery(botToken, callbackQuery.id, 'Peringatan berhasil diberikan.');
+        return new Response('OK');
+      }
+
+      // Eksekusi Blokir
+      if (callbackData.startsWith('admin_block_')) {
+        const targetId = parseInt(callbackData.split('_')[2]);
+        await handleAdminSpamAction(supabase, botToken, targetId, 'block', callbackQuery.message, chatId);
+        await answerCallbackQuery(botToken, callbackQuery.id, 'User telah diblokir.');
+        return new Response('OK');
       }
 
       if (callbackData.startsWith('reveal_')) {
