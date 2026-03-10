@@ -2286,7 +2286,7 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
     const { data } = await supabase.from('sticker_packs').select('status').eq('pack_name', packName).single();
     if (data) {
       status = data.status;
-      stickerPackCache.set(packName, status); // Simpan ke cache
+      stickerPackCache.set(packName, status as string); // Simpan ke cache
     }
   }
 
@@ -3283,9 +3283,9 @@ Deno.serve(async (req) => {
       
 
       // Menangkap callback 'ap_' (Allow Pack) dan 'dp_' (Deny Pack)
-      if (callbackData.startsWith('ap_') || data.startsWith('dp_')) {
-        const isAllow = data.startsWith('ap_');
-        const packId = data.replace(isAllow ? 'ap_' : 'dp_', '');
+      if (callbackData.startsWith('ap_') || callbackData.startsWith('dp_')) {
+        const isAllow = callbackData.startsWith('ap_');
+        const packId = callbackData.replace(isAllow ? 'ap_' : 'dp_', '');
         const newStatus = isAllow ? 'approved' : 'rejected';
 
         // 1. Ambil nama pack berdasarkan ID
@@ -3306,15 +3306,16 @@ Deno.serve(async (req) => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              chat_id: callbackQuery.message.chat.id,
-              message_id: callbackQuery.message.message_id,
-              text: `⚠️ <b>Review Stiker Selesai</b>\n\nNama Pack: <code>${packData.pack_name}</code>\nStatus: ${isAllow ? '✅ Diizinkan' : '❌ Ditolak'}`
+              chat_id: userId,
+              message_id: message?.message_id,
+              text: `⚠️ <b>Review Stiker Selesai</b>\n\nNama Pack: <code>${packData.pack_name}</code>\nStatus: ${isAllow ? '✅ Diizinkan' : '❌ Ditolak'}`,
+              parse_mode: 'HTML'
             })
           });
 
-          await answerCallbackQuery(botToken, callbackQuery.id, `Pack stiker berhasil ${isAllow ? 'diizinkan' : 'ditolak'}.`);
+          await answerCallbackQuery(botToken, query.id, `Pack stiker berhasil ${isAllow ? 'diizinkan' : 'ditolak'}.`);
         } else {
-          await answerCallbackQuery(botToken, callbackQuery.id, '❌ Pack tidak ditemukan.', true);
+          await answerCallbackQuery(botToken, query.id, '❌ Pack tidak ditemukan.', true);
         }
         
         return new Response('OK', { status: 200, headers: corsHeaders });
