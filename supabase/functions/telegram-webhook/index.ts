@@ -4949,7 +4949,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
 
 // ... Lanjut ke kode aslinya: 
 // await copyTelegramMessage(botToken, partnerId, userId, messageId, ...);
-            // B. Jika USER MENGIRIM STICKER (Handling Khusus)
+            // B. Jika USER MENGIRIM MEDIA (Photo/Video/Animation/VideoNote)
             else if (message.photo || message.video || message.animation || message.video_note) {
               // Cek apakah partner mengaktifkan Mode TikTok
               const { data: partnerSettings } = await supabase.rpc('get_partner_settings', {
@@ -4962,8 +4962,6 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
               if (isPartnerInTikTokMode) {
                 const mediaType = getMediaType(message);
                 
-                // Buat Callback Data: reveal_IDPENGIRIM_IDPESAN
-                // Kita simpan ID Pengirim agar nanti bisa di-copy aslinya
                 const revealData = `reveal_${userId}_${message.message_id}`;
                 
                 const hiddenKeyboard = {
@@ -4972,39 +4970,19 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                   ]
                 };
 
-                // Pesan Sensor untuk Penerima
                 let hiddenMsg = `🛡️ <b>SENSOR LIVE MODE</b>\n\nPartner mengirim <b>${mediaType}</b>.\nKonten disembunyikan untuk keamanan Live Streaming.`;
-                // Media ini support caption, jadi kita 'inject' quote ke dalam caption
                 const originalCaption = message.caption || "";
                 
                 if (isReply) {
                     let finalCaption = `${visualQuote}${originalCaption}`;
-      
-                    // Potong jika terlalu panjang (Limit Telegram 1024)
                     if (finalCaption.length > 1000) {
                         finalCaption = finalCaption.substring(0, 997) + "...";
                     }
                     hiddenMsg = `${visualQuote}${originalCaption}\n\n${hiddenMsg}.`;
-                    if (message.sticker) {
-                      // Sticker tidak support caption/quote di dalamnya
-                      hiddenMsg = `${visualQuote}${hiddenMsg}`;
-                    }
-                    // Gunakan copyMessage dengan caption override
                     await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
                 } else {
                 await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
                 }
-                // PENTING: Jangan beritahu pengirim (Stealth Mode)
-                // Pengirim akan mengira pesan terkirim biasa.
-              } else if (message.sticker) {
-                // Sticker tidak support caption/quote di dalamnya
-                      if (isReply) {
-                          // Kirim quote sebagai pesan teks terpisah DULUAN
-                          await sendTelegramMessage(botToken, partnerId, visualQuote + "<i>(membalas dengan sticker)</i>");
-                      }
-                      // Lalu kirim stickernya (tanpa caption override)
-                      await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
-    
               } else {
 
                 
