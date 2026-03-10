@@ -4938,9 +4938,13 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
             } else if (message.sticker) {
               const isAllowed = await handleStickerReview(supabase, botToken, message);
               if (!isAllowed) {
-                // Hentikan eksekusi di sini, jangan biarkan Telegram meneruskannya
                 return new Response('OK', { status: 200, headers: corsHeaders }); 
               }
+              // Sticker diizinkan -> teruskan ke partner
+              if (isReply) {
+                await sendTelegramMessage(botToken, partnerId, visualQuote + "<i>(membalas dengan sticker)</i>");
+              }
+              await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
             }
 
 // ... Lanjut ke kode aslinya: 
