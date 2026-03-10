@@ -2155,7 +2155,11 @@ async function sendSearchingMessage(
   }
 }
 
-
+// ============================================
+// IN-MEMORY CACHE UNTUK STICKER PACKS
+// Menghindari tagihan database jebol akibat spam stiker
+// ============================================
+const stickerPackCache = new Map<string, string>();
 
 // ============================================
 // BUTTON DEBOUNCE SYSTEM (Cost Optimization)
@@ -2165,6 +2169,8 @@ async function sendSearchingMessage(
 // 
 // PENTING: Cache ini HARUS dicek PALING AWAL di handler callback_query
 // sebelum operasi database apapun untuk menghemat biaya cloud
+
+
 const buttonClickCache = new Map<string, number>();
 
 // Cooldown per action type (dalam milidetik) - DIPERBESAR untuk mencegah double-click
@@ -2259,6 +2265,79 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData === 'check_channel_joined') return 'search_partner'; // Sama dengan search
   if (callbackData.startsWith('dismiss_promo')) return 'search_partner'; // Dismiss promo = search
   return 'default';
+}
+
+async function handleStickerReview(supabase: any, botToken: string, message: any): Promise<boolean> {
+  const sticker = message.sticker;
+  const packName = sticker.set_name;
+  const chatId = message.chat.id;
+
+  // 1. Tolak otomatis jika stiker custom/ilegal (tidak punya pack)
+  if (!packName) {
+    await sendTelegramMessage(botToken, chatId, "❌ Stiker kustom tanpa pack resmi tidak diizinkan demi keamanan.");
+    return false;
+  }
+
+  // 2. Cek In-Memory Cache (0 biaya cloud, performa instan)
+  let status = stickerPackCache.get(packName);
+
+  // 3. Jika tidak ada di cache, query ke database
+  if (!status) {
+    const { data } = await supabase.from('sticker_packs').select('status').eq('pack_name', packName).single();
+    if (data) {
+      status = data.status;
+      stickerPackCache.set(packName, status); // Simpan ke cache
+    }
+  }
+
+  // 4. Evaluasi Status
+  if (status === 'approved') return true; // Lolos, teruskan ke partner
+  
+  if (status === 'rejected') {
+    await sendTelegramMessage(botToken, chatId, "❌ Stiker dari pack ini tidak diizinkan. Silakan gunakan stiker lain.");
+    return false;
+  }
+  
+  if (status === 'pending') {
+    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini sedang ditinjau oleh admin sebelum dapat dikirim.");
+    return false;
+  }
+
+  // 5. Pack BARU (belum terdaftar) -> Insert ke DB & Minta Review Admin
+  const { data: newPack, error } = await supabase.from('sticker_packs')
+    .insert({ pack_name: packName, status: 'pending' })
+    .select('id').single();
+
+  if (!error && newPack) {
+    stickerPackCache.set(packName, 'pending'); // Kunci di cache agar tidak dikirim ulang ke admin
+    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini belum terdaftar. Sedang diteruskan ke admin untuk ditinjau.");
+
+    const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+    if (adminChatId) {
+      // A. Kirim wujud fisik stikernya agar admin tahu
+      await fetch(`${TELEGRAM_API}${botToken}/sendSticker`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: adminChatId, sticker: sticker.file_id })
+      });
+
+      // B. Kirim pesan aksi dengan ID pack (Anti limit 64-byte Telegram)
+      const reviewKeyboard = {
+        inline_keyboard: [
+          [
+            { text: '✅ Izinkan Pack', callback_data: `ap_${newPack.id}` },
+            { text: '❌ Tolak Pack', callback_data: `dp_${newPack.id}` }
+          ]
+        ]
+      };
+      await sendTelegramMessage(botToken, parseInt(adminChatId), `⚠️ <b>Review Stiker Baru</b>\n\nNama Pack: <code>${packName}</code>\n\nApakah pack stiker ini aman untuk dikirimkan secara publik?`, reviewKeyboard);
+    }
+  } else {
+    // Menangani race-condition (user spam stiker berbarengan sebelum insert selesai)
+    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini sedang ditinjau oleh admin.");
+  }
+
+  return false;
 }
 
 // Satu panggilan menangani SEMUA: upsert, channel check, state, reputation, search
@@ -3199,6 +3278,46 @@ Deno.serve(async (req) => {
         await handleAdminSpamAction(supabase, botToken, targetId, 'warn', message, userId);
         await answerCallbackQuery(botToken, query.id, 'Peringatan berhasil diberikan.');
         return new Response('OK');
+      }
+
+      
+
+      // Menangkap callback 'ap_' (Allow Pack) dan 'dp_' (Deny Pack)
+      if (callbackData.startsWith('ap_') || data.startsWith('dp_')) {
+        const isAllow = data.startsWith('ap_');
+        const packId = data.replace(isAllow ? 'ap_' : 'dp_', '');
+        const newStatus = isAllow ? 'approved' : 'rejected';
+
+        // 1. Ambil nama pack berdasarkan ID
+        const { data: packData } = await supabase.from('sticker_packs').select('pack_name').eq('id', packId).single();
+        
+        if (packData) {
+          // 2. Update Database
+          await supabase.from('sticker_packs').update({ 
+            status: newStatus, 
+            updated_at: new Date().toISOString() 
+          }).eq('id', packId);
+          
+          // 3. Update In-Memory Cache secara instan
+          stickerPackCache.set(packData.pack_name, newStatus);
+
+          // 4. Update teks pesan admin agar tombol hilang (mencegah klik ganda)
+          await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: callbackQuery.message.chat.id,
+              message_id: callbackQuery.message.message_id,
+              text: `⚠️ <b>Review Stiker Selesai</b>\n\nNama Pack: <code>${packData.pack_name}</code>\nStatus: ${isAllow ? '✅ Diizinkan' : '❌ Ditolak'}`
+            })
+          });
+
+          await answerCallbackQuery(botToken, callbackQuery.id, `Pack stiker berhasil ${isAllow ? 'diizinkan' : 'ditolak'}.`);
+        } else {
+          await answerCallbackQuery(botToken, callbackQuery.id, '❌ Pack tidak ditemukan.', true);
+        }
+        
+        return new Response('OK', { status: 200, headers: corsHeaders });
       }
 
       // Eksekusi Blokir
@@ -4803,6 +4922,8 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                 visualQuote = getReplyPreview(message.reply_to_message, userId);
             }
 
+
+
             // A. Jika USER MENGIRIM TEKS
             if (text) {
                 if (isReply) {
@@ -4813,9 +4934,18 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                     // Copy message biasa
                     await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
                 }
-            } 
+            } else if (message.sticker) {
+              const isAllowed = await handleStickerReview(supabase, botToken, message);
+              if (!isAllowed) {
+                // Hentikan eksekusi di sini, jangan biarkan Telegram meneruskannya
+                return new Response('OK', { status: 200, headers: corsHeaders }); 
+              }
+            }
+
+// ... Lanjut ke kode aslinya: 
+// await copyTelegramMessage(botToken, partnerId, userId, messageId, ...);
             // B. Jika USER MENGIRIM STICKER (Handling Khusus)
-            else if (message.sticker || message.photo || message.video || message.animation || message.video_note) {
+            else if (message.photo || message.video || message.animation || message.video_note) {
               // Cek apakah partner mengaktifkan Mode TikTok
               const { data: partnerSettings } = await supabase.rpc('get_partner_settings', {
                 p_partner_id: partnerId
@@ -4931,6 +5061,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                         })
                     });
                 } else {
+                  
                     // Bukan reply, copy biasa (mempertahankan caption asli user jika ada)
                     await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
                 }
