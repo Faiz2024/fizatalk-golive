@@ -2286,7 +2286,7 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
     const { data } = await supabase.from('sticker_packs').select('status').eq('pack_name', packName).single();
     if (data) {
       status = data.status;
-      stickerPackCache.set(packName, status); // Simpan ke cache
+      stickerPackCache.set(packName, status as string); // Simpan ke cache
     }
   }
 
