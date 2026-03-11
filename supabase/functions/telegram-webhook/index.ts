@@ -37,8 +37,6 @@ interface TelegramMessage {
   reply_to_message?: TelegramMessage; // Untuk fitur reply
   successful_payment?: SuccessfulPayment; // Telegram Stars payment
   // Tambahkan tipe media lain jika diperlukan
-  entities?: Array<{ type: string; offset: number; length: number; url?: string }>;
-  caption_entities?: Array<{ type: string; offset: number; length: number; url?: string }>;
 }
 
 interface TelegramReaction {
@@ -1776,110 +1774,6 @@ function getReplyPreview(replyMsg: any, currentUserId: number): string {
   return `<blockquote><b>${senderName}:</b>\n${previewText}</blockquote>\n`;
 }
 
-// Helper untuk mendeteksi pesan yang bisa di-klik (link, mention, command)
-function hasSpamEntities(message: TelegramMessage): boolean {
-  const entities = message.entities || message.caption_entities || [];
-  for (const ent of entities) {
-    if (['url', 'text_link', 'mention', 'bot_command'].includes(ent.type)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Helper untuk aksi eksekusi pemblokiran & peringatan oleh Admin
-async function handleAdminSpamAction(supabase: any, botToken: string, targetId: number, action: 'warn' | 'block', adminMsg: any, adminChatId: number) {
-    const { data: user } = await supabase.from('telegram_users')
-        .select('premium_until, spam_warnings, spam_warning_until, penalty_points')
-        .eq('id', targetId).single();
-        
-    if (!user) return;
-    
-    const isPremium = user.premium_until && new Date(user.premium_until) > new Date();
-    let warnings = user.spam_warnings || 0;
-    const warningUntil = user.spam_warning_until ? new Date(user.spam_warning_until) : null;
-    
-    // Reset peringatan jika sudah melewati masa 30 hari
-    if (warningUntil && new Date() > warningUntil) {
-        warnings = 0;
-    }
-    
-    // Tetapkan logika penambahan point & status
-    if (action === 'warn') {
-        warnings += 1;
-    } else {
-        warnings = 4; // Auto-Trigger block max
-    }
-    
-    const newWarningDate = new Date();
-    newWarningDate.setDate(newWarningDate.getDate() + 30); // Reset timer 30 hari
-    
-    if (warnings >= 4) {
-        // ----- LOGIKA MENCAPAI 4 PERINGATAN (BLOKIR) -----
-        if (isPremium) {
-            const blockedUntil = new Date();
-            blockedUntil.setDate(blockedUntil.getDate() + 1); // Blokir 1 hari (temp)
-            await supabase.from('telegram_users').update({ 
-                spam_warnings: warnings, 
-                spam_warning_until: newWarningDate.toISOString(),
-                penalty_points: 100, 
-                blocked_until: blockedUntil.toISOString()
-            }).eq('id', targetId);
-            
-            await sendTelegramMessage(botToken, targetId, `⏳ <b>AKUN DIBATASI SEMENTARA</b>\n\nAnda mencapai batas peringatan (4/4). Akun diistirahatkan sementara.`);
-        } else {
-            await supabase.from('telegram_users').update({ 
-                spam_warnings: warnings, 
-                spam_warning_until: newWarningDate.toISOString(),
-                penalty_points: 100
-            }).eq('id', targetId);
-            
-            await supabase.from('blocked_users').upsert({
-                user_id: targetId,
-                reason: 'spam_block',
-                blocked_message: 'Akun diblokir karena melakukan spam link / pelanggaran keras.',
-                is_active: true
-            });
-            
-            // Gunakan UI Blokir Existing
-            const blockedKeyboard = {
-              inline_keyboard: [
-                [{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }],
-                [{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_normal_7' }]
-              ]
-            };
-            const blockedMsg = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ <b>Alasan:</b> Anda telah mencapai batas peringatan SPAM (4/4). Demi kenyamanan, akses chat Anda <b>dinonaktifkan</b>.\n\nPilih opsi di bawah untuk memulihkan akun:`;
-            await sendTelegramMessage(botToken, targetId, blockedMsg, blockedKeyboard);
-        }
-    } else {
-        // ----- LOGIKA HANYA PERINGATAN (1/4 - 3/4) -----
-        await supabase.from('telegram_users').update({ 
-            spam_warnings: warnings, 
-            spam_warning_until: newWarningDate.toISOString(),
-            penalty_points: (user.penalty_points || 0) + 10 // Tambah penalty poin
-        }).eq('id', targetId);
-        
-        // Peringatan HANYA jika bukan premium
-        if (!isPremium) {
-            const warnMsg = `⚠️ <b>PERINGATAN (${warnings}/4)</b>\n\nKami mendeteksi aktivitas SPAM atau konten dilarang di akun Anda.\n\n🚫 <b>HIMBAUAN:</b>\nJangan menyebar spam link, mengirim stiker 18+, atau media 18+.\n\n<i>Peringatan ini akan hilang seiring banyaknya partner yang suka berinteraksi dengan Anda.</i>\n\n💎 <b>Beli Premium</b> untuk menghindari peringatan ini dan blokir permanen.`;
-            const premiumKb = buildPremiumNormalKeyboard(); 
-            await sendTelegramMessage(botToken, targetId, warnMsg, premiumKb);
-        }
-    }
-    
-    // Ubah UI pesan Admin agar tidak diklik dua kali
-    if (adminMsg) {
-        await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: adminChatId,
-                message_id: adminMsg.message_id,
-                text: adminMsg.text + `\n\n✅ <b>Tindakan:</b> ${action === 'warn' ? 'Diberi Peringatan' : 'Diblokir'} (${warnings}/4)`
-            })
-        });
-    }
-}
 
 async function sendTelegramMessage(botToken: string, chatId: number, text: string, replyMarkup?: any, retries = 2): Promise<boolean> {
   const url = `${TELEGRAM_API}${botToken}/sendMessage`;
@@ -1915,21 +1809,16 @@ async function answerCallbackQuery(botToken: string, callbackQueryId: string, te
 }
 
 // FUNGSI BARU: Menggunakan copyMessage untuk meneruskan SEMUA JENIS PESAN tanpa tag "diteruskan oleh"
-async function copyTelegramMessage(botToken: string, chatId: number, fromChatId: number, messageId: number, replyMarkup?: any) {
+async function copyTelegramMessage(botToken: string, chatId: number, fromChatId: number, messageId: number) {
   const url = `${TELEGRAM_API}${botToken}/copyMessage`;
-  const body: any = {
-    chat_id: chatId,
-    from_chat_id: fromChatId,
-    message_id: messageId
-  };
-  // TAMBAHKAN INI UNTUK MENDUKUNG TOMBOL
-  if (replyMarkup) {
-    body.reply_markup = replyMarkup;
-  }
   await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify({
+      chat_id: chatId,
+      from_chat_id: fromChatId,
+      message_id: messageId
+    })
   });
 }
 
@@ -2155,11 +2044,7 @@ async function sendSearchingMessage(
   }
 }
 
-// ============================================
-// IN-MEMORY CACHE UNTUK STICKER PACKS
-// Menghindari tagihan database jebol akibat spam stiker
-// ============================================
-const stickerPackCache = new Map<string, string>();
+
 
 // ============================================
 // BUTTON DEBOUNCE SYSTEM (Cost Optimization)
@@ -2169,8 +2054,6 @@ const stickerPackCache = new Map<string, string>();
 // 
 // PENTING: Cache ini HARUS dicek PALING AWAL di handler callback_query
 // sebelum operasi database apapun untuk menghemat biaya cloud
-
-
 const buttonClickCache = new Map<string, number>();
 
 // Cooldown per action type (dalam milidetik) - DIPERBESAR untuk mencegah double-click
@@ -2265,79 +2148,6 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData === 'check_channel_joined') return 'search_partner'; // Sama dengan search
   if (callbackData.startsWith('dismiss_promo')) return 'search_partner'; // Dismiss promo = search
   return 'default';
-}
-
-async function handleStickerReview(supabase: any, botToken: string, message: any): Promise<boolean> {
-  const sticker = message.sticker;
-  const packName = sticker.set_name;
-  const chatId = message.chat.id;
-
-  // 1. Tolak otomatis jika stiker custom/ilegal (tidak punya pack)
-  if (!packName) {
-    await sendTelegramMessage(botToken, chatId, "❌ Stiker kustom tanpa pack resmi tidak diizinkan demi keamanan.");
-    return false;
-  }
-
-  // 2. Cek In-Memory Cache (0 biaya cloud, performa instan)
-  let status = stickerPackCache.get(packName);
-
-  // 3. Jika tidak ada di cache, query ke database
-  if (!status) {
-    const { data } = await supabase.from('sticker_packs').select('status').eq('pack_name', packName).single();
-    if (data) {
-      status = data.status;
-      stickerPackCache.set(packName, status as string); // Simpan ke cache
-    }
-  }
-
-  // 4. Evaluasi Status
-  if (status === 'approved') return true; // Lolos, teruskan ke partner
-  
-  if (status === 'rejected') {
-    await sendTelegramMessage(botToken, chatId, "❌ Stiker dari pack ini tidak diizinkan. Silakan gunakan stiker lain.");
-    return false;
-  }
-  
-  if (status === 'pending') {
-    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini sedang ditinjau oleh admin sebelum dapat dikirim.");
-    return false;
-  }
-
-  // 5. Pack BARU (belum terdaftar) -> Insert ke DB & Minta Review Admin
-  const { data: newPack, error } = await supabase.from('sticker_packs')
-    .insert({ pack_name: packName, status: 'pending' })
-    .select('id').single();
-
-  if (!error && newPack) {
-    stickerPackCache.set(packName, 'pending'); // Kunci di cache agar tidak dikirim ulang ke admin
-    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini belum terdaftar. Sedang diteruskan ke admin untuk ditinjau.");
-
-    const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
-    if (adminChatId) {
-      // A. Kirim wujud fisik stikernya agar admin tahu
-      await fetch(`${TELEGRAM_API}${botToken}/sendSticker`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: adminChatId, sticker: sticker.file_id })
-      });
-
-      // B. Kirim pesan aksi dengan ID pack (Anti limit 64-byte Telegram)
-      const reviewKeyboard = {
-        inline_keyboard: [
-          [
-            { text: '✅ Izinkan Pack', callback_data: `ap_${newPack.id}` },
-            { text: '❌ Tolak Pack', callback_data: `dp_${newPack.id}` }
-          ]
-        ]
-      };
-      await sendTelegramMessage(botToken, parseInt(adminChatId), `⚠️ <b>Review Stiker Baru</b>\n\nNama Pack: <code>${packName}</code>\n\nApakah pack stiker ini aman untuk dikirimkan secara publik?`, reviewKeyboard);
-    }
-  } else {
-    // Menangani race-condition (user spam stiker berbarengan sebelum insert selesai)
-    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini sedang ditinjau oleh admin.");
-  }
-
-  return false;
 }
 
 // Satu panggilan menangani SEMUA: upsert, channel check, state, reputation, search
@@ -3229,104 +3039,6 @@ Deno.serve(async (req) => {
           }
 
           return new Response('OK', { status: 200 });
-      }
-
-      // >>> ROUTE PENANGANAN SPAM <<<
-      if (callbackData.startsWith('reportspam_')) {
-        if (isButtonOnCooldown(userId, 'report_user')) return new Response('OK');
-        const spammerId = parseInt(callbackData.split('_')[1]);
-        const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
-        
-        await answerCallbackQuery(botToken, query.id, 'Laporan diteruskan ke Admin. Terima kasih!', true);
-        
-        // Hapus tombol spam dari pesan agar partner tidak double-klik
-        if (message) {
-            await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: userId,
-                    message_id: message.message_id,
-                    reply_markup: { inline_keyboard: [] }
-                })
-            });
-        }
-
-        // Notifikasi ke CS / Admin
-        if (adminChatId) {
-            const adminMsg = `🚨 <b>LAPORAN SPAM/LINK</b>\n\nTerlapor ID: <code>${spammerId}</code>\nPelapor ID: <code>${userId}</code>\n\nPilih tindakan (Bukti pesan di bawah):`;
-            const adminKb = {
-                inline_keyboard: [
-                    [
-                        { text: '⚠️ Beri Peringatan', callback_data: `admin_warn_${spammerId}` },
-                        { text: '🚫 Blokir Langsung', callback_data: `admin_block_${spammerId}` }
-                    ]
-                ]
-            };
-            await sendTelegramMessage(botToken, parseInt(adminChatId), adminMsg, adminKb);
-            
-            if (message) {
-              await copyTelegramMessage(botToken, parseInt(adminChatId), userId, message.message_id);
-            }
-        }
-        return new Response('OK');
-      }
-
-      // Eksekusi Peringatan
-      if (callbackData.startsWith('admin_warn_')) {
-        const targetId = parseInt(callbackData.split('_')[2]);
-        await handleAdminSpamAction(supabase, botToken, targetId, 'warn', message, userId);
-        await answerCallbackQuery(botToken, query.id, 'Peringatan berhasil diberikan.');
-        return new Response('OK');
-      }
-
-      
-
-      // Menangkap callback 'ap_' (Allow Pack) dan 'dp_' (Deny Pack)
-      if (callbackData.startsWith('ap_') || callbackData.startsWith('dp_')) {
-        const isAllow = callbackData.startsWith('ap_');
-        const packId = callbackData.replace(isAllow ? 'ap_' : 'dp_', '');
-        const newStatus = isAllow ? 'approved' : 'rejected';
-
-        // 1. Ambil nama pack berdasarkan ID
-        const { data: packData } = await supabase.from('sticker_packs').select('pack_name').eq('id', packId).single();
-        
-        if (packData) {
-          // 2. Update Database
-          await supabase.from('sticker_packs').update({ 
-            status: newStatus, 
-            updated_at: new Date().toISOString() 
-          }).eq('id', packId);
-          
-          // 3. Update In-Memory Cache secara instan
-          stickerPackCache.set(packData.pack_name, newStatus);
-
-          // 4. Update teks pesan admin agar tombol hilang (mencegah klik ganda)
-          await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: userId,
-              message_id: message?.message_id,
-              text: `⚠️ <b>Review Stiker Selesai</b>\n\nNama Pack: <code>${packData.pack_name}</code>\nStatus: ${isAllow ? '✅ Diizinkan' : '❌ Ditolak'}`,
-              parse_mode: 'HTML'
-            })
-          });
-
-          await answerCallbackQuery(botToken, query.id, `Pack stiker berhasil ${isAllow ? 'diizinkan' : 'ditolak'}.`);
-        } else {
-          await answerCallbackQuery(botToken, query.id, '❌ Pack tidak ditemukan.', true);
-        }
-        
-        return new Response('OK', { status: 200, headers: corsHeaders });
-      }
-
-      // Eksekusi Blokir
-      if (callbackData.startsWith('admin_block_')) {
-        const targetId = parseInt(callbackData.split('_')[2]);
-        await handleAdminSpamAction(supabase, botToken, targetId, 'block', message, userId);
-        await answerCallbackQuery(botToken, query.id, 'User telah diblokir.');
-        return new Response('OK');
       }
 
       if (callbackData.startsWith('reveal_')) {
@@ -4902,14 +4614,6 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
               return new Response('OK', { status: 200 }); 
           }
         }
-
-        // === DETEKSI SPAM UNTUK SEMUA JENIS PESAN ===
-        let spamMarkup = undefined;
-        if (hasSpamEntities(message)) {
-            spamMarkup = {
-                inline_keyboard: [[ { text: '🚩 Laporkan spam', callback_data: `reportspam_${userId}` } ]]
-            };
-        }
        
         
 
@@ -4923,34 +4627,19 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                 visualQuote = getReplyPreview(message.reply_to_message, userId);
             }
 
-
-
             // A. Jika USER MENGIRIM TEKS
             if (text) {
                 if (isReply) {
                     // Gabungkan Quote + Pesan Baru
                     const finalMessage = `${visualQuote}${text}`;
-                    await sendTelegramMessage(botToken, partnerId, finalMessage, spamMarkup);
+                    await sendTelegramMessage(botToken, partnerId, finalMessage);
                 } else {
                     // Copy message biasa
-                    await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
+                    await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
                 }
-            } else if (message.sticker) {
-              const isAllowed = await handleStickerReview(supabase, botToken, message);
-              if (!isAllowed) {
-                return new Response('OK', { status: 200, headers: corsHeaders }); 
-              }
-              // Sticker diizinkan -> teruskan ke partner
-              if (isReply) {
-                await sendTelegramMessage(botToken, partnerId, visualQuote + "<i>(membalas dengan sticker)</i>");
-              }
-              await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
-            }
-
-// ... Lanjut ke kode aslinya: 
-// await copyTelegramMessage(botToken, partnerId, userId, messageId, ...);
-            // B. Jika USER MENGIRIM MEDIA (Photo/Video/Animation/VideoNote)
-            else if (message.photo || message.video || message.animation || message.video_note) {
+            } 
+            // B. Jika USER MENGIRIM STICKER (Handling Khusus)
+            else if (message.sticker || message.photo || message.video || message.animation || message.video_note) {
               // Cek apakah partner mengaktifkan Mode TikTok
               const { data: partnerSettings } = await supabase.rpc('get_partner_settings', {
                 p_partner_id: partnerId
@@ -4962,6 +4651,8 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
               if (isPartnerInTikTokMode) {
                 const mediaType = getMediaType(message);
                 
+                // Buat Callback Data: reveal_IDPENGIRIM_IDPESAN
+                // Kita simpan ID Pengirim agar nanti bisa di-copy aslinya
                 const revealData = `reveal_${userId}_${message.message_id}`;
                 
                 const hiddenKeyboard = {
@@ -4970,19 +4661,39 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                   ]
                 };
 
+                // Pesan Sensor untuk Penerima
                 let hiddenMsg = `🛡️ <b>SENSOR LIVE MODE</b>\n\nPartner mengirim <b>${mediaType}</b>.\nKonten disembunyikan untuk keamanan Live Streaming.`;
+                // Media ini support caption, jadi kita 'inject' quote ke dalam caption
                 const originalCaption = message.caption || "";
                 
                 if (isReply) {
                     let finalCaption = `${visualQuote}${originalCaption}`;
+      
+                    // Potong jika terlalu panjang (Limit Telegram 1024)
                     if (finalCaption.length > 1000) {
                         finalCaption = finalCaption.substring(0, 997) + "...";
                     }
                     hiddenMsg = `${visualQuote}${originalCaption}\n\n${hiddenMsg}.`;
+                    if (message.sticker) {
+                      // Sticker tidak support caption/quote di dalamnya
+                      hiddenMsg = `${visualQuote}${hiddenMsg}`;
+                    }
+                    // Gunakan copyMessage dengan caption override
                     await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
                 } else {
                 await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
                 }
+                // PENTING: Jangan beritahu pengirim (Stealth Mode)
+                // Pengirim akan mengira pesan terkirim biasa.
+              } else if (message.sticker) {
+                // Sticker tidak support caption/quote di dalamnya
+                      if (isReply) {
+                          // Kirim quote sebagai pesan teks terpisah DULUAN
+                          await sendTelegramMessage(botToken, partnerId, visualQuote + "<i>(membalas dengan sticker)</i>");
+                      }
+                      // Lalu kirim stickernya (tanpa caption override)
+                      await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
+    
               } else {
 
                 
@@ -5044,7 +4755,6 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                         })
                     });
                 } else {
-                  
                     // Bukan reply, copy biasa (mempertahankan caption asli user jika ada)
                     await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
                 }
