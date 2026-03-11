@@ -341,6 +341,30 @@ export type Database = {
           },
         ]
       }
+      sticker_packs: {
+        Row: {
+          added_at: string | null
+          id: number
+          pack_name: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          added_at?: string | null
+          id?: number
+          pack_name: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          added_at?: string | null
+          id?: number
+          pack_name?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       telegram_users: {
         Row: {
           blocked_until: string | null
@@ -361,6 +385,8 @@ export type Database = {
           partner_id: number | null
           penalty_points: number | null
           premium_until: string | null
+          spam_warning_until: string | null
+          spam_warnings: number | null
           state: Database["public"]["Enums"]["user_state"]
           target_gender: string | null
           target_location: string | null
@@ -385,6 +411,8 @@ export type Database = {
           partner_id?: number | null
           penalty_points?: number | null
           premium_until?: string | null
+          spam_warning_until?: string | null
+          spam_warnings?: number | null
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
           target_location?: string | null
@@ -409,6 +437,8 @@ export type Database = {
           partner_id?: number | null
           penalty_points?: number | null
           premium_until?: string | null
+          spam_warning_until?: string | null
+          spam_warnings?: number | null
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
           target_location?: string | null
