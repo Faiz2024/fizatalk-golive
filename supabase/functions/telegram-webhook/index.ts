@@ -1594,26 +1594,9 @@ function getPremiumBenefitsText(): string {
 • 🚀 Prioritas matching`;
 }
 
-// Helper function to build premium offer message for non-premium users (filter habis)
-function buildFilterExhaustedMessage(): string {
-  return `⚠️ <b>Kesempatan Filter Gratis Habis!</b>
-
-Kesempatan 10x filter gratis kamu hari ini sudah habis. Kuota akan di-reset setiap pukul <b>00:00 WIB</b>.
-
-💎 <b>Upgrade ke Premium</b> untuk filter <b>TANPA BATAS</b>!
-
-${getPremiumBenefitsText()}
-
-💰 <b>HARGA PREMIUM:</b>
-📦 <b>1 MINGGU:</b> Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}
-📦 <b>1 BULAN:</b> Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}
-
-💎 Beli sekarang untuk menikmati filter tanpa batas!`;
-}
-
-// Legacy: keep old function for compatibility
+// Legacy: keep old function for compatibility (no longer used for filter limits)
 function buildPremiumOfferMessage(featureName: string): string {
-  return buildFilterExhaustedMessage();
+  return `💎 <b>Fitur Premium</b>\n\n${getPremiumBenefitsText()}`;
 }
 
 // Helper function to build premium purchase keyboard (normal prices)
@@ -2494,31 +2477,17 @@ async function handleComprehensiveSearchResult(
 ): Promise<void> {
   const penaltyPoints = result.reputation?.penalty_points || 0;
 
-  // Ambil filter info user untuk pesan "Mencari..." + cek eligibility
+  // Ambil filter info user untuk pesan "Mencari..."
   const { data: filterUserData } = await supabase
     .from('telegram_users')
-    .select('target_gender, target_location, filter_uses_today, filter_uses_date, premium_until')
+    .select('target_gender, target_location')
     .eq('id', userId)
     .single();
   
-  // Cek apakah user berhak menampilkan filter info
-  let filterInfo: { target_gender?: string | null; target_location?: string | null } | undefined = undefined;
-  if (filterUserData) {
-    const now = new Date();
-    const todayWIB = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-    const todayStr = `${todayWIB.getFullYear()}-${String(todayWIB.getMonth()+1).padStart(2,'0')}-${String(todayWIB.getDate()).padStart(2,'0')}`;
-    const isPremium = filterUserData.premium_until && new Date(filterUserData.premium_until) > now;
-    const filterUsesToday = (filterUserData.filter_uses_date === todayStr) ? (filterUserData.filter_uses_today || 0) : 0;
-    const filterAllowed = isPremium || filterUsesToday < 10;
-    
-    if (filterAllowed) {
-      filterInfo = {
-        target_gender: filterUserData.target_gender,
-        target_location: filterUserData.target_location
-      };
-    }
-    // Jika tidak filterAllowed, filterInfo tetap undefined → pesan pencarian biasa tanpa target
-  }
+  const filterInfo = filterUserData ? {
+    target_gender: filterUserData.target_gender,
+    target_location: filterUserData.target_location
+  } : undefined;
 
   // Buat keyboard "Laporkan" & "Asik" jika user menekan Next dan penalti < 40
   let endChatKeyboard = undefined;
@@ -2574,20 +2543,11 @@ async function autoSearchPartner(supabase: any, botToken: string, userId: number
     // 0. Ambil filter info user untuk ditampilkan di pesan mencari
     const { data: filterData } = await supabase
       .from('telegram_users')
-      .select('target_gender, target_location, premium_until, filter_uses_today, filter_uses_date')
+      .select('target_gender, target_location')
       .eq('id', userId)
       .single();
     
-    const isPremium = filterData?.premium_until && new Date(filterData.premium_until) > new Date();
-    
-    // Cek apakah filter masih berlaku (premium atau kuota belum habis)
-    const todayWIB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-    const todayStr = `${todayWIB.getFullYear()}-${String(todayWIB.getMonth()+1).padStart(2,'0')}-${String(todayWIB.getDate()).padStart(2,'0')}`;
-    const filterUsesToday = (filterData?.filter_uses_date === todayStr) ? (filterData?.filter_uses_today || 0) : 0;
-    const filterAllowed = isPremium || filterUsesToday < 10;
-    
-    // Hanya tampilkan filter info jika user berhak menggunakan filter
-    const filterInfo = filterAllowed ? {
+    const filterInfo = filterData ? {
       target_gender: filterData?.target_gender,
       target_location: filterData?.target_location
     } : undefined;
@@ -3613,31 +3573,10 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHANGE LOCATION (INLINE BUTTON) ---
       if (callbackData === 'change_location') {
-        // Cek filter usage via RPC (premium = unlimited, non-premium = 10x/hari)
+        // Ambil target lokasi saat ini
         const { data: filterCheck } = await supabase.rpc('check_and_use_filter', { p_user_id: userId });
 
-        if (!filterCheck?.allowed) {
-          // Kesempatan habis - tampilkan pesan filter exhausted
-          await answerCallbackQuery(botToken, query.id);
-          const exhaustedMsg = buildFilterExhaustedMessage();
-          const keyboard = buildPremiumNormalKeyboard();
-          const premiumFileId = await getPremiumFileId(supabase);
-          if (premiumFileId) {
-            try {
-              await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: userId, photo: premiumFileId, caption: exhaustedMsg, parse_mode: 'HTML', reply_markup: keyboard })
-              });
-            } catch (e) {
-              await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
-            }
-          } else {
-            await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
-          }
-          return new Response('OK', { status: 200 });
-        }
-
-        // Buat keyboard lokasi untuk premium (dengan opsi Semua di atas)
+        // Buat keyboard lokasi (dengan opsi Semua di atas)
         const locationButtons = [[{ text: '🇮🇩 Semua Lokasi', callback_data: 'target_loc_semua' }]];
 
   
@@ -3655,12 +3594,12 @@ Deno.serve(async (req) => {
 
         const tl = filterCheck?.target_location;
         const currentTarget = tl ? (tl === 'semua' ? 'Semua 🌏' : `📍 ${tl}`) : 'Semua 🌏';
-        const remainingText = filterCheck?.is_premium ? '' : `\n\n📊 Sisa kesempatan filter: <b>${filterCheck?.remaining ?? 0}x</b> (reset 00:00 WIB)`;
+        // No remaining text needed - filter is unlimited for all users
 
         await answerCallbackQuery(botToken, query.id);
         await sendTelegramMessage(
           botToken, userId,
-          `📍 <b>Pilih Target Lokasi Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>${remainingText}\n\nPilih lokasi partner yang ingin kamu ajak chat:`,
+          `📍 <b>Pilih Target Lokasi Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>\n\nPilih lokasi partner yang ingin kamu ajak chat:`,
           locationKeyboard
         );
 
@@ -4024,29 +3963,8 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHANGE TARGET (INLINE BUTTON) ---
       if (callbackData === 'change_target') {
-        // Cek filter usage via RPC (premium = unlimited, non-premium = 10x/hari)
+        // Ambil target gender saat ini
         const { data: filterCheck } = await supabase.rpc('check_and_use_filter', { p_user_id: userId });
-
-        if (!filterCheck?.allowed) {
-          // Kesempatan habis - tampilkan pesan filter exhausted
-          await answerCallbackQuery(botToken, query.id);
-          const exhaustedMsg = buildFilterExhaustedMessage();
-          const keyboard = buildPremiumNormalKeyboard();
-          const premiumFileId = await getPremiumFileId(supabase);
-          if (premiumFileId) {
-            try {
-              await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: userId, photo: premiumFileId, caption: exhaustedMsg, parse_mode: 'HTML', reply_markup: keyboard })
-              });
-            } catch (e) {
-              await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
-            }
-          } else {
-            await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
-          }
-          return new Response('OK', { status: 200 });
-        }
 
         // Tampilkan pilihan target gender
         const targetKeyboard = {
@@ -4063,12 +3981,11 @@ Deno.serve(async (req) => {
 
         const tg = filterCheck?.target_gender;
         const currentTarget = tg ? (tg === 'cowok' ? 'Cowok 👦' : tg === 'cewek' ? 'Cewek 👧' : 'Semua 👥') : 'Semua 👥';
-        const remainingText = filterCheck?.is_premium ? '' : `\n\n📊 Sisa kesempatan filter: <b>${filterCheck?.remaining ?? 0}x</b> (reset 00:00 WIB)`;
 
         await answerCallbackQuery(botToken, query.id);
         await sendTelegramMessage(
           botToken, userId,
-          `🎯 <b>Pilih Target Gender Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>${remainingText}\n\nPilih siapa yang ingin kamu ajak chat:`,
+          `🎯 <b>Pilih Target Gender Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>\n\nPilih siapa yang ingin kamu ajak chat:`,
           targetKeyboard
         );
 
