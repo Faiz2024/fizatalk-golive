@@ -3594,7 +3594,7 @@ Deno.serve(async (req) => {
 
         const tl = filterCheck?.target_location;
         const currentTarget = tl ? (tl === 'semua' ? 'Semua 🌏' : `📍 ${tl}`) : 'Semua 🌏';
-        const remainingText = filterCheck?.is_premium ? '' : `\n\n📊 Sisa kesempatan filter: <b>${filterCheck?.remaining ?? 0}x</b> (reset 00:00 WIB)`;
+        // No remaining text needed - filter is unlimited for all users
 
         await answerCallbackQuery(botToken, query.id);
         await sendTelegramMessage(
