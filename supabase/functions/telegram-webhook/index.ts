@@ -3573,31 +3573,10 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHANGE LOCATION (INLINE BUTTON) ---
       if (callbackData === 'change_location') {
-        // Cek filter usage via RPC (premium = unlimited, non-premium = 10x/hari)
+        // Ambil target lokasi saat ini
         const { data: filterCheck } = await supabase.rpc('check_and_use_filter', { p_user_id: userId });
 
-        if (!filterCheck?.allowed) {
-          // Kesempatan habis - tampilkan pesan filter exhausted
-          await answerCallbackQuery(botToken, query.id);
-          const exhaustedMsg = buildFilterExhaustedMessage();
-          const keyboard = buildPremiumNormalKeyboard();
-          const premiumFileId = await getPremiumFileId(supabase);
-          if (premiumFileId) {
-            try {
-              await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: userId, photo: premiumFileId, caption: exhaustedMsg, parse_mode: 'HTML', reply_markup: keyboard })
-              });
-            } catch (e) {
-              await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
-            }
-          } else {
-            await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
-          }
-          return new Response('OK', { status: 200 });
-        }
-
-        // Buat keyboard lokasi untuk premium (dengan opsi Semua di atas)
+        // Buat keyboard lokasi (dengan opsi Semua di atas)
         const locationButtons = [[{ text: '🇮🇩 Semua Lokasi', callback_data: 'target_loc_semua' }]];
 
   
