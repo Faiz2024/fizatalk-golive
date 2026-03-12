@@ -371,6 +371,8 @@ export type Database = {
           chat_end_count: number | null
           coins: number
           created_at: string
+          filter_uses_date: string
+          filter_uses_today: number
           first_name: string | null
           gender: string | null
           id: number
@@ -395,6 +397,8 @@ export type Database = {
           chat_end_count?: number | null
           coins?: number
           created_at?: string
+          filter_uses_date?: string
+          filter_uses_today?: number
           first_name?: string | null
           gender?: string | null
           id: number
@@ -419,6 +423,8 @@ export type Database = {
           chat_end_count?: number | null
           coins?: number
           created_at?: string
+          filter_uses_date?: string
+          filter_uses_today?: number
           first_name?: string | null
           gender?: string | null
           id?: number
