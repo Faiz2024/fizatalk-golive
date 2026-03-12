@@ -2272,6 +2272,39 @@ function getActionTypeFromCallback(callbackData: string): string {
   return 'default';
 }
 
+// HELPER: Auto-post stiker preview ke Channel resmi
+async function postStickerToChannel(botToken: string, packName: string, previewStickerId: string): Promise<void> {
+  const channelUsername = '@FizaStick';
+  const packUrl = `https://t.me/addstickers/${packName}`;
+  
+  // UI/UX: Gunakan Inline Button yang intuitif untuk menambahkan stiker
+  const replyMarkup = {
+    inline_keyboard: [
+      [{ text: '✨ Tambahkan Pack Stiker ✨', url: packUrl }]
+    ]
+  };
+
+  try {
+    const res = await fetch(`${TELEGRAM_API}${botToken}/sendSticker`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: channelUsername,
+        sticker: previewStickerId,
+        reply_markup: replyMarkup
+      })
+    });
+
+    if (!res.ok) {
+      // Isolasi error log agar rate limit channel tidak membunuh proses utama bot
+      const errJson = await res.json();
+      console.error('[POST TO CHANNEL] Gagal mengirim ke channel:', JSON.stringify(errJson));
+    }
+  } catch (error) {
+    console.error('[POST TO CHANNEL] System Exception:', error);
+  }
+}
+
 async function cloneStickerPack(botToken: string, originalPackName: string, botUsername: string, ownerId: number): Promise<string | null> {
   try {
     const getSetRes = await fetch(`${TELEGRAM_API}${botToken}/getStickerSet?name=${originalPackName}`);
@@ -2313,7 +2346,13 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
       console.error('[CLONE STICKER] Error:', createJson);
       return null;
     }
-    
+
+    // Gunakan stiker indeks pertama [0] sebagai gambar preview.
+    // Dijalankan secara fire-and-forget (tanpa 'await') demi performa & penghematan tagihan fungsi cloud
+    if (inputStickers.length > 0) {
+      postStickerToChannel(botToken, newPackName, inputStickers[0].sticker)
+        .catch(err => console.error(err));
+    }
     return newPackName;
   } catch (error) {
     console.error('[CLONE STICKER] Exception:', error);
