@@ -2159,7 +2159,12 @@ async function sendSearchingMessage(
 // IN-MEMORY CACHE UNTUK STICKER PACKS
 // Menghindari tagihan database jebol akibat spam stiker
 // ============================================
-const stickerPackCache = new Map<string, string>();
+interface StickerPackData {
+  status: string;
+  fiza_pack_name: string | null;
+}
+// Cache in-memory untuk memutus query berulang
+const stickerPackCache = new Map<string, StickerPackData>();
 
 // ============================================
 // BUTTON DEBOUNCE SYSTEM (Cost Optimization)
@@ -2267,6 +2272,55 @@ function getActionTypeFromCallback(callbackData: string): string {
   return 'default';
 }
 
+async function cloneStickerPack(botToken: string, originalPackName: string, botUsername: string, ownerId: number): Promise<string | null> {
+  try {
+    const getSetRes = await fetch(`${TELEGRAM_API}${botToken}/getStickerSet?name=${originalPackName}`);
+    const setJson = await getSetRes.json();
+    
+    if (!setJson.ok || !setJson.result || !setJson.result.stickers.length) {
+      return null;
+    }
+    
+    const stickers = setJson.result.stickers;
+    const stickerFormat = setJson.result.is_animated ? 'animated' : (setJson.result.is_video ? 'video' : 'static');
+    
+    // Generate nama pack unik (Syarat Telegram: wajib diakhiri _by_botusername)
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    const newPackName = `fz_${randomStr}_by_${botUsername}`;
+    const newPackTitle = "@FizaTalkBot - Random Chat Bot";
+
+    // 🚀 OPTIMASI PERFORMA & BIAYA CLOUD: Ambil 50 stiker teratas untuk di bulk-create. 
+    // Mencegah Timeout dan Error 429 Too Many Requests dari Telegram.
+    const inputStickers = stickers.slice(0, 50).map((s: any) => ({
+      sticker: s.file_id,
+      emoji_list: [s.emoji || '✨']
+    }));
+    
+    const createRes = await fetch(`${TELEGRAM_API}${botToken}/createNewStickerSet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: ownerId,
+        name: newPackName,
+        title: newPackTitle,
+        stickers: inputStickers,
+        sticker_format: stickerFormat
+      })
+    });
+    
+    const createJson = await createRes.json();
+    if (!createJson.ok) {
+      console.error('[CLONE STICKER] Error:', createJson);
+      return null;
+    }
+    
+    return newPackName;
+  } catch (error) {
+    console.error('[CLONE STICKER] Exception:', error);
+    return null;
+  }
+}
+
 async function handleStickerReview(supabase: any, botToken: string, message: any): Promise<boolean> {
   const sticker = message.sticker;
   const packName = sticker.set_name;
@@ -2278,66 +2332,83 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
     return false;
   }
 
-  // 2. Cek In-Memory Cache (0 biaya cloud, performa instan)
-  let status = stickerPackCache.get(packName);
+  // 2. BYPASS OTOMATIS: Jika stiker yang dikirim buatan Bot kita sendiri (@FizaTalkBot)
+  const botUsername = Deno.env.get('BOT_USERNAME') || 'FizaTalkBot';
+  if (packName.endsWith(`_by_${botUsername}`)) {
+     return true; // Langsung izinkan dan teruskan ke partner
+  }
 
-  // 3. Jika tidak ada di cache, query ke database
-  if (!status) {
-    const { data } = await supabase.from('sticker_packs').select('status').eq('pack_name', packName).single();
+  // 3. Cek In-Memory Cache (Performa Cepat, 0 Biaya Baca DB)
+  let packData = stickerPackCache.get(packName);
+
+  // 4. Jika tidak ada di cache, sinkronkan ke DB
+  if (!packData) {
+    const { data } = await supabase.from('sticker_packs')
+      .select('status, fiza_pack_name')
+      .eq('pack_name', packName)
+      .single();
+      
     if (data) {
-      status = data.status;
-      stickerPackCache.set(packName, status as string); // Simpan ke cache
+      packData = { status: data.status, fiza_pack_name: data.fiza_pack_name };
+      stickerPackCache.set(packName, packData); 
     }
   }
 
-  // 4. Evaluasi Status
-  if (status === 'approved') return true; // Lolos, teruskan ke partner
-  
-  if (status === 'rejected') {
-    await sendTelegramMessage(botToken, chatId, "❌ Stiker dari pack ini tidak diizinkan. Silakan gunakan stiker lain.");
-    return false;
-  }
-  
-  if (status === 'pending') {
-    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini sedang ditinjau oleh admin sebelum dapat dikirim.");
-    return false;
+  // 5. Evaluasi Status Interaksi UI/UX ke User
+  if (packData) {
+    if (packData.status === 'approved') {
+      // Jika disetujui, TAPI user mengirim menggunakan pack aslinya (bukan yang dikloning bot)
+      if (packData.fiza_pack_name) {
+         await sendTelegramMessage(botToken, chatId, `⚠️ <b>Gunakan Pack Resmi Kami!</b>\n\nStiker yang kamu kirim sudah ada versi khususnya. Silakan tambahkan dan gunakan stiker dari pack berikut:\n👉 https://t.me/addstickers/${packData.fiza_pack_name}\n\n<i>Atau gunakan stiker dari channel @FizaStick.</i>`);
+      } else {
+         return true; // Fallback jika stiker lama belum dikloning tapi berstatus approved
+      }
+      return false; // Jangan kirim ke partner
+    }
+    
+    if (packData.status === 'rejected') {
+      await sendTelegramMessage(botToken, chatId, "❌ Stiker dari pack ini tidak diizinkan. Silakan gunakan stiker dari channel @FizaStick.");
+      return false;
+    }
+    
+    if (packData.status === 'pending') {
+      await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker tersebut sedang ditinjau oleh admin.\n💡 <i>Rekomendasi: Gunakan stiker dari channel @FizaStick terlebih dahulu.</i>");
+      return false;
+    }
   }
 
-  // 5. Pack BARU (belum terdaftar) -> Insert ke DB & Minta Review Admin
+  // 6. PACK BARU (Belum Terdaftar) -> Simpan Requester dan Minta Review
   const { data: newPack, error } = await supabase.from('sticker_packs')
-    .insert({ pack_name: packName, status: 'pending' })
+    .insert({ pack_name: packName, status: 'pending', requester_id: chatId })
     .select('id').single();
 
   if (!error && newPack) {
-    stickerPackCache.set(packName, 'pending'); // Kunci di cache agar tidak dikirim ulang ke admin
-    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini belum terdaftar. Sedang diteruskan ke admin untuk ditinjau.");
+    stickerPackCache.set(packName, { status: 'pending', fiza_pack_name: null }); 
+    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker tersebut akan ditinjau oleh admin.\n💡 <i>Rekomendasi: Gunakan stiker dari channel @FizaStick terlebih dahulu.</i>");
 
     const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
     if (adminChatId) {
-      // A. Kirim wujud fisik stikernya agar admin tahu
       await fetch(`${TELEGRAM_API}${botToken}/sendSticker`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: adminChatId, sticker: sticker.file_id })
       });
 
-      // B. Kirim pesan aksi dengan ID pack (Anti limit 64-byte Telegram)
       const reviewKeyboard = {
         inline_keyboard: [
           [
-            { text: '✅ Izinkan Pack', callback_data: `ap_${newPack.id}` },
+            { text: '✅ Izinkan & Kloning', callback_data: `ap_${newPack.id}` },
             { text: '❌ Tolak Pack', callback_data: `dp_${newPack.id}` }
           ]
         ]
       };
-      await sendTelegramMessage(botToken, parseInt(adminChatId), `⚠️ <b>Review Stiker Baru</b>\n\nNama Pack: <code>${packName}</code>\n\nApakah pack stiker ini aman untuk dikirimkan secara publik?`, reviewKeyboard);
+      await sendTelegramMessage(botToken, parseInt(adminChatId), `⚠️ <b>Review Stiker Baru</b>\n\nNama Pack: <code>${packName}</code>\nPengirim: <code>${chatId}</code>\n\nJika diizinkan, bot otomatis mengkloning pack ini menjadi milik @FizaTalkBot.`, reviewKeyboard);
     }
   } else {
-    // Menangani race-condition (user spam stiker berbarengan sebelum insert selesai)
-    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini sedang ditinjau oleh admin.");
+    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini sedang diproses sistem.");
   }
 
-  return false;
+  return false; 
 }
 
 // Satu panggilan menangani SEMUA: upsert, channel check, state, reputation, search
@@ -3283,42 +3354,76 @@ Deno.serve(async (req) => {
       
 
       // Menangkap callback 'ap_' (Allow Pack) dan 'dp_' (Deny Pack)
-      if (callbackData.startsWith('ap_') || callbackData.startsWith('dp_')) {
-        const isAllow = callbackData.startsWith('ap_');
-        const packId = callbackData.replace(isAllow ? 'ap_' : 'dp_', '');
-        const newStatus = isAllow ? 'approved' : 'rejected';
+      if (callbackData.startsWith('ap_')) {
+        const packId = callbackData.replace('ap_', '');
+        const adminChatId = callbackQuery.message.chat.id;
+        const messageId = callbackQuery.message.message_id;
 
-        // 1. Ambil nama pack berdasarkan ID
-        const { data: packData } = await supabase.from('sticker_packs').select('pack_name').eq('id', packId).single();
-        
-        if (packData) {
-          // 2. Update Database
-          await supabase.from('sticker_packs').update({ 
-            status: newStatus, 
-            updated_at: new Date().toISOString() 
-          }).eq('id', packId);
-          
-          // 3. Update In-Memory Cache secara instan
-          stickerPackCache.set(packData.pack_name, newStatus);
-
-          // 4. Update teks pesan admin agar tombol hilang (mencegah klik ganda)
-          await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+        // 1. Loading UI - Edit pesan agar tidak ditekan admin berulang kali
+        await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              chat_id: userId,
-              message_id: message?.message_id,
-              text: `⚠️ <b>Review Stiker Selesai</b>\n\nNama Pack: <code>${packData.pack_name}</code>\nStatus: ${isAllow ? '✅ Diizinkan' : '❌ Ditolak'}`,
-              parse_mode: 'HTML'
+                chat_id: adminChatId,
+                message_id: messageId,
+                text: callbackQuery.message.text + `\n\n⏳ <b>Sedang diproses... Mengkloning stiker...</b>`
             })
-          });
+        });
 
-          await answerCallbackQuery(botToken, query.id, `Pack stiker berhasil ${isAllow ? 'diizinkan' : 'ditolak'}.`);
-        } else {
-          await answerCallbackQuery(botToken, query.id, '❌ Pack tidak ditemukan.', true);
-        }
+        const { data: pack } = await supabase.from('sticker_packs').select('*').eq('id', packId).single();
         
-        return new Response('OK', { status: 200, headers: corsHeaders });
+        if (pack && pack.status === 'pending') {
+          // 💡 Environment variable ini perlu Anda set di dashboard Supabase Anda
+          const OWNER_ID = parseInt(Deno.env.get('STICKER_OWNER_ID') || '0'); 
+          const BOT_USERNAME = Deno.env.get('BOT_USERNAME') || 'FizaTalkBot';
+
+          if (!OWNER_ID) {
+            await sendTelegramMessage(botToken, adminChatId, `❌ Gagal: Env variabel STICKER_OWNER_ID belum diset! (Dibutuhkan ID telegram admin pribadi).`);
+            return new Response('OK');
+          }
+
+          // 2. Mulai eksekusi Kloning
+          const newPackName = await cloneStickerPack(botToken, pack.pack_name, BOT_USERNAME, OWNER_ID);
+          
+          if (newPackName) {
+            // 3. Update Database & In-Memory Cache
+            await supabase.from('sticker_packs')
+              .update({ status: 'approved', fiza_pack_name: newPackName })
+              .eq('id', packId);
+            
+            stickerPackCache.set(pack.pack_name, { status: 'approved', fiza_pack_name: newPackName });
+
+            // 4. Beri feedback visual ke Admin
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: messageId,
+                  text: callbackQuery.message.text + `\n\n✅ <b>BERHASIL KLONING!</b>\nStiker diclone ke: <code>${newPackName}</code>`
+              })
+            });
+
+            // 5. Beritahu kembali user yang pertama kali request
+            if (pack.requester_id) {
+              await sendTelegramMessage(
+                  botToken, 
+                  pack.requester_id, 
+                  `🎉 <b>Stiker yang kamu ajukan telah disetujui!</b>\n\nKami telah membuat versi resmi FizaTalk. Silakan tambahkan dan gunakan pack ini untuk dikirim ke partner:\n👉 https://t.me/addstickers/${newPackName}`
+              );
+            }
+          } else {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: messageId,
+                  text: callbackQuery.message.text + `\n\n❌ <b>GAGAL KLONING.</b>\nPastikan stiker valid dan bot telah diajak bicara (/start) oleh akun STICKER_OWNER_ID.`
+              })
+            });
+          }
+        }
       }
 
       // Eksekusi Blokir
