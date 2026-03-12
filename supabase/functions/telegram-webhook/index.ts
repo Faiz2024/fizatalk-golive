@@ -3963,29 +3963,8 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHANGE TARGET (INLINE BUTTON) ---
       if (callbackData === 'change_target') {
-        // Cek filter usage via RPC (premium = unlimited, non-premium = 10x/hari)
+        // Ambil target gender saat ini
         const { data: filterCheck } = await supabase.rpc('check_and_use_filter', { p_user_id: userId });
-
-        if (!filterCheck?.allowed) {
-          // Kesempatan habis - tampilkan pesan filter exhausted
-          await answerCallbackQuery(botToken, query.id);
-          const exhaustedMsg = buildFilterExhaustedMessage();
-          const keyboard = buildPremiumNormalKeyboard();
-          const premiumFileId = await getPremiumFileId(supabase);
-          if (premiumFileId) {
-            try {
-              await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: userId, photo: premiumFileId, caption: exhaustedMsg, parse_mode: 'HTML', reply_markup: keyboard })
-              });
-            } catch (e) {
-              await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
-            }
-          } else {
-            await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
-          }
-          return new Response('OK', { status: 200 });
-        }
 
         // Tampilkan pilihan target gender
         const targetKeyboard = {
@@ -4002,12 +3981,11 @@ Deno.serve(async (req) => {
 
         const tg = filterCheck?.target_gender;
         const currentTarget = tg ? (tg === 'cowok' ? 'Cowok 👦' : tg === 'cewek' ? 'Cewek 👧' : 'Semua 👥') : 'Semua 👥';
-        const remainingText = filterCheck?.is_premium ? '' : `\n\n📊 Sisa kesempatan filter: <b>${filterCheck?.remaining ?? 0}x</b> (reset 00:00 WIB)`;
 
         await answerCallbackQuery(botToken, query.id);
         await sendTelegramMessage(
           botToken, userId,
-          `🎯 <b>Pilih Target Gender Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>${remainingText}\n\nPilih siapa yang ingin kamu ajak chat:`,
+          `🎯 <b>Pilih Target Gender Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>\n\nPilih siapa yang ingin kamu ajak chat:`,
           targetKeyboard
         );
 
