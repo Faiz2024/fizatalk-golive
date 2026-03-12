@@ -3599,7 +3599,7 @@ Deno.serve(async (req) => {
         await answerCallbackQuery(botToken, query.id);
         await sendTelegramMessage(
           botToken, userId,
-          `📍 <b>Pilih Target Lokasi Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>${remainingText}\n\nPilih lokasi partner yang ingin kamu ajak chat:`,
+          `📍 <b>Pilih Target Lokasi Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>\n\nPilih lokasi partner yang ingin kamu ajak chat:`,
           locationKeyboard
         );
 
