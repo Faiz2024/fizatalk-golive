@@ -3510,14 +3510,6 @@ Deno.serve(async (req) => {
             })
           });
 
-          // Beritahu requester
-          if (pack.requester_id) {
-            await sendTelegramMessage(
-              botToken,
-              pack.requester_id,
-              `❌ <b>Stiker yang kamu ajukan ditolak.</b>\n\nPack stiker ini tidak diizinkan. Silakan gunakan stiker dari channel @FizaStick.`
-            );
-          }
         } else {
           await answerCallbackQuery(botToken, query.id, '⚠️ Pack sudah diproses sebelumnya.');
         }
