@@ -2407,7 +2407,7 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
 
     // Gunakan stiker indeks pertama [0] sebagai gambar preview.
     // 🚀 PERBAIKAN: Ambil stiker indeks [0] dari PACK YANG BARU DIBUAT (Kloning)
-    if (inputStickers.length > 0) {
+    if (addedCount > 0) {
       // Jalankan secara background (fire-and-forget) agar bot tidak lambat
       fetch(`${TELEGRAM_API}${botToken}/getStickerSet?name=${newPackName}`)
         .then(res => res.json())
