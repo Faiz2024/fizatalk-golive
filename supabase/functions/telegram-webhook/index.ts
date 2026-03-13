@@ -2521,51 +2521,40 @@ async function comprehensiveSearchAction(
     return { success: false, handled: true, result };
   }
   
-  // Handle jika user premium kena temp ban (blocked_until)
+  // Handle jika user kena temp ban (blocked_until) - baik premium maupun non-premium
   if (!result.success && result.error === 'user_temp_banned') {
     const blockedUntil = result.blocked_until ? new Date(result.blocked_until) : null;
-    const blockedUntilStr = blockedUntil ? formatDateTimeWIB(blockedUntil) : '00:00 WIB';
+    const blockedUntilStr = blockedUntil ? formatDateTimeWIB(blockedUntil) : 'tidak diketahui';
     
+    const unblockKeyboard = {
+      inline_keyboard: [
+        [{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }],
+        [{ text: '💎 Upgrade Premium', callback_data: 'buy_premium_normal_7' }]
+      ]
+    };
+
     await sendTelegramMessage(
       botToken,
       userId,
-      `⏳ <b>AKUN DIBATASI SEMENTARA</b>\n\n⚠️ Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda.\n\n🔓 Akun Anda akan dapat digunakan kembali pada:\n📅 <b>${blockedUntilStr}</b>\n\n💡 Gunakan waktu ini untuk merefleksikan perilaku chat Anda. Hindari spam, konten NSFW, perilaku toksik, dan trolling.`
+      `⏳ <b>AKUN DIBATASI SEMENTARA</b>\n\n⚠️ Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda.\n\n🔓 Akun akan aktif kembali pada:\n📅 <b>${blockedUntilStr}</b>\n\n💡 Atau buka blokir sekarang:`,
+      unblockKeyboard
     );
     return { success: false, handled: true, result };
   }
   
-  // Handle jika user banned via penalty points
-  // Handle jika user banned via penalty points
+  // Handle jika user banned permanen (oleh admin via blocked_users)
   if (!result.success && result.error === 'user_banned') {
     const blockedKeyboard = {
       inline_keyboard: [
-        [
-          { text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }
-        ],
-        [
-          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_normal_7' }
-        ]
+        [{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }],
+        [{ text: '💎 Upgrade Premium', callback_data: 'buy_premium_normal_7' }]
       ]
     };
-
-    const blockedMessage = `🚫 <b>AKUN ANDA DIBLOKIR</b>
-
-  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan sampai batas waktu yang tidak ditentukan.</b>
-
-  🔓 <b>CARA MEMBUKA BLOKIR:</b>
-
-  1️⃣ <b>Bayar Denda Pelanggaran</b>
-  Hapus status blokir saat ini dengan membayar denda sebesar <b>Rp 10.000</b>.
-
-  2️⃣ <b>Upgrade ke Premium (Recommended)</b>
-  Dapatkan status <b>VIP</b> yang lebih kebal terhadap laporan palsu, prioritas matching, dan fitur eksklusif lainnya.
-
-  Pilih opsi di bawah untuk memulihkan akun Anda segera:`;
 
     await sendTelegramMessage(
       botToken,
       userId,
-      blockedMessage,
+      `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ Akun Anda dinonaktifkan oleh admin.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ <b>Bayar Denda</b> - Rp 10.000\n2️⃣ <b>Upgrade Premium</b> - Kebal laporan palsu + fitur eksklusif\n\nPilih opsi di bawah:`,
       blockedKeyboard
     );
     return { success: false, handled: true, result };
