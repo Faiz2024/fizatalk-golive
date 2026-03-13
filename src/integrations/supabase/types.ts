@@ -344,22 +344,28 @@ export type Database = {
       sticker_packs: {
         Row: {
           added_at: string | null
+          fiza_pack_name: string | null
           id: number
           pack_name: string
+          requester_id: number | null
           status: string
           updated_at: string | null
         }
         Insert: {
           added_at?: string | null
+          fiza_pack_name?: string | null
           id?: number
           pack_name: string
+          requester_id?: number | null
           status?: string
           updated_at?: string | null
         }
         Update: {
           added_at?: string | null
+          fiza_pack_name?: string | null
           id?: number
           pack_name?: string
+          requester_id?: number | null
           status?: string
           updated_at?: string | null
         }
@@ -371,6 +377,8 @@ export type Database = {
           chat_end_count: number | null
           coins: number
           created_at: string
+          filter_uses_date: string | null
+          filter_uses_today: number | null
           first_name: string | null
           gender: string | null
           id: number
@@ -395,6 +403,8 @@ export type Database = {
           chat_end_count?: number | null
           coins?: number
           created_at?: string
+          filter_uses_date?: string | null
+          filter_uses_today?: number | null
           first_name?: string | null
           gender?: string | null
           id: number
@@ -419,6 +429,8 @@ export type Database = {
           chat_end_count?: number | null
           coins?: number
           created_at?: string
+          filter_uses_date?: string | null
+          filter_uses_today?: number | null
           first_name?: string | null
           gender?: string | null
           id?: number
