@@ -2305,13 +2305,13 @@ async function postStickerToChannel(botToken: string, packName: string, previewS
   }
 }
 
-async function cloneStickerPack(botToken: string, originalPackName: string, botUsername: string, ownerId: number): Promise<string | null> {
+async function cloneStickerPack(botToken: string, originalPackName: string, botUsername: string, ownerId: number): Promise<{ packName: string | null; errorMsg: string }> {
   try {
     const getSetRes = await fetch(`${TELEGRAM_API}${botToken}/getStickerSet?name=${originalPackName}`);
     const setJson = await getSetRes.json();
     
     if (!setJson.ok || !setJson.result || !setJson.result.stickers.length) {
-      return null;
+      return { packName: null, errorMsg: setJson.description || 'Pack tidak ditemukan atau kosong' };
     }
     
     const stickers = setJson.result.stickers;
@@ -2344,7 +2344,7 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
     const createJson = await createRes.json();
     if (!createJson.ok) {
       console.error('[CLONE STICKER] Error:', createJson);
-      return null;
+      return { packName: null, errorMsg: createJson.description || 'Gagal membuat sticker set baru' };
     }
 
     // Gunakan stiker indeks pertama [0] sebagai gambar preview.
@@ -2364,10 +2364,10 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
         })
         .catch(err => console.error('[POST TO CHANNEL] Gagal mengambil pack kloning:', err));
     }
-    return newPackName;
+    return { packName: newPackName, errorMsg: '' };
   } catch (error) {
     console.error('[CLONE STICKER] Exception:', error);
-    return null;
+    return { packName: null, errorMsg: error instanceof Error ? error.message : 'Unknown exception' };
   }
 }
 
