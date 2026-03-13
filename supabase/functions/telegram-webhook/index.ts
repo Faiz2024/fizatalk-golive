@@ -2407,7 +2407,11 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
   // 5. Evaluasi Status Interaksi UI/UX ke User
   if (packData) {
     if (packData.status === 'approved') {
-      // Jika disetujui, TAPI user mengirim menggunakan pack aslinya (bukan yang dikloning bot)
+      // Jika stiker resmi Telegram (fiza_pack_name == pack_name), langsung izinkan
+      if (packData.fiza_pack_name === packName) {
+        return true; // Stiker resmi, langsung teruskan ke partner
+      }
+      // Jika disetujui dan sudah dikloning, minta user pakai pack kloning
       if (packData.fiza_pack_name) {
          await sendTelegramMessage(botToken, chatId, `⚠️ <b>Gunakan Pack Resmi Kami!</b>\n\nStiker yang kamu kirim sudah ada versi khususnya. Silakan tambahkan dan gunakan stiker dari pack berikut:\n👉 https://t.me/addstickers/${packData.fiza_pack_name}\n\n<i>Atau gunakan stiker dari channel @FizaStick.</i>`);
       } else {
