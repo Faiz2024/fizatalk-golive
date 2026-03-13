@@ -3406,8 +3406,9 @@ Deno.serve(async (req) => {
       // Menangkap callback 'ap_' (Allow Pack) dan 'dp_' (Deny Pack)
       if (callbackData.startsWith('ap_')) {
         const packId = callbackData.replace('ap_', '');
-        const adminChatId = query.message.chat.id;
-        const messageId = query.message.message_id;
+        const adminChatId = query.message!.chat.id;
+        const messageId = query.message!.message_id;
+        const originalText = (query.message as any)?.text || '';
 
         // 1. Loading UI - Edit pesan agar tidak ditekan admin berulang kali
         await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
@@ -3416,7 +3417,8 @@ Deno.serve(async (req) => {
             body: JSON.stringify({
                 chat_id: adminChatId,
                 message_id: messageId,
-                text: query.message.text + `\n\n⏳ <b>Sedang diproses... Mengkloning stiker...</b>`
+                text: originalText + `\n\n⏳ <b>Sedang diproses... Mengkloning stiker...</b>`,
+                parse_mode: 'HTML'
             })
         });
 
