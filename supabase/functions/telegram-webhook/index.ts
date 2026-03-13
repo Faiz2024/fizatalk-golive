@@ -2344,7 +2344,7 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
     const createJson = await createRes.json();
     if (!createJson.ok) {
       console.error('[CLONE STICKER] Error:', createJson);
-      return null;
+      return { packName: null, errorMsg: createJson.description || 'Gagal membuat sticker set baru' };
     }
 
     // Gunakan stiker indeks pertama [0] sebagai gambar preview.
