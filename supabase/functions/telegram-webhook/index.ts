@@ -1621,7 +1621,7 @@ function buildPremiumNormalKeyboard(): any {
 
 // Helper function to send premium offer with photo
 async function sendPremiumOffer(supabase: any, botToken: string, userId: number, featureName: string): Promise<void> {
-  const premiumMessage = buildPremiumOfferMessage(featureName);
+  const premiumMessage = buildFilterPremiumOnlyMessage();
   const keyboard = buildPremiumNormalKeyboard();
   
   // Get premium file_id from database
