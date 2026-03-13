@@ -3472,7 +3472,8 @@ Deno.serve(async (req) => {
               body: JSON.stringify({
                   chat_id: adminChatId,
                   message_id: messageId,
-                  text: query.message.text + `\n\n❌ <b>GAGAL KLONING.</b>\nPastikan stiker valid dan bot telah diajak bicara (/start) oleh akun STICKER_OWNER_ID.`
+                  text: originalText + `\n\n❌ <b>GAGAL KLONING.</b>\nPastikan stiker valid dan bot telah diajak bicara (/start) oleh akun STICKER_OWNER_ID.`,
+                  parse_mode: 'HTML'
               })
             });
           }
