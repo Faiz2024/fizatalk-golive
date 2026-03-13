@@ -3480,6 +3480,52 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Handler 'dp_' (Deny/Tolak Pack)
+      if (callbackData.startsWith('dp_')) {
+        const packId = callbackData.replace('dp_', '');
+        const adminChatId = query.message!.chat.id;
+        const messageId = query.message!.message_id;
+        const originalText = (query.message as any)?.text || '';
+
+        const { data: pack } = await supabase.from('sticker_packs').select('*').eq('id', packId).single();
+
+        if (pack && pack.status === 'pending') {
+          // Update status ke rejected
+          await supabase.from('sticker_packs')
+            .update({ status: 'rejected' })
+            .eq('id', packId);
+
+          // Update cache
+          stickerPackCache.set(pack.pack_name, { status: 'rejected', fiza_pack_name: null });
+
+          // Edit pesan admin
+          await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: messageId,
+              text: originalText + `\n\n❌ <b>DITOLAK.</b> Pack ini tidak akan bisa digunakan.`,
+              parse_mode: 'HTML'
+            })
+          });
+
+          // Beritahu requester
+          if (pack.requester_id) {
+            await sendTelegramMessage(
+              botToken,
+              pack.requester_id,
+              `❌ <b>Stiker yang kamu ajukan ditolak.</b>\n\nPack stiker ini tidak diizinkan. Silakan gunakan stiker dari channel @FizaStick.`
+            );
+          }
+        } else {
+          await answerCallbackQuery(botToken, query.id, '⚠️ Pack sudah diproses sebelumnya.');
+        }
+
+        await answerCallbackQuery(botToken, query.id);
+        return new Response('OK');
+      }
+
       // Eksekusi Blokir
       if (callbackData.startsWith('admin_block_')) {
         const targetId = parseInt(callbackData.split('_')[2]);
