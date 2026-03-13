@@ -2407,11 +2407,7 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
   // 5. Evaluasi Status Interaksi UI/UX ke User
   if (packData) {
     if (packData.status === 'approved') {
-      // Jika stiker resmi Telegram (fiza_pack_name == pack_name), langsung izinkan
-      if (packData.fiza_pack_name === packName) {
-        return true; // Stiker resmi, langsung teruskan ke partner
-      }
-      // Jika disetujui dan sudah dikloning, minta user pakai pack kloning
+      // Jika disetujui, TAPI user mengirim menggunakan pack aslinya (bukan yang dikloning bot)
       if (packData.fiza_pack_name) {
          await sendTelegramMessage(botToken, chatId, `⚠️ <b>Gunakan Pack Resmi Kami!</b>\n\nStiker yang kamu kirim sudah ada versi khususnya. Silakan tambahkan dan gunakan stiker dari pack berikut:\n👉 https://t.me/addstickers/${packData.fiza_pack_name}\n\n<i>Atau gunakan stiker dari channel @FizaStick.</i>`);
       } else {
@@ -3429,85 +3425,57 @@ Deno.serve(async (req) => {
         const { data: pack } = await supabase.from('sticker_packs').select('*').eq('id', packId).single();
         
         if (pack && pack.status === 'pending') {
+          // 💡 Environment variable ini perlu Anda set di dashboard Supabase Anda
+          const OWNER_ID = parseInt(Deno.env.get('STICKER_OWNER_ID') || '0'); 
           const BOT_USERNAME = Deno.env.get('BOT_USERNAME') || 'FizaTalkBot';
 
-          // 🔍 Deteksi sticker resmi Telegram: pack resmi TIDAK memiliki suffix "_by_BotUsername"
-          const isOfficialPack = !pack.pack_name.includes('_by_');
+          if (!OWNER_ID) {
+            await sendTelegramMessage(botToken, adminChatId, `❌ Gagal: Env variabel STICKER_OWNER_ID belum diset! (Dibutuhkan ID telegram admin pribadi).`);
+            return new Response('OK');
+          }
 
-          if (isOfficialPack) {
-            // ✅ Stiker resmi Telegram - langsung izinkan tanpa kloning
+          // 2. Mulai eksekusi Kloning
+          const newPackName = await cloneStickerPack(botToken, pack.pack_name, BOT_USERNAME, OWNER_ID);
+          
+          if (newPackName) {
+            // 3. Update Database & In-Memory Cache
             await supabase.from('sticker_packs')
-              .update({ status: 'approved', fiza_pack_name: pack.pack_name })
+              .update({ status: 'approved', fiza_pack_name: newPackName })
               .eq('id', packId);
             
-            stickerPackCache.set(pack.pack_name, { status: 'approved', fiza_pack_name: pack.pack_name });
+            stickerPackCache.set(pack.pack_name, { status: 'approved', fiza_pack_name: newPackName });
 
+            // 4. Beri feedback visual ke Admin
             await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: adminChatId,
-                message_id: messageId,
-                text: originalText + `\n\n✅ <b>DIIZINKAN (Stiker Resmi Telegram)</b>\nPack <code>${pack.pack_name}</code> langsung disetujui tanpa kloning.`,
-                parse_mode: 'HTML'
-              })
-            });
-
-            if (pack.requester_id) {
-              await sendTelegramMessage(
-                botToken,
-                pack.requester_id,
-                `🎉 <b>Stiker yang kamu ajukan telah disetujui!</b>\n\nPack stiker resmi ini sekarang bisa digunakan untuk chatting.`
-              );
-            }
-          } else {
-            // 🔄 Stiker buatan bot lain - perlu kloning
-            const OWNER_ID = parseInt(Deno.env.get('STICKER_OWNER_ID') || '0');
-
-            if (!OWNER_ID) {
-              await sendTelegramMessage(botToken, adminChatId, `❌ Gagal: Env variabel STICKER_OWNER_ID belum diset!`);
-              return new Response('OK');
-            }
-
-            const newPackName = await cloneStickerPack(botToken, pack.pack_name, BOT_USERNAME, OWNER_ID);
-            
-            if (newPackName) {
-              await supabase.from('sticker_packs')
-                .update({ status: 'approved', fiza_pack_name: newPackName })
-                .eq('id', packId);
-              
-              stickerPackCache.set(pack.pack_name, { status: 'approved', fiza_pack_name: newPackName });
-
-              await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
                   chat_id: adminChatId,
                   message_id: messageId,
                   text: originalText + `\n\n✅ <b>BERHASIL KLONING!</b>\nStiker diclone ke: <code>${newPackName}</code>`,
                   parse_mode: 'HTML'
-                })
-              });
+              })
+            });
 
-              if (pack.requester_id) {
-                await sendTelegramMessage(
-                  botToken,
-                  pack.requester_id,
+            // 5. Beritahu kembali user yang pertama kali request
+            if (pack.requester_id) {
+              await sendTelegramMessage(
+                  botToken, 
+                  pack.requester_id, 
                   `🎉 <b>Stiker yang kamu ajukan telah disetujui!</b>\n\nKami telah membuat versi resmi FizaTalk. Silakan tambahkan dan gunakan pack ini untuk dikirim ke partner:\n👉 https://t.me/addstickers/${newPackName}`
-                );
-              }
-            } else {
-              await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+              );
+            }
+          } else {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
                   chat_id: adminChatId,
                   message_id: messageId,
                   text: originalText + `\n\n❌ <b>GAGAL KLONING.</b>\nPastikan stiker valid dan bot telah diajak bicara (/start) oleh akun STICKER_OWNER_ID.`,
                   parse_mode: 'HTML'
-                })
-              });
-            }
+              })
+            });
           }
         }
       }
