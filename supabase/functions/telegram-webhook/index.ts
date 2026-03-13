@@ -3452,7 +3452,8 @@ Deno.serve(async (req) => {
               body: JSON.stringify({
                   chat_id: adminChatId,
                   message_id: messageId,
-                  text: query.message.text + `\n\n✅ <b>BERHASIL KLONING!</b>\nStiker diclone ke: <code>${newPackName}</code>`
+                  text: originalText + `\n\n✅ <b>BERHASIL KLONING!</b>\nStiker diclone ke: <code>${newPackName}</code>`,
+                  parse_mode: 'HTML'
               })
             });
 
