@@ -2348,10 +2348,21 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
     }
 
     // Gunakan stiker indeks pertama [0] sebagai gambar preview.
-    // Dijalankan secara fire-and-forget (tanpa 'await') demi performa & penghematan tagihan fungsi cloud
+    // 🚀 PERBAIKAN: Ambil stiker indeks [0] dari PACK YANG BARU DIBUAT (Kloning)
     if (inputStickers.length > 0) {
-      postStickerToChannel(botToken, newPackName, inputStickers[0].sticker)
-        .catch(err => console.error(err));
+      // Jalankan secara background (fire-and-forget) agar bot tidak lambat
+      fetch(`${TELEGRAM_API}${botToken}/getStickerSet?name=${newPackName}`)
+        .then(res => res.json())
+        .then(newSetJson => {
+          if (newSetJson.ok && newSetJson.result.stickers.length > 0) {
+            // Dapatkan file_id stiker yang sudah terikat dengan pack kloning
+            const clonedStickerId = newSetJson.result.stickers[0].file_id;
+            
+            // Post stiker kloning ke channel
+            return postStickerToChannel(botToken, newPackName, clonedStickerId);
+          }
+        })
+        .catch(err => console.error('[POST TO CHANNEL] Gagal mengambil pack kloning:', err));
     }
     return newPackName;
   } catch (error) {
