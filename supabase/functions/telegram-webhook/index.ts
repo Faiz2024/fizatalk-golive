@@ -2305,13 +2305,13 @@ async function postStickerToChannel(botToken: string, packName: string, previewS
   }
 }
 
-async function cloneStickerPack(botToken: string, originalPackName: string, botUsername: string, ownerId: number): Promise<string | null> {
+async function cloneStickerPack(botToken: string, originalPackName: string, botUsername: string, ownerId: number): Promise<{ packName: string | null; errorMsg: string }> {
   try {
     const getSetRes = await fetch(`${TELEGRAM_API}${botToken}/getStickerSet?name=${originalPackName}`);
     const setJson = await getSetRes.json();
     
     if (!setJson.ok || !setJson.result || !setJson.result.stickers.length) {
-      return null;
+      return { packName: null, errorMsg: setJson.description || 'Pack tidak ditemukan atau kosong' };
     }
     
     const stickers = setJson.result.stickers;
