@@ -2322,12 +2322,15 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
     const newPackName = `fz_${randomStr}_by_${botUsername}`;
     const newPackTitle = "@FizaTalkBot - Random Chat Bot";
 
-    // 🚀 OPTIMASI PERFORMA & BIAYA CLOUD: Ambil 50 stiker teratas untuk di bulk-create. 
-    // Mencegah Timeout dan Error 429 Too Many Requests dari Telegram.
-    const inputStickers = stickers.slice(0, 50).map((s: any) => ({
-      sticker: s.file_id,
-      emoji_list: [s.emoji || '✨']
-    }));
+    // 🚀 OPTIMASI: Buat pack dengan 1 stiker, lalu tambahkan sisanya satu per satu dengan delay
+    // untuk menghindari error 429 Too Many Requests dari Telegram.
+    const maxStickers = Math.min(stickers.length, 50);
+    
+    // Step 1: Buat pack baru dengan stiker pertama
+    const firstSticker = {
+      sticker: stickers[0].file_id,
+      emoji_list: [stickers[0].emoji || '✨']
+    };
     
     const createRes = await fetch(`${TELEGRAM_API}${botToken}/createNewStickerSet`, {
       method: 'POST',
@@ -2336,20 +2339,75 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
         user_id: ownerId,
         name: newPackName,
         title: newPackTitle,
-        stickers: inputStickers,
+        stickers: [firstSticker],
         sticker_format: stickerFormat
       })
     });
     
     const createJson = await createRes.json();
     if (!createJson.ok) {
-      console.error('[CLONE STICKER] Error:', createJson);
+      console.error('[CLONE STICKER] createNewStickerSet Error:', createJson);
       return null;
     }
+    
+    // Step 2: Tambahkan sisa stiker satu per satu dengan delay 500ms
+    let addedCount = 1;
+    for (let i = 1; i < maxStickers; i++) {
+      // Delay 500ms antar request untuk menghindari rate limit
+      await new Promise(r => setTimeout(r, 500));
+      
+      const stickerData = {
+        sticker: stickers[i].file_id,
+        emoji_list: [stickers[i].emoji || '✨']
+      };
+      
+      try {
+        const addRes = await fetch(`${TELEGRAM_API}${botToken}/addStickerToSet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: ownerId,
+            name: newPackName,
+            sticker: stickerData
+          })
+        });
+        
+        const addJson = await addRes.json();
+        if (!addJson.ok) {
+          // Jika kena rate limit (429), tunggu sesuai retry_after lalu coba sekali lagi
+          if (addJson.error_code === 429 && addJson.parameters?.retry_after) {
+            const waitSec = Math.min(addJson.parameters.retry_after, 30);
+            console.log(`[CLONE STICKER] Rate limited, waiting ${waitSec}s...`);
+            await new Promise(r => setTimeout(r, waitSec * 1000));
+            
+            // Retry sekali
+            const retryRes = await fetch(`${TELEGRAM_API}${botToken}/addStickerToSet`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: ownerId,
+                name: newPackName,
+                sticker: stickerData
+              })
+            });
+            const retryJson = await retryRes.json();
+            if (retryJson.ok) addedCount++;
+            else console.error(`[CLONE STICKER] Retry failed sticker ${i}:`, retryJson);
+          } else {
+            console.error(`[CLONE STICKER] Failed sticker ${i}:`, addJson);
+          }
+        } else {
+          addedCount++;
+        }
+      } catch (err) {
+        console.error(`[CLONE STICKER] Exception sticker ${i}:`, err);
+      }
+    }
+    console.log(`[CLONE STICKER] Added ${addedCount}/${maxStickers} stickers to ${newPackName}`);
 
     // Gunakan stiker indeks pertama [0] sebagai gambar preview.
     // 🚀 PERBAIKAN: Ambil stiker indeks [0] dari PACK YANG BARU DIBUAT (Kloning)
-    if (inputStickers.length > 0) {
+    if (addedCount > 0) {
       // Jalankan secara background (fire-and-forget) agar bot tidak lambat
       fetch(`${TELEGRAM_API}${botToken}/getStickerSet?name=${newPackName}`)
         .then(res => res.json())
