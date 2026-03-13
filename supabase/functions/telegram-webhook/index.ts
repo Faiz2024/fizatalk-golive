@@ -3435,9 +3435,11 @@ Deno.serve(async (req) => {
           }
 
           // 2. Mulai eksekusi Kloning
-          const newPackName = await cloneStickerPack(botToken, pack.pack_name, BOT_USERNAME, OWNER_ID);
+          const cloneResult = await cloneStickerPack(botToken, pack.pack_name, BOT_USERNAME, OWNER_ID);
           
-          if (newPackName) {
+          if (cloneResult.packName) {
+            const newPackName = cloneResult.packName;
+            
             // 3. Update Database & In-Memory Cache
             await supabase.from('sticker_packs')
               .update({ status: 'approved', fiza_pack_name: newPackName })
@@ -3466,13 +3468,14 @@ Deno.serve(async (req) => {
               );
             }
           } else {
+            // PERBAIKAN: Tampilkan error asli dari Telegram di chat admin
             await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                   chat_id: adminChatId,
                   message_id: messageId,
-                  text: originalText + `\n\n❌ <b>GAGAL KLONING.</b>\nPastikan stiker valid dan bot telah diajak bicara (/start) oleh akun STICKER_OWNER_ID.`,
+                  text: originalText + `\n\n❌ <b>GAGAL KLONING.</b>\nAlasan: <code>${cloneResult.errorMsg}</code>`,
                   parse_mode: 'HTML'
               })
             });
