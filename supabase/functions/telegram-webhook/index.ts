@@ -1594,13 +1594,11 @@ function getPremiumBenefitsText(): string {
 • 🚀 Prioritas matching`;
 }
 
-// Helper function to build premium offer message for non-premium users (filter habis)
-function buildFilterExhaustedMessage(): string {
-  return `⚠️ <b>Kesempatan Filter Gratis Habis!</b>
+// Helper function to build premium-only filter message
+function buildFilterPremiumOnlyMessage(): string {
+  return `🔒 <b>Fitur Khusus Premium!</b>
 
-Kesempatan 10x filter gratis kamu hari ini sudah habis. Kuota akan di-reset setiap pukul <b>00:00 WIB</b>.
-
-💎 <b>Upgrade ke Premium</b> untuk filter <b>TANPA BATAS</b>!
+Filter gender dan lokasi hanya tersedia untuk pengguna Premium.
 
 ${getPremiumBenefitsText()}
 
@@ -1608,12 +1606,7 @@ ${getPremiumBenefitsText()}
 📦 <b>1 MINGGU:</b> Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}
 📦 <b>1 BULAN:</b> Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}
 
-💎 Beli sekarang untuk menikmati filter tanpa batas!`;
-}
-
-// Legacy: keep old function for compatibility
-function buildPremiumOfferMessage(featureName: string): string {
-  return buildFilterExhaustedMessage();
+💎 Beli sekarang untuk menggunakan filter!`;
 }
 
 // Helper function to build premium purchase keyboard (normal prices)
