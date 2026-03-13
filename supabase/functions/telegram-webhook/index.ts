@@ -4207,26 +4207,32 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHANGE TARGET (INLINE BUTTON) ---
       if (callbackData === 'change_target') {
-        // Cek filter usage via RPC (premium = unlimited, non-premium = 10x/hari)
-        const { data: filterCheck } = await supabase.rpc('check_and_use_filter', { p_user_id: userId });
+        // Cek premium langsung (filter hanya untuk premium)
+        const { data: userData } = await supabase
+          .from('telegram_users')
+          .select('premium_until, target_gender')
+          .eq('id', userId)
+          .single();
 
-        if (!filterCheck?.allowed) {
-          // Kesempatan habis - tampilkan pesan filter exhausted
+        const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
+
+        if (!isPremium) {
+          // Non-premium: tampilkan pesan premium-only
           await answerCallbackQuery(botToken, query.id);
-          const exhaustedMsg = buildFilterExhaustedMessage();
+          const premiumMsg = buildFilterPremiumOnlyMessage();
           const keyboard = buildPremiumNormalKeyboard();
           const premiumFileId = await getPremiumFileId(supabase);
           if (premiumFileId) {
             try {
               await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: userId, photo: premiumFileId, caption: exhaustedMsg, parse_mode: 'HTML', reply_markup: keyboard })
+                body: JSON.stringify({ chat_id: userId, photo: premiumFileId, caption: premiumMsg, parse_mode: 'HTML', reply_markup: keyboard })
               });
             } catch (e) {
-              await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
+              await sendTelegramMessage(botToken, userId, premiumMsg, keyboard);
             }
           } else {
-            await sendTelegramMessage(botToken, userId, exhaustedMsg, keyboard);
+            await sendTelegramMessage(botToken, userId, premiumMsg, keyboard);
           }
           return new Response('OK', { status: 200 });
         }
@@ -4244,14 +4250,13 @@ Deno.serve(async (req) => {
           ]
         };
 
-        const tg = filterCheck?.target_gender;
+        const tg = userData?.target_gender;
         const currentTarget = tg ? (tg === 'cowok' ? 'Cowok 👦' : tg === 'cewek' ? 'Cewek 👧' : 'Semua 👥') : 'Semua 👥';
-        const remainingText = filterCheck?.is_premium ? '' : `\n\n📊 Sisa kesempatan filter: <b>${filterCheck?.remaining ?? 0}x</b> (reset 00:00 WIB)`;
 
         await answerCallbackQuery(botToken, query.id);
         await sendTelegramMessage(
           botToken, userId,
-          `🎯 <b>Pilih Target Gender Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>${remainingText}\n\nPilih siapa yang ingin kamu ajak chat:`,
+          `🎯 <b>Pilih Target Gender Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>\n\nPilih siapa yang ingin kamu ajak chat:`,
           targetKeyboard
         );
 
