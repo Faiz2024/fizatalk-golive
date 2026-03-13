@@ -2364,10 +2364,10 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
         })
         .catch(err => console.error('[POST TO CHANNEL] Gagal mengambil pack kloning:', err));
     }
-    return newPackName;
+    return { packName: newPackName, errorMsg: '' };
   } catch (error) {
     console.error('[CLONE STICKER] Exception:', error);
-    return null;
+    return { packName: null, errorMsg: error instanceof Error ? error.message : 'Unknown exception' };
   }
 }
 
