@@ -2364,16 +2364,27 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
   }
 }
 
-async function handleStickerReview(supabase: any, botToken: string, message: any): Promise<boolean> {
+async function handleStickerReview(supabase: any, botToken: string, message: any, isPremium: boolean = false): Promise<boolean> {
   const sticker = message.sticker;
   const packName = sticker.set_name;
   const chatId = message.chat.id;
+
+  if (isPremium) {
+      return true;
+  }
 
   // 1. Tolak otomatis jika stiker custom/ilegal (tidak punya pack)
   if (!packName) {
     await sendTelegramMessage(botToken, chatId, "❌ Stiker kustom tanpa pack resmi tidak diizinkan demi keamanan.");
     return false;
   }
+
+  // Keyboard upgrade premium standar yang memanfaatkan callback original
+  const premiumUpgradeKeyboard = {
+      inline_keyboard: [
+          [{ text: '💎 Upgrade Premium (Bebas Stiker)', callback_data: 'buy_premium_normal_7' }]
+      ]
+  };
 
   // 2. BYPASS OTOMATIS: Jika stiker yang dikirim buatan Bot kita sendiri (@FizaTalkBot)
   const botUsername = Deno.env.get('BOT_USERNAME') || 'FizaTalkBot';
@@ -2410,12 +2421,12 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
     }
     
     if (packData.status === 'rejected') {
-      await sendTelegramMessage(botToken, chatId, "❌ Stiker dari pack ini tidak diizinkan. Silakan gunakan stiker dari channel @FizaStick.");
+      await sendTelegramMessage(botToken, chatId, "❌ Stiker dari pack ini tidak diizinkan. Silakan gunakan stiker dari channel @FizaStick.", premiumUpgradeKeyboard);
       return false;
     }
     
     if (packData.status === 'pending') {
-      await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker tersebut sedang ditinjau oleh admin.\n💡 <i>Rekomendasi: Gunakan stiker dari channel @FizaStick terlebih dahulu.</i>");
+      await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker tersebut sedang ditinjau oleh admin.\n💡 <i>Rekomendasi: Gunakan stiker dari channel @FizaStick terlebih dahulu.</i>", premiumUpgradeKeyboard);
       return false;
     }
   }
@@ -2427,7 +2438,7 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
 
   if (!error && newPack) {
     stickerPackCache.set(packName, { status: 'pending', fiza_pack_name: null }); 
-    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker tersebut akan ditinjau oleh admin.\n💡 <i>Rekomendasi: Gunakan stiker dari channel @FizaStick terlebih dahulu.</i>");
+    await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker tersebut akan ditinjau oleh admin.\n💡 <i>Rekomendasi: Gunakan stiker dari channel @FizaStick terlebih dahulu.</i>", premiumUpgradeKeyboard);
 
     const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
     if (adminChatId) {
@@ -4813,7 +4824,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
     // UBAH BAGIAN INI: Tambahkan retry sederhana atau error blocking
     const { data: dbUser, error: dbError } = await supabase
       .from('telegram_users')
-      .select('state, partner_id')
+      .select('state, partner_id, premium_until')
       .eq('id', userId)
       .maybeSingle();
 
@@ -5093,7 +5104,10 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
 
         // === DETEKSI SPAM UNTUK SEMUA JENIS PESAN ===
         let spamMarkup = undefined;
-        if (hasSpamEntities(message)) {
+
+        const isSenderPremium = dbUser?.premium_until && new Date(dbUser.premium_until) > new Date();
+
+        if (hasSpamEntities(message) && !isSenderPremium) {
             spamMarkup = {
                 inline_keyboard: [[ { text: '🚩 Laporkan spam', callback_data: `reportspam_${userId}` } ]]
             };
@@ -5124,7 +5138,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
                     await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
                 }
             } else if (message.sticker) {
-              const isAllowed = await handleStickerReview(supabase, botToken, message);
+              const isAllowed = await handleStickerReview(supabase, botToken, message, isPremium);
               if (!isAllowed) {
                 return new Response('OK', { status: 200, headers: corsHeaders }); 
               }
