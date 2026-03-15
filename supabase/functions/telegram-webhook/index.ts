@@ -1854,9 +1854,14 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
         
         // Peringatan HANYA jika bukan premium
         if (!isPremium) {
+
+            const premiumUpgradeKeyboard = {
+                inline_keyboard: [
+                    [{ text: '💎 Upgrade Premium (Bebas-Peringatan)', callback_data: 'buy_premium_normal_7' }]
+                ]
+            };
             const warnMsg = `⚠️ <b>PERINGATAN (${warnings}/4)</b>\n\nKami mendeteksi aktivitas SPAM atau konten dilarang di akun Anda.\n\n🚫 <b>HIMBAUAN:</b>\nJangan menyebar spam link, mengirim stiker 18+, atau media 18+.\n\n<i>Peringatan ini akan hilang seiring banyaknya partner yang suka berinteraksi dengan Anda.</i>\n\n💎 <b>Beli Premium</b> untuk menghindari peringatan ini dan blokir permanen.`;
-            const premiumKb = buildPremiumNormalKeyboard(); 
-            await sendTelegramMessage(botToken, targetId, warnMsg, premiumKb);
+            await sendTelegramMessage(botToken, targetId, warnMsg, premiumUpgradeKeyboard);
         }
     }
     
