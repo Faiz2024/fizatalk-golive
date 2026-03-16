@@ -2884,7 +2884,7 @@ const LOCATION_LIST = [
   'Bali', 'NTB', 'NTT',
   'Kalimantan Barat', 'Kalimantan Tengah', 'Kalimantan Selatan', 'Kalimantan Timur', 'Kalimantan Utara',
   'Sulawesi Utara', 'Gorontalo', 'Sulawesi Tengah', 'Sulawesi Barat', 'Sulawesi Selatan', 'Sulawesi Tenggara',
-  'Maluku', 'Maluku Utara', 'Papua', 'Papua Barat', 'Papua Selatan', 'Papua Tengah', 'Papua Pegunungan'
+  'Maluku', 'Maluku Utara', 'Papua', 'Papua Barat', 'Papua Selatan', 'Papua Tengah', 'Lainnya'
 ];
 
 // Helper: Show premium offer for target gender (non-premium users)
@@ -3856,9 +3856,8 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
 
-        // Buat keyboard lokasi untuk premium (dengan opsi Semua di atas)
-        const locationButtons = [[{ text: '🇮🇩 Semua Lokasi', callback_data: 'target_loc_semua' }]];
-
+        // Buat keyboard lokasi untuk premium
+        const locationButtons: any[][] = [];
         for (let i = 0; i < LOCATION_LIST.length; i += 3) {
           const row = [];
           for (let j = 0; j < 3 && i + j < LOCATION_LIST.length; j++) {
@@ -3867,6 +3866,7 @@ Deno.serve(async (req) => {
           }
           locationButtons.push(row);
         }
+        locationButtons.push([{ text: '🇮🇩 Semua Lokasi', callback_data: 'target_loc_semua' }]);
 
         const locationKeyboard = { inline_keyboard: locationButtons };
 
@@ -4917,7 +4917,48 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
               };
               await sendTelegramMessage(botToken, userId, '⚠️ Kamu sedang dalam chat.\n\nPilih aksi:', chattingKeyboard);
               isCommand = true;
-          } else if (text === '/filter') {
+          } else if (text === '/filter_lokasi') {
+          // Cek apakah user premium
+          const { data: userData } = await supabase
+            .from('telegram_users')
+            .select('premium_until, target_location')
+            .eq('id', userId)
+            .single();
+
+          const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
+
+          if (!isPremium) {
+            await showLocationFilterPremiumOffer(supabase, botToken, userId);
+            return new Response('OK', { status: 200 });
+          }
+
+          // Buat keyboard lokasi untuk premium (dengan opsi Semua di atas)
+          const locationButtons: any[][] = [];
+          for (let i = 0; i < LOCATION_LIST.length; i += 3) {
+            const row = [];
+            for (let j = 0; j < 3 && i + j < LOCATION_LIST.length; j++) {
+              const loc = LOCATION_LIST[i + j];
+              row.push({ text: loc, callback_data: `target_loc_${loc}` });
+            }
+            locationButtons.push(row);
+          }
+          locationButtons.push([{ text: '🇮🇩 Semua Lokasi', callback_data: 'target_loc_semua' }]);
+
+          const locationKeyboard = {
+            inline_keyboard: locationButtons
+          };
+
+          const currentTarget = userData?.target_location 
+            ? (userData.target_location === 'semua' ? 'Semua 🌏' : `📍 ${userData.target_location}`) 
+            : 'Semua 🌏';
+
+          await sendTelegramMessage(
+            botToken,
+            userId,
+            `📍 <b>Pilih Target Lokasi Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>\n\nPilih lokasi partner yang ingin kamu ajak chat:`,
+            locationKeyboard
+          );
+        } else if (text === '/filter') {
           // Cek apakah user premium
           const { data: userData } = await supabase
             .from('telegram_users')
@@ -5578,7 +5619,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
           }
 
           // Buat keyboard lokasi untuk premium (dengan opsi Semua di atas)
-          const locationButtons = [[{ text: '🌏 Semua Lokasi', callback_data: 'target_loc_semua' }]];
+          const locationButtons: any[][] = [];
           for (let i = 0; i < LOCATION_LIST.length; i += 3) {
             const row = [];
             for (let j = 0; j < 3 && i + j < LOCATION_LIST.length; j++) {
@@ -5587,6 +5628,7 @@ Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
             }
             locationButtons.push(row);
           }
+          locationButtons.push([{ text: '🇮🇩 Semua Lokasi', callback_data: 'target_loc_semua' }]);
 
           const locationKeyboard = {
             inline_keyboard: locationButtons
