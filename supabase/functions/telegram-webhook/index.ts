@@ -3832,23 +3832,8 @@ Deno.serve(async (req) => {
         const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
         if (!isPremium) {
-          // Non-premium: tampilkan pesan premium-only
-          await answerCallbackQuery(botToken, query.id);
-          const premiumMsg = buildFilterPremiumOnlyMessage();
-          const keyboard = buildPremiumNormalKeyboard();
-          const premiumFileId = await getPremiumFileId(supabase);
-          if (premiumFileId) {
-            try {
-              await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: userId, photo: premiumFileId, caption: premiumMsg, parse_mode: 'HTML', reply_markup: keyboard })
-              });
-            } catch (e) {
-              await sendTelegramMessage(botToken, userId, premiumMsg, keyboard);
-            }
-          } else {
-            await sendTelegramMessage(botToken, userId, premiumMsg, keyboard);
-          }
+          await answerCallbackQuery(botToken, query.id, '🔒 Fitur Premium Only!');
+          await sendPremiumOffer(supabase, botToken, userId,);
           return new Response('OK', { status: 200 });
         }
 
@@ -4247,22 +4232,8 @@ Deno.serve(async (req) => {
 
         if (!isPremium) {
           // Non-premium: tampilkan pesan premium-only
-          await answerCallbackQuery(botToken, query.id);
-          const premiumMsg = buildFilterPremiumOnlyMessage();
-          const keyboard = buildPremiumNormalKeyboard();
-          const premiumFileId = await getPremiumFileId(supabase);
-          if (premiumFileId) {
-            try {
-              await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: userId, photo: premiumFileId, caption: premiumMsg, parse_mode: 'HTML', reply_markup: keyboard })
-              });
-            } catch (e) {
-              await sendTelegramMessage(botToken, userId, premiumMsg, keyboard);
-            }
-          } else {
-            await sendTelegramMessage(botToken, userId, premiumMsg, keyboard);
-          }
+          await answerCallbackQuery(botToken, query.id, '🔒 Fitur Premium Only!');
+          await sendPremiumOffer(supabase, botToken, userId,);
           return new Response('OK', { status: 200 });
         }
 
@@ -4385,44 +4356,7 @@ Deno.serve(async (req) => {
         if (!isPremium) {
           // User belum premium - tampilkan penawaran premium
           await answerCallbackQuery(botToken, query.id, '🔒 Fitur Premium Only!');
-          
-          // Get premium file_id from database
-          const premiumFileId = await getPremiumFileId(supabase);
-
-          const buyPremiumKeyboard = {
-            inline_keyboard: [
-              [
-                { text: '📦 1 Minggu - Rp 25.000', callback_data: 'buy_premium_normal_7' },
-              ],
-              [
-                { text: '📦 1 Bulan - Rp 60.000', callback_data: 'buy_premium_normal_30' }
-              ]
-            ]
-          };
-
-          const premiumMessage = buildPremiumOfferMessage();
-
-          if (premiumFileId) {
-            try {
-              await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  chat_id: userId,
-                  photo: premiumFileId,
-                  caption: premiumMessage,
-                  parse_mode: 'HTML',
-                  reply_markup: buyPremiumKeyboard
-                })
-              });
-            } catch (e) {
-              console.error('sendPhoto error for reconnect premium offer:', e);
-              await sendTelegramMessage(botToken, userId, premiumMessage, buyPremiumKeyboard);
-            }
-          } else {
-            await sendTelegramMessage(botToken, userId, premiumMessage, buyPremiumKeyboard);
-          }
-
+          await sendPremiumOffer(supabase, botToken, userId,);
           return new Response('OK', { status: 200 });
         }
 
@@ -4909,7 +4843,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
           const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
           if (!isPremium) {
-            await showLocationFilterPremiumOffer(supabase, botToken, userId);
+            await sendPremiumOffer(supabase, botToken, userId,);
             return new Response('OK', { status: 200 });
           }
 
@@ -4950,50 +4884,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
           const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
           if (!isPremium) {
-            // User bukan premium - tampilkan penawaran beli premium dengan harga normal
-            // Get premium file_id from database
-            const premiumFileId = await getPremiumFileId(supabase);
-
-            const buyPremiumKeyboard = {
-              inline_keyboard: [
-                [
-                  { text: '📦 1 Minggu - Rp 20.000', callback_data: 'buy_premium_normal_7' },
-                ],
-                [
-                  { text: '📦 1 Bulan - Rp 60.000', callback_data: 'buy_premium_normal_30' }
-                ]
-              ]
-            };
-
-            const premiumMessage = buildPremiumOfferMessage();
-
-            // Kirim dengan foto premium (jika file_id ada)
-            if (premiumFileId) {
-              try {
-                const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    chat_id: userId,
-                    photo: premiumFileId,
-                    caption: premiumMessage,
-                    parse_mode: 'HTML',
-                    reply_markup: buyPremiumKeyboard
-                  })
-                });
-
-                if (!resp.ok) {
-                  // Fallback ke text jika foto gagal
-                  await sendTelegramMessage(botToken, userId, premiumMessage, buyPremiumKeyboard);
-                }
-              } catch (e) {
-                console.error('sendPhoto error for /target:', e);
-                await sendTelegramMessage(botToken, userId, premiumMessage, buyPremiumKeyboard);
-              }
-            } else {
-              await sendTelegramMessage(botToken, userId, premiumMessage, buyPremiumKeyboard);
-            }
-
+            await sendPremiumOffer(supabase, botToken, userId, '💎 Upgrade Premium (Filter Gender)');
             return new Response('OK', { status: 200 });
           }
 
@@ -5509,7 +5400,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
 
           if (!isPremium) {
             // User bukan premium - tampilkan penawaran beli premium
-            await sendPremiumOffer(supabase, botToken, userId, 'pilih target gender');
+            await sendPremiumOffer(supabase, botToken, userId);
             return new Response('OK', { status: 200 });
           }
 
@@ -5582,7 +5473,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
           const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
           if (!isPremium) {
-            await showLocationFilterPremiumOffer(supabase, botToken, userId);
+            await sendPremiumOffer(supabase, botToken, userId);
             return new Response('OK', { status: 200 });
           }
 
