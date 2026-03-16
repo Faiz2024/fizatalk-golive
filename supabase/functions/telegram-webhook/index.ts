@@ -2869,7 +2869,7 @@ async function buildTargetGenderKeyboard(supabase: any, userId: number): Promise
 
 // Helper: Show premium offer for location filter (non-premium users)
 async function showLocationFilterPremiumOffer(supabase: any, botToken: string, userId: number) {
-  await sendPremiumOffer(supabase, botToken, userId);
+  await sendPremiumOffer(supabase, botToken, userId, 'filter_lokasi');
 }
 
 // Daftar lokasi Indonesia
