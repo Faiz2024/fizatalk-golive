@@ -2631,8 +2631,11 @@ async function handleComprehensiveSearchResult(
   
   // Filter info hanya ditampilkan untuk premium
   let filterInfo: { target_gender?: string | null; target_location?: string | null } | undefined = undefined;
+
+  let isPremium = false;
+
   if (filterUserData) {
-    const isPremium = filterUserData.premium_until && new Date(filterUserData.premium_until) > new Date();
+    isPremium = filterUserData.premium_until && new Date(filterUserData.premium_until) > new Date();
     if (isPremium) {
       filterInfo = {
         target_gender: filterUserData.target_gender,
@@ -2655,7 +2658,7 @@ async function handleComprehensiveSearchResult(
   }
 
   // Jika penalty >= 40, tampilkan tombol Upgrade Premium (Anti Banned)
-  if (penaltyPoints >= 40) {
+  if (penaltyPoints >= 40 && !isPremium) {
     inlineKeyboard.push([
       { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
     ]);
