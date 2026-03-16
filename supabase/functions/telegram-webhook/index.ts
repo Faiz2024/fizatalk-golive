@@ -2649,8 +2649,8 @@ async function handleComprehensiveSearchResult(
   if (isNext && result.old_partner_id && penaltyPoints < 40) {
     inlineKeyboard.push([
       { text: '🚩 Laporkan', callback_data: `report_user_${result.old_partner_id}` },
-      { text: '👍 Baik', callback_data: `rate_baik_${result.old_partner_id}` },
-      { text: '😎 Asik', callback_data: `rate_asik_${result.old_partner_id}` }
+      { text: '😎 Asik', callback_data: `rate_asik_${result.old_partner_id}` },
+      { text: '👍 Baik', callback_data: `rate_baik_${result.old_partner_id}` }
     ]);
   }
 
