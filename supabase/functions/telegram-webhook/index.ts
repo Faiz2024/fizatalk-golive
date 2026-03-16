@@ -4843,7 +4843,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
           const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
           if (!isPremium) {
-            await sendPremiumOffer(supabase, botToken, userId,);
+            await sendPremiumOffer(supabase, botToken, userId, 'filter_lokasi');
             return new Response('OK', { status: 200 });
           }
 
