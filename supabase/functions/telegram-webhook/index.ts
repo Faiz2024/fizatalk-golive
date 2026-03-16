@@ -5400,7 +5400,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
 
           if (!isPremium) {
             // User bukan premium - tampilkan penawaran beli premium
-            await sendPremiumOffer(supabase, botToken, userId);
+            await sendPremiumOffer(supabase, botToken, userId, 'filter_gender');
             return new Response('OK', { status: 200 });
           }
 
