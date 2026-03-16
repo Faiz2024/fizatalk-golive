@@ -4356,7 +4356,7 @@ Deno.serve(async (req) => {
         if (!isPremium) {
           // User belum premium - tampilkan penawaran premium
           await answerCallbackQuery(botToken, query.id, '🔒 Fitur Premium Only!');
-          await sendPremiumOffer(supabase, botToken, userId,);
+          await sendPremiumOffer(supabase, botToken, userId, 'reconnect');
           return new Response('OK', { status: 200 });
         }
 
