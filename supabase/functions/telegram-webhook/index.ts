@@ -3833,7 +3833,7 @@ Deno.serve(async (req) => {
 
         if (!isPremium) {
           await answerCallbackQuery(botToken, query.id, '🔒 Fitur Premium Only!');
-          await sendPremiumOffer(supabase, botToken, userId,);
+          await sendPremiumOffer(supabase, botToken, userId, 'filter_lokasi');
           return new Response('OK', { status: 200 });
         }
 
