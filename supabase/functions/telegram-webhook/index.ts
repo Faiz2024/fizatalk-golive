@@ -4233,7 +4233,7 @@ Deno.serve(async (req) => {
         if (!isPremium) {
           // Non-premium: tampilkan pesan premium-only
           await answerCallbackQuery(botToken, query.id, '🔒 Fitur Premium Only!');
-          await sendPremiumOffer(supabase, botToken, userId,);
+          await sendPremiumOffer(supabase, botToken, userId, 'filter_gender');
           return new Response('OK', { status: 200 });
         }
 
