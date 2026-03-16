@@ -1606,10 +1606,6 @@ Dengan beralih ke Premium, kamu tidak hanya mendapatkan kebebasan mencari partne
 
 ${getPremiumBenefitsText()}
 
-💰 <b>HARGA PREMIUM:</b>
-📦 <b>1 MINGGU:</b> Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}
-📦 <b>1 BULAN:</b> Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}
-
 💎 Beli sekarang untuk menikmati semua fiturnya!`;
 }
 
@@ -2873,7 +2869,7 @@ async function buildTargetGenderKeyboard(supabase: any, userId: number): Promise
 
 // Helper: Show premium offer for location filter (non-premium users)
 async function showLocationFilterPremiumOffer(supabase: any, botToken: string, userId: number) {
-  await sendPremiumOffer(supabase, botToken, userId, 'pilih target lokasi');
+  await sendPremiumOffer(supabase, botToken, userId);
 }
 
 // Daftar lokasi Indonesia
@@ -4404,22 +4400,7 @@ Deno.serve(async (req) => {
             ]
           };
 
-          const premiumMessage = `🔒 <b>Fitur Premium Only!</b>
-
-Fitur <b>Hubungi Kembali</b> hanya tersedia untuk user <b>Premium</b>.
-
-✨ <b>KEUNTUNGAN PREMIUM:</b>
-• 🔄 Hubungi kembali partner sebelumnya
-• 🎯 Pilih target gender chat
-• 📍 Pilih target lokasi chat
-• ⭐ Badge Premium
-• 🚀 Prioritas matching
-
-💰 <b>HARGA PREMIUM:</b>
-📦 <b>1 MINGGU:</b> Rp 25.000
-📦 <b>1 BULAN:</b> Rp 60.000
-
-💎 Beli sekarang untuk menikmati fitur eksklusif!`;
+          const premiumMessage = buildPremiumOfferMessage();
 
           if (premiumFileId) {
             try {
@@ -4958,7 +4939,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
             `📍 <b>Pilih Target Lokasi Chat</b>\n\n📌 Target saat ini: <b>${currentTarget}</b>\n\nPilih lokasi partner yang ingin kamu ajak chat:`,
             locationKeyboard
           );
-        } else if (text === '/filter') {
+        } else if (text === '/target') {
           // Cek apakah user premium
           const { data: userData } = await supabase
             .from('telegram_users')
@@ -4984,20 +4965,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
               ]
             };
 
-            const premiumMessage = `❌ <b>Fitur Premium Only!</b>
-
-Fitur memilih gender target hanya tersedia untuk user <b>Premium</b>.
-
-✨ <b>KEUNTUNGAN PREMIUM:</b>
-• 🎯 Pilih target gender chat
-• ⭐ Badge Premium
-• 🚀 Prioritas matching
-
-💰 <b>HARGA PREMIUM:</b>
-📦 <b>1 MINGGU:</b> Rp 20.000
-📦 <b>1 BULAN:</b> Rp 60.000
-
-💎 Beli sekarang untuk menikmati fitur eksklusif!`;
+            const premiumMessage = buildPremiumOfferMessage();
 
             // Kirim dengan foto premium (jika file_id ada)
             if (premiumFileId) {
