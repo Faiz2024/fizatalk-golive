@@ -2869,7 +2869,7 @@ async function buildTargetGenderKeyboard(supabase: any, userId: number): Promise
 
 // Helper: Show premium offer for location filter (non-premium users)
 async function showLocationFilterPremiumOffer(supabase: any, botToken: string, userId: number) {
-  await sendPremiumOffer(supabase, botToken, userId);
+  await sendPremiumOffer(supabase, botToken, userId, 'filter_lokasi');
 }
 
 // Daftar lokasi Indonesia
@@ -3833,7 +3833,7 @@ Deno.serve(async (req) => {
 
         if (!isPremium) {
           await answerCallbackQuery(botToken, query.id, '🔒 Fitur Premium Only!');
-          await sendPremiumOffer(supabase, botToken, userId,);
+          await sendPremiumOffer(supabase, botToken, userId, 'filter_lokasi');
           return new Response('OK', { status: 200 });
         }
 
@@ -4233,7 +4233,7 @@ Deno.serve(async (req) => {
         if (!isPremium) {
           // Non-premium: tampilkan pesan premium-only
           await answerCallbackQuery(botToken, query.id, '🔒 Fitur Premium Only!');
-          await sendPremiumOffer(supabase, botToken, userId,);
+          await sendPremiumOffer(supabase, botToken, userId, 'filter_gender');
           return new Response('OK', { status: 200 });
         }
 
@@ -4356,7 +4356,7 @@ Deno.serve(async (req) => {
         if (!isPremium) {
           // User belum premium - tampilkan penawaran premium
           await answerCallbackQuery(botToken, query.id, '🔒 Fitur Premium Only!');
-          await sendPremiumOffer(supabase, botToken, userId,);
+          await sendPremiumOffer(supabase, botToken, userId, 'reconnect');
           return new Response('OK', { status: 200 });
         }
 
@@ -4843,7 +4843,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
           const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
           if (!isPremium) {
-            await sendPremiumOffer(supabase, botToken, userId,);
+            await sendPremiumOffer(supabase, botToken, userId, 'filter_lokasi');
             return new Response('OK', { status: 200 });
           }
 
@@ -5400,7 +5400,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
 
           if (!isPremium) {
             // User bukan premium - tampilkan penawaran beli premium
-            await sendPremiumOffer(supabase, botToken, userId);
+            await sendPremiumOffer(supabase, botToken, userId, 'filter_gender');
             return new Response('OK', { status: 200 });
           }
 
@@ -5473,7 +5473,7 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
           const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
           if (!isPremium) {
-            await sendPremiumOffer(supabase, botToken, userId);
+            await sendPremiumOffer(supabase, botToken, userId, 'filter_lokasi');
             return new Response('OK', { status: 200 });
           }
 
