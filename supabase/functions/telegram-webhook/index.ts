@@ -1588,17 +1588,21 @@ async function getPromoPremiumFileId(supabase: any): Promise<string | null> {
 // Helper function to build premium benefits text
 function getPremiumBenefitsText(): string {
   return `✨ <b>KEUNTUNGAN PREMIUM:</b>
-• 🎯 Pilih target gender chat
-• 📍 Pilih target lokasi chat
-• ⭐ Badge Premium
-• 🚀 Prioritas matching`;
+• 🎯 <b>Filter Gender:</b> Bebas pilih target gender chat sesuai keinginanmu.
+• 📍 <b>Filter Lokasi:</b> Cari partner berdasarkan target lokasi spesifik.
+• 🛡️ <b>Anti Banned:</b> Akunmu mendapatkan status VIP yang lebih kebal terhadap blokir/banned.
+• 🎭 <b>Bebas Stiker:</b> Kirim stiker favoritmu tanpa batasan atau peninjauan sistem.
+• ⚠️ <b>Bebas Peringatan:</b> Terbebas dari peringatan spam yang mengganggu kenyamanan chat.
+• ⭐ <b>Badge Premium:</b> Tampil beda dengan lencana eksklusif.
+• 🚀 <b>Prioritas matching:</b> Dapatkan partner chat lebih cepat dari pengguna biasa.`;
 }
 
 // Helper function to build premium-only filter message
-function buildFilterPremiumOnlyMessage(): string {
-  return `🔒 <b>Fitur Khusus Premium!</b>
+function buildFilterPremiumOnlyMessage(customTitle: string = '🔒 Fitur Khusus Premium!'): string {
+  return `<b>${customTitle}</b>
 
-Filter gender dan lokasi hanya tersedia untuk pengguna Premium.
+<b>Kenapa kamu harus beli Premium?</b>
+Dengan beralih ke Premium, kamu tidak hanya mendapatkan kebebasan mencari partner secara lebih spesifik, tapi juga menikmati pengalaman chat yang jauh lebih aman dan tanpa batas. Kamu akan mendapatkan akses penuh untuk menggunakan <b>Filter Gender</b> dan <b>Filter Lokasi</b> agar obrolan makin asik. Lebih dari itu, akunmu juga akan dilindungi dengan fitur <b>Anti Banned</b>, kebebasan berekspresi karena <b>Bebas Stiker</b>, dan chatting dengan tenang karena akunmu dipastikan <b>Bebas Peringatan</b>.
 
 ${getPremiumBenefitsText()}
 
@@ -1606,7 +1610,7 @@ ${getPremiumBenefitsText()}
 📦 <b>1 MINGGU:</b> Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}
 📦 <b>1 BULAN:</b> Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}
 
-💎 Beli sekarang untuk menggunakan filter!`;
+💎 Beli sekarang untuk menikmati semua fiturnya!`;
 }
 
 // Helper function to build premium purchase keyboard (normal prices)
@@ -1620,8 +1624,9 @@ function buildPremiumNormalKeyboard(): any {
 }
 
 // Helper function to send premium offer with photo
-async function sendPremiumOffer(supabase: any, botToken: string, userId: number, featureName: string): Promise<void> {
-  const premiumMessage = buildFilterPremiumOnlyMessage();
+async function sendPremiumOffer(supabase: any, botToken: string, userId: number, featureName: string, customTitle?: string): Promise<void> {
+  const titleToUse = customTitle || '🔒 Fitur Khusus Premium!';
+  const premiumMessage = buildFilterPremiumOnlyMessage(titleToUse);
   const keyboard = buildPremiumNormalKeyboard();
   
   // Get premium file_id from database
@@ -1838,7 +1843,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
             const blockedKeyboard = {
               inline_keyboard: [
                 [{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }],
-                [{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_normal_7' }]
+                [{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }]
               ]
             };
             const blockedMsg = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ <b>Alasan:</b> Anda telah mencapai batas peringatan SPAM (4/4). Demi kenyamanan, akses chat Anda <b>dinonaktifkan</b>.\n\nPilih opsi di bawah untuk memulihkan akun:`;
@@ -1857,7 +1862,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
 
             const premiumUpgradeKeyboard = {
                 inline_keyboard: [
-                    [{ text: '💎 Upgrade Premium (Bebas-Peringatan)', callback_data: 'buy_premium_normal_7' }]
+                    [{ text: '💎 Upgrade Premium (Bebas Peringatan)', callback_data: 'show_premium_offer_peringatan' }]
                 ]
             };
             const warnMsg = `⚠️ <b>PERINGATAN (${warnings}/4)</b>\n\nKami mendeteksi aktivitas SPAM atau konten dilarang di akun Anda.\n\n🚫 <b>HIMBAUAN:</b>\nJangan menyebar spam link, mengirim stiker 18+, atau media 18+.\n\n<i>Peringatan ini akan hilang seiring banyaknya partner yang suka berinteraksi dengan Anda.</i>\n\n💎 <b>Beli Premium</b> untuk menghindari peringatan ini dan blokir permanen.`;
@@ -2387,7 +2392,7 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
   // Keyboard upgrade premium standar yang memanfaatkan callback original
   const premiumUpgradeKeyboard = {
       inline_keyboard: [
-          [{ text: '💎 Upgrade Premium (Bebas Stiker)', callback_data: 'buy_premium_normal_7' }]
+          [{ text: '💎 Upgrade Premium (Bebas Stiker)', callback_data: 'show_premium_offer_stiker' }]
       ]
   };
 
@@ -2509,7 +2514,7 @@ async function comprehensiveSearchAction(
           { text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }
         ],
         [
-          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_normal_7' }
+          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }
         ]
       ]
     };
@@ -2559,7 +2564,7 @@ async function comprehensiveSearchAction(
           { text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }
         ],
         [
-          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'buy_premium_normal_7' }
+          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }
         ]
       ]
     };
@@ -3688,10 +3693,22 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA SHOW TARGET PREMIUM (NON-PREMIUM USER CLICKED BUTTON) ---
-      if (callbackData === 'show_target_premium') {
+      // --- LOGIKA SHOW PREMIUM OFFER (DINAMIS DARI TOMBOL ANTI BANNED / STIKER / PERINGATAN) ---
+      if (callbackData.startsWith('show_premium_offer')) {
         await answerCallbackQuery(botToken, query.id);
-        await showTargetGenderPremiumOffer(supabase, botToken, userId);
+        
+        let customTitle = '🔒 Fitur Khusus Premium!';
+        if (callbackData === 'show_premium_offer_antibanned') {
+          customTitle = '💎 Upgrade Premium (Anti Banned)';
+        } else if (callbackData === 'show_premium_offer_stiker') {
+          customTitle = '💎 Upgrade Premium (Bebas Stiker)';
+        } else if (callbackData === 'show_premium_offer_peringatan') {
+          customTitle = '💎 Upgrade Premium (Bebas Peringatan)';
+        }
+        
+        // Memanggil fungsi sendPremiumOffer dengan mengirimkan judul (customTitle) spesifik
+        await sendPremiumOffer(supabase, botToken, userId, 'premium', customTitle);
+        
         return new Response('OK', { status: 200 });
       }
 
