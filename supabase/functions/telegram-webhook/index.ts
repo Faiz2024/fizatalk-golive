@@ -2037,8 +2037,8 @@ function buildEndChatKeyboard(partnerId: number): any {
     inline_keyboard: [
       [
         { text: '🚩 Laporkan', callback_data: `report_user_${partnerId}`},
-        { text: '👍 Baik', callback_data: `rate_baik_${partnerId}` },
-        { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` }
+        { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` },
+        { text: '👍 Baik', callback_data: `rate_baik_${partnerId}` }
       ],
       [
         { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
