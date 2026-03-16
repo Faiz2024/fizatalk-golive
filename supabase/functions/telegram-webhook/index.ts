@@ -1601,9 +1601,6 @@ function getPremiumBenefitsText(): string {
 function buildFilterPremiumOnlyMessage(customTitle: string = '🔒 Fitur Khusus Premium!'): string {
   return `<b>${customTitle}</b>
 
-<b>Kenapa kamu harus beli Premium?</b>
-Dengan beralih ke Premium, kamu tidak hanya mendapatkan kebebasan mencari partner secara lebih spesifik, tapi juga menikmati pengalaman chat yang jauh lebih aman dan tanpa batas. Kamu akan mendapatkan akses penuh untuk menggunakan <b>Filter Gender</b> dan <b>Filter Lokasi</b> agar obrolan makin asik. Lebih dari itu, akunmu juga akan dilindungi dengan fitur <b>Anti Banned</b>, kebebasan berekspresi karena <b>Bebas Stiker</b>, dan chatting dengan tenang karena akunmu dipastikan <b>Bebas Peringatan</b>.
-
 ${getPremiumBenefitsText()}
 
 💎 Beli sekarang untuk menikmati semua fiturnya!`;
@@ -2645,17 +2642,28 @@ async function handleComprehensiveSearchResult(
   }
 
   // Buat keyboard "Laporkan" & "Asik" jika user menekan Next dan penalti < 40
-  let endChatKeyboard = undefined;
+  let endChatKeyboard: any = undefined;
+  const inlineKeyboard: any[][] = [];
+
+  // Jika user menekan Next dan penalti < 40, tampilkan tombol rating
   if (isNext && result.old_partner_id && penaltyPoints < 40) {
-    endChatKeyboard = {
-      inline_keyboard: [
-        [
-          { text: '🚩 Laporkan', callback_data: `report_user_${result.old_partner_id}` },
-          { text: '👍 Baik', callback_data: `rate_baik_${result.old_partner_id}` },
-          { text: '😎 Asik', callback_data: `rate_asik_${result.old_partner_id}` }
-        ]
-      ]
-    };
+    inlineKeyboard.push([
+      { text: '🚩 Laporkan', callback_data: `report_user_${result.old_partner_id}` },
+      { text: '👍 Baik', callback_data: `rate_baik_${result.old_partner_id}` },
+      { text: '😎 Asik', callback_data: `rate_asik_${result.old_partner_id}` }
+    ]);
+  }
+
+  // Jika penalty >= 40, tampilkan tombol Upgrade Premium (Anti Banned)
+  if (penaltyPoints >= 40) {
+    inlineKeyboard.push([
+      { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
+    ]);
+  }
+
+  // Pasang keyboard jika ada isinya
+  if (inlineKeyboard.length > 0) {
+    endChatKeyboard = { inline_keyboard: inlineKeyboard };
   }
   
   if (!result.matched) {
@@ -3837,17 +3845,22 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
 
-        // Buat keyboard lokasi untuk premium
+        // Buat keyboard lokasi untuk premium (Kecualikan "Lainnya")
+        const targetLocationList = LOCATION_LIST.filter(loc => loc !== 'Lainnya');
         const locationButtons: any[][] = [];
-        for (let i = 0; i < LOCATION_LIST.length; i += 3) {
+
+        for (let i = 0; i < targetLocationList.length; i += 3) {
           const row = [];
-          for (let j = 0; j < 3 && i + j < LOCATION_LIST.length; j++) {
-            const loc = LOCATION_LIST[i + j];
+          for (let j = 0; j < 3 && i + j < targetLocationList.length; j++) {
+            const loc = targetLocationList[i + j];
             row.push({ text: loc, callback_data: `target_loc_${loc}` });
           }
           locationButtons.push(row);
         }
+        
+        // Tambahkan opsi Semua Lokasi di paling bawah
         locationButtons.push([{ text: '🇮🇩 Semua Lokasi', callback_data: 'target_loc_semua' }]);
+
 
         const locationKeyboard = { inline_keyboard: locationButtons };
 
@@ -4847,18 +4860,22 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
             return new Response('OK', { status: 200 });
           }
 
-          // Buat keyboard lokasi untuk premium (dengan opsi Semua di atas)
+          // Buat keyboard lokasi untuk premium (Kecualikan "Lainnya")
+          const targetLocationList = LOCATION_LIST.filter(loc => loc !== 'Lainnya');
           const locationButtons: any[][] = [];
-          for (let i = 0; i < LOCATION_LIST.length; i += 3) {
+
+          for (let i = 0; i < targetLocationList.length; i += 3) {
             const row = [];
-            for (let j = 0; j < 3 && i + j < LOCATION_LIST.length; j++) {
-              const loc = LOCATION_LIST[i + j];
+            for (let j = 0; j < 3 && i + j < targetLocationList.length; j++) {
+              const loc = targetLocationList[i + j];
               row.push({ text: loc, callback_data: `target_loc_${loc}` });
             }
             locationButtons.push(row);
           }
+          
+          // Tambahkan opsi Semua Lokasi di paling bawah
           locationButtons.push([{ text: '🇮🇩 Semua Lokasi', callback_data: 'target_loc_semua' }]);
-
+          
           const locationKeyboard = {
             inline_keyboard: locationButtons
           };
