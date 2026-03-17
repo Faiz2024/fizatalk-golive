@@ -2488,17 +2488,12 @@ async function comprehensiveSearchAction(
   });
   
   if (error) {
-    console.error(`[SEARCH] RPC comprehensive_search_action error for user ${userId}:`, JSON.stringify(error));
-    
     // Fallback: masukkan user ke antrian secara manual
     await supabase.from('waiting_queue').upsert({
       user_id: userId,
       joined_at: new Date().toISOString()
     });
     await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
-    
-    // Kirim pesan ke user agar tidak silent failure
-    await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\n⏳ Mohon tunggu, kamu sudah masuk antrian.');
     return { success: false, handled: true };
   }
   
@@ -4163,8 +4158,7 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA SEARCH PARTNER (INLINE BUTTON) - SATU PANGGILAN RPC ---
       if (callbackData === 'search_partner') {
-        // answerCallbackQuery sudah di-fire di STEP 2 (line 3288), jangan panggil lagi
-        console.log(`[SEARCH] User ${userId} pressed search_partner button`);
+        await answerCallbackQuery(botToken, query.id, '🔍 Mencari partner...');
         
         // SATU PANGGILAN RPC: handles upsert, blocked check, state check, gender check, reputation, search
         const { success, handled, result } = await comprehensiveSearchAction(
@@ -4172,8 +4166,6 @@ Deno.serve(async (req) => {
           query.from.username, query.from.first_name, 
           false // isNext = false
         );
-        
-        console.log(`[SEARCH] Result for user ${userId}: success=${success}, handled=${handled}, action=${result?.action || 'N/A'}, matched=${result?.matched}`);
         
         if (handled) {
           // RPC sudah menangani notifikasi (banned, blocked, error)
@@ -4289,8 +4281,7 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHAT NEXT (INLINE BUTTON) - SATU PANGGILAN RPC ---
       if (callbackData === 'chat_next') {
-        // answerCallbackQuery sudah di-fire di STEP 2 (line 3288), jangan panggil lagi
-        console.log(`[SEARCH] User ${userId} pressed chat_next button`);
+        await answerCallbackQuery(botToken, query.id, '⏭️ Mencari partner baru...');
         
         // SATU PANGGILAN RPC: handles upsert, blocked check, end chat, reputation, search
         const { success, handled, result: searchResult } = await comprehensiveSearchAction(
