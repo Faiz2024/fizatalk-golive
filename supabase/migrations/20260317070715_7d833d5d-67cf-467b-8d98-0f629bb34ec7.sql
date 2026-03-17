@@ -1,0 +1,2 @@
+ALTER TABLE public.partner_reports DROP CONSTRAINT partner_reports_report_type_check;
+ALTER TABLE public.partner_reports ADD CONSTRAINT partner_reports_report_type_check CHECK (report_type = ANY (ARRAY['spam'::text, 'sange'::text, 'baik'::text, 'asik'::text]));
