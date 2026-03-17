@@ -4289,7 +4289,8 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA CHAT NEXT (INLINE BUTTON) - SATU PANGGILAN RPC ---
       if (callbackData === 'chat_next') {
-        await answerCallbackQuery(botToken, query.id, '⏭️ Mencari partner baru...');
+        // answerCallbackQuery sudah di-fire di STEP 2 (line 3288), jangan panggil lagi
+        console.log(`[SEARCH] User ${userId} pressed chat_next button`);
         
         // SATU PANGGILAN RPC: handles upsert, blocked check, end chat, reputation, search
         const { success, handled, result: searchResult } = await comprehensiveSearchAction(
