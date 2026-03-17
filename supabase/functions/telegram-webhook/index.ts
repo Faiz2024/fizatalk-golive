@@ -2488,12 +2488,17 @@ async function comprehensiveSearchAction(
   });
   
   if (error) {
+    console.error(`[SEARCH] RPC comprehensive_search_action error for user ${userId}:`, JSON.stringify(error));
+    
     // Fallback: masukkan user ke antrian secara manual
     await supabase.from('waiting_queue').upsert({
       user_id: userId,
       joined_at: new Date().toISOString()
     });
     await supabase.from('telegram_users').update({ state: 'waiting' }).eq('id', userId);
+    
+    // Kirim pesan ke user agar tidak silent failure
+    await sendTelegramMessage(botToken, userId, '🔍 Mencari partner untuk kamu...\n\n⏳ Mohon tunggu, kamu sudah masuk antrian.');
     return { success: false, handled: true };
   }
   
