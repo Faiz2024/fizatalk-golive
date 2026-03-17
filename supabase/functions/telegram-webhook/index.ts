@@ -4163,7 +4163,8 @@ Deno.serve(async (req) => {
 
       // --- LOGIKA SEARCH PARTNER (INLINE BUTTON) - SATU PANGGILAN RPC ---
       if (callbackData === 'search_partner') {
-        await answerCallbackQuery(botToken, query.id, '🔍 Mencari partner...');
+        // answerCallbackQuery sudah di-fire di STEP 2 (line 3288), jangan panggil lagi
+        console.log(`[SEARCH] User ${userId} pressed search_partner button`);
         
         // SATU PANGGILAN RPC: handles upsert, blocked check, state check, gender check, reputation, search
         const { success, handled, result } = await comprehensiveSearchAction(
@@ -4171,6 +4172,8 @@ Deno.serve(async (req) => {
           query.from.username, query.from.first_name, 
           false // isNext = false
         );
+        
+        console.log(`[SEARCH] Result for user ${userId}: success=${success}, handled=${handled}, action=${result?.action || 'N/A'}, matched=${result?.matched}`);
         
         if (handled) {
           // RPC sudah menangani notifikasi (banned, blocked, error)
