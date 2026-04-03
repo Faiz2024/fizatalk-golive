@@ -584,10 +584,10 @@ async function handleSuccessfulStarsPayment(
   }
 }
 
-// Helper: Process Sakurupiah payment for premium
-async function processSakurupiahPremiumPayment(
+// Helper: Process Manual QRIS payment for premium
+async function processManualQRISPremiumPayment(
   supabase: any, botToken: string, userId: number,
-  configKey: string, method: 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO', // Update tipe data di sini 
+  configKey: string,
   queryId: string, message: any
 ): Promise<void> {
   const config = PREMIUM_PAY_CONFIG[configKey];
@@ -603,7 +603,7 @@ async function processSakurupiahPremiumPayment(
     .select('premium_until, first_name, username')
     .eq('id', userId).single();
 
-  // Cancel ALL old pending premium transactions so user can always create new one
+  // Cancel ALL old pending premium transactions
   await supabase.from('premium_requests')
     .update({ status: 'cancelled' })
     .eq('user_id', userId).eq('status', 'pending');
@@ -613,7 +613,7 @@ async function processSakurupiahPremiumPayment(
   const { data: premReq, error: insertErr } = await supabase.from('premium_requests')
     .insert({
       user_id: userId, duration_days: config.days, price: config.price,
-      unique_code: 0, status: 'pending', payment_method: method,
+      unique_code: 0, status: 'pending', payment_method: 'QRIS_MANUAL',
     }).select('id').single();
 
   if (insertErr || !premReq) {
@@ -622,106 +622,48 @@ async function processSakurupiahPremiumPayment(
     return;
   }
 
-  const merchantRef = `p_${premReq.id}`;
+  // Set user state to awaiting_payment
+  await supabase.rpc('set_user_payment_state', { p_user_id: userId });
+
   const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'FizaTalk User';
-
-  const invoice = await createSakurupiahInvoice({
-    method, amount: config.price, merchantRef,
-    productName: config.label, customerName: userName, expired: 60,
-  });
-
-  if (!invoice.success) {
-    await supabase.from('premium_requests').update({ status: 'cancelled' }).eq('id', premReq.id);
-    await sendTelegramMessage(botToken, userId, `❌ Gagal membuat invoice: ${invoice.error}\n\nSilakan coba lagi.`);
-    return;
-  }
-
-  await supabase.from('premium_requests')
-    .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', premReq.id);
-
-  // Mencari callback_data original yang memicu menu payment method (misal: buy_premium_30)
   const origCallback = Object.keys(BUY_PREMIUM_MAP).find(k => BUY_PREMIUM_MAP[k] === configKey) || 'cancel_premium';
-  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: origCallback }]] };
-    
-  if (method === 'QRIS' && invoice.qrString) {
-      const qrUrl = invoice.qrString;
-      const caption = `💳  <b>${config.label}</b>\n\n` +
-      `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `📱  <b>CARA BAYAR:</b>\n\n` +
-      `1️⃣  Screenshot QR di atas\n` +
-      `2️⃣  Buka E-Wallet/M-Banking favorit kamu\n` +
-      `3️⃣  Pilih Scan QR / Bayar dari Galeri\n` +
-      `4️⃣  Konfirmasi pembayaran\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>60 menit</b>`;
-    try {
-      const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: userId, photo: qrUrl, caption, parse_mode: 'HTML', reply_markup: cancelKb })
-      });
-      const rj = await resp.json();
-      if (rj.ok) {
-        await supabase.from('premium_requests').update({ message_id: rj.result.message_id }).eq('id', premReq.id);
-      } else {
-        console.error('[PREMIUM QRIS] sendPhoto failed:', JSON.stringify(rj));
-        // Fallback: kirim checkout URL sebagai link
-        const fallbackKb = { inline_keyboard: [
-          [{ text: '🔗 Buka Halaman Pembayaran', url: invoice.checkoutUrl! }],
-          [{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_premium' }]
-        ]};
-        await sendTelegramMessage(botToken, userId,
-          `${caption}\n\n🔗 Klik tombol di bawah untuk membayar:`, fallbackKb);
-      }
-    } catch (e) {
-      console.error('[PREMIUM QRIS] Error:', e);
-      const fallbackKb = { inline_keyboard: [
-        [{ text: '🔗 Buka Halaman Pembayaran', url: invoice.checkoutUrl! }],
-        [{ text: '❌ Batalkan Transaksi', callback_data: 'cancel_premium' }]
-      ]};
-      await sendTelegramMessage(botToken, userId,
-        `${caption}\n\n🔗 Klik tombol di bawah untuk membayar:`, fallbackKb);
+  const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan', callback_data: 'cancel_premium' }]] };
+
+  const caption = `💎  <b>${config.label}</b>\n\n` +
+    `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n` +
+    `🆔  ID Transaksi: <code>${premReq.id.substring(0, 8)}</code>\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📱  <b>CARA BAYAR:</b>\n\n` +
+    `1️⃣  Screenshot / Scan QR di atas\n` +
+    `2️⃣  Buka E-Wallet / M-Banking\n` +
+    `3️⃣  Bayar <b>tepat</b> Rp ${config.price.toLocaleString('id-ID')}\n` +
+    `4️⃣  <b>Kirim foto bukti bayar</b> ke chat ini\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📸  Setelah bayar, <b>kirim screenshot bukti pembayaran</b> langsung ke sini\n` +
+    `⏰  Admin akan verifikasi dalam <b>1-5 menit</b>`;
+
+  try {
+    const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: userId, photo: QRIS_IMAGE_URL, caption, parse_mode: 'HTML', reply_markup: cancelKb })
+    });
+    const rj = await resp.json();
+    if (rj.ok) {
+      await supabase.from('premium_requests').update({ message_id: rj.result.message_id }).eq('id', premReq.id);
+    } else {
+      console.error('[PREMIUM QRIS MANUAL] sendPhoto failed:', JSON.stringify(rj));
+      await sendTelegramMessage(botToken, userId, caption, cancelKb);
     }
-  } else {
-    // --- LOGIKA E-WALLET BARU (DANA, GOPAY, OVO, SHOPEEPAY) ---
-    console.log(`[PREMIUM ${method}] paymentNo:`, invoice.paymentNo, 'checkoutUrl:', invoice.checkoutUrl);
-    
-    // Konfigurasi visual UI UX E-Wallet
-    const eWalletConfig: Record<string, { name: string, emoji: string }> = {
-      'DANA': { name: 'DANA', emoji: '💙' },
-      'GOPAY': { name: 'GoPay', emoji: '🟢' },
-      'SHOPEEPAY': { name: 'ShopeePay', emoji: '🟠' },
-      'OVO': { name: 'OVO', emoji: '💜' }
-    };
-    
-    const walletInfo = eWalletConfig[method] || { name: method, emoji: '💳' };
-    
-    // Gunakan payment_no (Direct App Link) sebagai prioritas utama
-    const payUrl = invoice.paymentNo || invoice.checkoutUrl!;
-    
-    const walletButtons: any[][] = [
-      [{ text: `${walletInfo.emoji} Bayar via ${walletInfo.name}`, url: payUrl }]
-    ];
-    
-
-    walletButtons.push([{ text: '🔙 Kembali', callback_data: origCallback }]);
-    const walletKb = { inline_keyboard: walletButtons };
-
-    await sendTelegramMessage(botToken, userId,
-      `💳  <b>${config.label}</b>\n\n` +
-      `💰  Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `📱  Klik tombol di bawah untuk membayar langsung via aplikasi <b>${walletInfo.name}</b>\n\n` +
-      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>60 menit</b>`,
-      walletKb);
+  } catch (e) {
+    console.error('[PREMIUM QRIS MANUAL] Error:', e);
+    await sendTelegramMessage(botToken, userId, caption, cancelKb);
   }
-  // Notify admin (Pembayaran Premium)
+
+  // Notify admin
   const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
   if (csChatId) {
     await sendTelegramMessage(botToken, parseInt(csChatId),
-      `💎 <b>PEMBAYARAN PREMIUM DIMULAI</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n📦 Paket: ${config.label}\n💵 Total: Rp ${config.price.toLocaleString('id-ID')}\n📱 Via: ${method}\n\n⏳ Menunggu pembayaran (auto-verify)...`
+      `💎 <b>PEMBAYARAN PREMIUM (QRIS MANUAL)</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n📦 Paket: ${config.label}\n💵 Total: Rp ${config.price.toLocaleString('id-ID')}\n🆔 TRX: <code>${premReq.id.substring(0, 8)}</code>\n\n⏳ Menunggu bukti pembayaran...`
     );
   }
 }
