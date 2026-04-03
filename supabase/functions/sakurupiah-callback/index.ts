@@ -18,13 +18,38 @@ function formatDateWIB(date: Date): string {
   });
 }
 
+// Normalize status values from provider
+function isSuccessStatus(status: string, statusKode: any): boolean {
+  const s = String(status).toLowerCase();
+  const k = String(statusKode);
+  return (
+    (s === 'berhasil' || s === 'paid' || s === 'success' || s === 'settlement') &&
+    (k === '1' || k === 'paid' || k === 'success')
+  );
+}
+
+function isExpiredStatus(status: string, statusKode: any): boolean {
+  const s = String(status).toLowerCase();
+  const k = String(statusKode);
+  return (
+    (s === 'expired' || s === 'gagal' || s === 'failed') &&
+    (k === '2' || k === 'expired' || k === 'failed')
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
 
   const rawBody = await req.text();
-  console.log('[CALLBACK] Received:', rawBody);
+
+  // === ENHANCED LOGGING: Headers ===
+  const allHeaders: Record<string, string> = {};
+  req.headers.forEach((v, k) => { allHeaders[k] = v; });
+  console.log('[CALLBACK] === INCOMING REQUEST ===');
+  console.log('[CALLBACK] Headers:', JSON.stringify(allHeaders));
+  console.log('[CALLBACK] Body:', rawBody);
 
   // Validate X-Callback-Signature
   const callbackSignature = req.headers.get('x-callback-signature') || '';
@@ -39,55 +64,101 @@ Deno.serve(async (req) => {
   const expectedSignature = Array.from(new Uint8Array(sig))
     .map(b => b.toString(16).padStart(2, '0')).join('');
 
+  console.log('[CALLBACK] Signature check:', { received: callbackSignature, expected: expectedSignature, match: callbackSignature === expectedSignature });
+
   if (callbackSignature !== expectedSignature) {
-    console.error('[CALLBACK] Invalid signature');
+    console.error('[CALLBACK] ❌ Invalid signature - rejecting');
     return new Response(JSON.stringify({ success: false, message: 'Invalid signature' }), { status: 403 });
   }
 
-  const callbackEvent = req.headers.get('x-callback-event');
-  if (callbackEvent !== 'payment_status') {
+  console.log('[CALLBACK] ✅ Signature valid');
+
+  // Check callback event header - be lenient
+  const callbackEvent = req.headers.get('x-callback-event') || '';
+  console.log('[CALLBACK] Event header:', callbackEvent);
+  
+  if (callbackEvent && callbackEvent !== 'payment_status') {
+    console.log('[CALLBACK] Non-payment event, ignoring:', callbackEvent);
     return new Response(JSON.stringify({ success: true, message: 'Ignored event' }));
   }
 
-  const data = JSON.parse(rawBody);
+  let data: any;
+  try {
+    data = JSON.parse(rawBody);
+  } catch (e) {
+    console.error('[CALLBACK] ❌ Failed to parse body as JSON:', e);
+    return new Response(JSON.stringify({ success: false, message: 'Invalid JSON' }), { status: 400 });
+  }
+
   const { trx_id, merchant_ref, status, status_kode } = data;
-  console.log(`[CALLBACK] trx_id=${trx_id} ref=${merchant_ref} status=${status} code=${status_kode}`);
+  console.log('[CALLBACK] Parsed data:', { trx_id, merchant_ref, status, status_kode });
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseKey);
   const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')!;
 
-  const prefix = merchant_ref.substring(0, 2);
+  const prefix = merchant_ref ? merchant_ref.substring(0, 2) : '';
+  console.log('[CALLBACK] Prefix:', prefix);
 
-  if (status === 'berhasil' && (status_kode === 1 || status_kode === '1')) {
+  if (isSuccessStatus(status, status_kode)) {
+    console.log('[CALLBACK] ✅ Status = SUCCESS, processing...');
     if (prefix === 'p_') {
-      await handlePremiumSuccess(supabase, botToken, merchant_ref);
+      await handlePremiumSuccess(supabase, botToken, merchant_ref, trx_id);
     } else if (prefix === 't_') {
-      await handleTopupSuccess(supabase, botToken, merchant_ref);
+      await handleTopupSuccess(supabase, botToken, merchant_ref, trx_id);
     } else if (prefix === 'f_') {
-      await handleFineSuccess(supabase, botToken, merchant_ref);
+      await handleFineSuccess(supabase, botToken, merchant_ref, trx_id);
+    } else {
+      console.error('[CALLBACK] ❌ Unknown prefix:', prefix);
     }
-  } else if (status === 'expired' && (status_kode === 2 || status_kode === '2')) {
+  } else if (isExpiredStatus(status, status_kode)) {
+    console.log('[CALLBACK] ⏰ Status = EXPIRED, processing...');
     await handleExpired(supabase, botToken, prefix, merchant_ref);
+  } else {
+    console.log('[CALLBACK] ⚠️ Unhandled status:', { status, status_kode });
   }
 
   return new Response(JSON.stringify({ success: true, message: `Status ${status}` }));
 });
 
 // === PREMIUM SUCCESS ===
-async function handlePremiumSuccess(supabase: any, botToken: string, merchantRef: string) {
+async function handlePremiumSuccess(supabase: any, botToken: string, merchantRef: string, trxId?: string) {
   const requestId = merchantRef.substring(2);
+  console.log('[CALLBACK:PREMIUM] Looking up request:', requestId);
 
-  const { data: req, error } = await supabase
+  let req: any = null;
+
+  // Primary lookup by merchant_ref
+  const { data: d1, error: e1 } = await supabase
     .from('premium_requests')
     .select('*')
     .eq('id', requestId)
     .eq('status', 'pending')
     .single();
 
-  if (error || !req) {
-    console.error('[CALLBACK] Premium not found:', requestId);
+  if (d1) {
+    req = d1;
+    console.log('[CALLBACK:PREMIUM] Found by id:', requestId);
+  } else {
+    console.log('[CALLBACK:PREMIUM] Not found by id, trying trx_id fallback...');
+    // Fallback: lookup by sakurupiah_trx_id
+    if (trxId) {
+      const { data: d2 } = await supabase
+        .from('premium_requests')
+        .select('*')
+        .eq('sakurupiah_trx_id', trxId)
+        .eq('status', 'pending')
+        .single();
+      if (d2) {
+        req = d2;
+        console.log('[CALLBACK:PREMIUM] Found by trx_id:', trxId);
+      }
+    }
+  }
+
+  if (!req) {
+    console.error('[CALLBACK:PREMIUM] ❌ Request not found:', { requestId, trxId });
     return;
   }
 
@@ -108,10 +179,11 @@ async function handlePremiumSuccess(supabase: any, botToken: string, merchantRef
   }
 
   // Update user: activate premium + reset penalty
-  await supabase
+  const { error: updateErr } = await supabase
     .from('telegram_users')
     .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0 })
     .eq('id', req.user_id);
+  console.log('[CALLBACK:PREMIUM] User update:', updateErr ? `❌ ${updateErr.message}` : '✅ OK');
 
   // Unblock if blocked
   await supabase
@@ -120,10 +192,11 @@ async function handlePremiumSuccess(supabase: any, botToken: string, merchantRef
     .eq('user_id', req.user_id);
 
   // Update request status
-  await supabase
+  const { error: reqErr } = await supabase
     .from('premium_requests')
     .update({ status: 'approved', processed_at: new Date().toISOString() })
-    .eq('id', requestId);
+    .eq('id', req.id);
+  console.log('[CALLBACK:PREMIUM] Request update:', reqErr ? `❌ ${reqErr.message}` : '✅ OK');
 
   // Record transaction
   await supabase.from('coin_transactions').insert({
@@ -147,22 +220,42 @@ async function handlePremiumSuccess(supabase: any, botToken: string, merchantRef
     );
   }
 
-  console.log(`[CALLBACK] Premium approved: user=${req.user_id} days=${req.duration_days}`);
+  console.log(`[CALLBACK:PREMIUM] ✅ Approved: user=${req.user_id} days=${req.duration_days}`);
 }
 
 // === TOPUP SUCCESS ===
-async function handleTopupSuccess(supabase: any, botToken: string, merchantRef: string) {
+async function handleTopupSuccess(supabase: any, botToken: string, merchantRef: string, trxId?: string) {
   const requestId = merchantRef.substring(2);
+  console.log('[CALLBACK:TOPUP] Looking up request:', requestId);
 
-  const { data: req, error } = await supabase
+  let req: any = null;
+
+  const { data: d1 } = await supabase
     .from('topup_requests')
     .select('*')
     .eq('id', requestId)
     .eq('status', 'pending')
     .single();
 
-  if (error || !req) {
-    console.error('[CALLBACK] Topup not found:', requestId);
+  if (d1) {
+    req = d1;
+    console.log('[CALLBACK:TOPUP] Found by id:', requestId);
+  } else if (trxId) {
+    console.log('[CALLBACK:TOPUP] Not found by id, trying trx_id fallback...');
+    const { data: d2 } = await supabase
+      .from('topup_requests')
+      .select('*')
+      .eq('sakurupiah_trx_id', trxId)
+      .eq('status', 'pending')
+      .single();
+    if (d2) {
+      req = d2;
+      console.log('[CALLBACK:TOPUP] Found by trx_id:', trxId);
+    }
+  }
+
+  if (!req) {
+    console.error('[CALLBACK:TOPUP] ❌ Request not found:', { requestId, trxId });
     return;
   }
 
@@ -176,10 +269,11 @@ async function handleTopupSuccess(supabase: any, botToken: string, merchantRef: 
   const currentCoins = userData?.coins || 0;
   const newBalance = currentCoins + req.amount;
 
-  await supabase
+  const { error: updateErr } = await supabase
     .from('telegram_users')
     .update({ coins: newBalance })
     .eq('id', req.user_id);
+  console.log('[CALLBACK:TOPUP] User coins update:', updateErr ? `❌ ${updateErr.message}` : '✅ OK');
 
   await supabase.from('coin_transactions').insert({
     user_id: req.user_id,
@@ -188,10 +282,11 @@ async function handleTopupSuccess(supabase: any, botToken: string, merchantRef: 
     description: `Top-up ${req.amount} koin via ${req.payment_method || 'Sakurupiah'}`
   });
 
-  await supabase
+  const { error: reqErr } = await supabase
     .from('topup_requests')
     .update({ status: 'approved', processed_at: new Date().toISOString() })
-    .eq('id', requestId);
+    .eq('id', req.id);
+  console.log('[CALLBACK:TOPUP] Request update:', reqErr ? `❌ ${reqErr.message}` : '✅ OK');
 
   await sendTelegramMessage(botToken, req.user_id,
     `✅ <b>TOP-UP BERHASIL!</b>\n\n💰 ${req.amount} koin telah ditambahkan.\n💳 Saldo baru: ${newBalance} koin\n\nTerima kasih! 🎉`
@@ -204,14 +299,17 @@ async function handleTopupSuccess(supabase: any, botToken: string, merchantRef: 
     );
   }
 
-  console.log(`[CALLBACK] Topup approved: user=${req.user_id} amount=${req.amount}`);
+  console.log(`[CALLBACK:TOPUP] ✅ Approved: user=${req.user_id} amount=${req.amount}`);
 }
 
 // === FINE SUCCESS (UNBLOCK) ===
-async function handleFineSuccess(supabase: any, botToken: string, merchantRef: string) {
+async function handleFineSuccess(supabase: any, botToken: string, merchantRef: string, trxId?: string) {
   const requestId = merchantRef.substring(2);
+  console.log('[CALLBACK:FINE] Looking up request:', requestId);
 
-  const { data: req, error } = await supabase
+  let req: any = null;
+
+  const { data: d1 } = await supabase
     .from('pending_transactions')
     .select('*')
     .eq('id', requestId)
@@ -219,16 +317,35 @@ async function handleFineSuccess(supabase: any, botToken: string, merchantRef: s
     .eq('admin_notes', 'FINE_PAYMENT')
     .single();
 
-  if (error || !req) {
-    console.error('[CALLBACK] Fine not found:', requestId);
+  if (d1) {
+    req = d1;
+    console.log('[CALLBACK:FINE] Found by id:', requestId);
+  } else if (trxId) {
+    console.log('[CALLBACK:FINE] Not found by id, trying trx_id fallback...');
+    const { data: d2 } = await supabase
+      .from('pending_transactions')
+      .select('*')
+      .eq('sakurupiah_trx_id', trxId)
+      .eq('status', 'pending')
+      .eq('admin_notes', 'FINE_PAYMENT')
+      .single();
+    if (d2) {
+      req = d2;
+      console.log('[CALLBACK:FINE] Found by trx_id:', trxId);
+    }
+  }
+
+  if (!req) {
+    console.error('[CALLBACK:FINE] ❌ Request not found:', { requestId, trxId });
     return;
   }
 
   // Approve transaction
-  await supabase
+  const { error: txErr } = await supabase
     .from('pending_transactions')
     .update({ status: 'approved', approved_at: new Date().toISOString() })
-    .eq('id', requestId);
+    .eq('id', req.id);
+  console.log('[CALLBACK:FINE] Transaction update:', txErr ? `❌ ${txErr.message}` : '✅ OK');
 
   // Unblock user
   await supabase
@@ -266,18 +383,20 @@ async function handleFineSuccess(supabase: any, botToken: string, merchantRef: s
     );
   }
 
-  console.log(`[CALLBACK] Fine approved, user unblocked: ${req.user_id}`);
+  console.log(`[CALLBACK:FINE] ✅ Approved, user unblocked: ${req.user_id}`);
 }
 
 // === HANDLE EXPIRED ===
 async function handleExpired(supabase: any, botToken: string, prefix: string, merchantRef: string) {
   const requestId = merchantRef.substring(2);
+  console.log('[CALLBACK:EXPIRED] Processing:', { prefix, requestId });
 
   if (prefix === 'p_') {
-    await supabase.from('premium_requests')
+    const { error } = await supabase.from('premium_requests')
       .update({ status: 'expired', processed_at: new Date().toISOString() })
       .eq('id', requestId)
       .eq('status', 'pending');
+    console.log('[CALLBACK:EXPIRED] Premium update:', error ? `❌ ${error.message}` : '✅ OK');
 
     const { data: req } = await supabase.from('premium_requests').select('user_id').eq('id', requestId).single();
     if (req) {
@@ -286,10 +405,11 @@ async function handleExpired(supabase: any, botToken: string, prefix: string, me
       );
     }
   } else if (prefix === 't_') {
-    await supabase.from('topup_requests')
+    const { error } = await supabase.from('topup_requests')
       .update({ status: 'expired', processed_at: new Date().toISOString() })
       .eq('id', requestId)
       .eq('status', 'pending');
+    console.log('[CALLBACK:EXPIRED] Topup update:', error ? `❌ ${error.message}` : '✅ OK');
 
     const { data: req } = await supabase.from('topup_requests').select('user_id').eq('id', requestId).single();
     if (req) {
@@ -298,11 +418,12 @@ async function handleExpired(supabase: any, botToken: string, prefix: string, me
       );
     }
   } else if (prefix === 'f_') {
-    await supabase.from('pending_transactions')
+    const { error } = await supabase.from('pending_transactions')
       .update({ status: 'expired' })
       .eq('id', requestId)
       .eq('status', 'pending');
+    console.log('[CALLBACK:EXPIRED] Fine update:', error ? `❌ ${error.message}` : '✅ OK');
   }
 
-  console.log(`[CALLBACK] Expired: ${prefix} ${requestId}`);
+  console.log(`[CALLBACK:EXPIRED] Done: ${prefix} ${requestId}`);
 }
