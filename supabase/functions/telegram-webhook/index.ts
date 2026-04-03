@@ -201,9 +201,9 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
   formData.append('merchant_fee', '2'); // 2 = biaya fee ditanggung pelanggan
   formData.append('merchant_ref', params.merchantRef);
   formData.append('expired', (params.expired || 60).toString());
-  formData.append('produk[]', params.productName);
-  formData.append('qty[]', '1');
-  formData.append('harga[]', params.amount.toString());
+  formData.append('produk[0]', params.productName);
+  formData.append('qty[0]', '1');
+  formData.append('harga[0]', params.amount.toString());
   formData.append('callback_url', SAKURUPIAH_CALLBACK_URL);
   formData.append('return_url', 'https://t.me/FizaTalkBot');
   formData.append('signature', signature);
@@ -212,7 +212,7 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
     const resp = await fetch(SAKURUPIAH_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': 'Bearer ${apiKey}',
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formData.toString(),
