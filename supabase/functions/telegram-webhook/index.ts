@@ -3770,9 +3770,16 @@ Deno.serve(async (req) => {
       currentUser = dbUser;
     }
 
-
     // ************************************************
-    // LOGIKA CHATTING & FORWARDING (TANPA TAG)
+    // HANDLER: Photo proof for awaiting_payment state
+    // ************************************************
+    if (currentUser?.state === 'awaiting_payment' && message.photo && message.photo.length > 0) {
+      const photoFileId = message.photo[message.photo.length - 1].file_id;
+      const handled = await handlePaymentProofPhoto(supabase, botToken, userId, photoFileId);
+      if (handled) return new Response('OK', { status: 200 });
+    }
+
+
     // ************************************************
     if (currentUser?.state === 'chatting' && currentUser?.partner_id && message.message_id) {
         const partnerId = currentUser.partner_id as number;
