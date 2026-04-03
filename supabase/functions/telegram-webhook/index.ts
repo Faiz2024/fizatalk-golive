@@ -1304,7 +1304,21 @@ async function handleCSApproveReject(
       }
     }
     await answerCallbackQuery(botToken, queryId, '❌ Transaksi ditolak');
-    await sendTelegramMessage(botToken, csUserId, `❌ Transaksi <code>${txId.substring(0, 8)}</code> telah <b>DITOLAK</b>.`);
+    // Edit pesan admin: hapus tombol agar tidak double-click
+    if (message) {
+      try {
+        await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: message.chat.id,
+            message_id: message.message_id,
+            text: `❌ <b>DITOLAK</b>\n\n${message.text || ''}\n\n⏰ Diproses oleh admin`,
+            parse_mode: 'HTML'
+          })
+        });
+      } catch (e) { console.error('Failed to edit reject message:', e); }
+    }
     return;
   }
 
