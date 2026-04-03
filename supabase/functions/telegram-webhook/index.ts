@@ -192,7 +192,7 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
   const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signatureData));
   const signature = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
 
-  const formData = new URLSearchParams();
+  const formData = new FormData();
   formData.append('api_id', apiId);
   formData.append('method', params.method);
   formData.append('name', params.customerName || 'FizaTalk User');
@@ -208,15 +208,12 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
   formData.append('return_url', 'https://t.me/FizaTalkBot');
   formData.append('signature', signature);
 
-  console.log('[SAKURUPIAH] Request body:', formData.toString());
+  console.log('[SAKURUPIAH] Request body (multipart/form-data): api_id=' + apiId + '&method=' + params.method + '&amount=' + params.amount + '&merchant_ref=' + params.merchantRef);
 
   try {
     const resp = await fetch(SAKURUPIAH_API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData.toString(),
+      body: formData,
     });
 
     const text = await resp.text();
