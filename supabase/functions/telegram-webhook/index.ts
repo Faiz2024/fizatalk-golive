@@ -4621,11 +4621,6 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         return new Response('OK', { status: 200 });
       }
 
-          
-      if (callbackData.startsWith('rate_')) {
-
-
-    }
     // --- END LOGIKA CALLBACK ---
 
     // NOTE: Message reaction handler DIHAPUS untuk hemat biaya cloud
