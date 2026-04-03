@@ -214,7 +214,6 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
     const resp = await fetch(SAKURUPIAH_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formData.toString(),
