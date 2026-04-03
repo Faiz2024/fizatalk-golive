@@ -1,53 +1,54 @@
 
 
-## Perbaikan Error Pembayaran Sakurupiah
+## Perbaikan Error 415 - Sakurupiah API
 
 ### Masalah
 
-Ada **mismatch antara Content-Type header dan format body** pada fungsi `createSakurupiahInvoice`:
+API Sakurupiah mengembalikan **HTTP 415 Unsupported Media Type** karena API mereka mengharapkan format `application/x-www-form-urlencoded`, bukan `application/json`.
 
-- **Header**: `Content-Type: application/json` (diubah pada edit terakhir)
-- **Body**: `formData.toString()` yang menghasilkan format `key=value&key2=value2` (URL-encoded)
-
-Server Sakurupiah menerima header JSON tapi body bukan JSON, sehingga mengembalikan **HTTP 415 Unsupported Media Type**.
+Log terakhir membuktikan ini:
+- Request body dikirim sebagai JSON
+- Response: `415 Unsupported Media Type` dari openresty server
 
 ### Solusi
 
-Ubah body request menjadi format JSON agar sesuai dengan header `Content-Type: application/json`:
+Ubah kembali format request ke `application/x-www-form-urlencoded` menggunakan `URLSearchParams`, dan ubah Content-Type header agar sesuai.
 
-**File**: `supabase/functions/telegram-webhook/index.ts`
+**File**: `supabase/functions/telegram-webhook/index.ts` (baris 195-222)
 
-1. Ganti `URLSearchParams` (baris 195-209) menjadi object JSON
-2. Kirim body sebagai `JSON.stringify(jsonBody)` (baris 218)
-
-Perubahan spesifik:
 ```typescript
-// SEBELUM (URLSearchParams)
+// SEBELUM (JSON - GAGAL)
+const jsonBody = { api_id: apiId, ... };
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(jsonBody),
+
+// SESUDAH (Form URL-encoded - SESUAI API)
 const formData = new URLSearchParams();
 formData.append('api_id', apiId);
-...
-body: formData.toString()
+formData.append('method', params.method);
+formData.append('name', params.customerName || 'FizaTalk User');
+formData.append('phone', '6280000000000');
+formData.append('amount', String(params.amount));
+formData.append('merchant_fee', '2');
+formData.append('merchant_ref', params.merchantRef);
+formData.append('expired', String(params.expired || 60));
+formData.append('produk[0]', params.productName);
+formData.append('qty[0]', '1');
+formData.append('harga[0]', String(params.amount));
+formData.append('callback_url', SAKURUPIAH_CALLBACK_URL);
+formData.append('return_url', 'https://t.me/FizaTalkBot');
+formData.append('signature', signature);
 
-// SESUDAH (JSON)
-const jsonBody = {
-  api_id: apiId,
-  method: params.method,
-  name: params.customerName || 'FizaTalk User',
-  phone: '6280000000000',
-  amount: params.amount,
-  merchant_fee: 2,
-  merchant_ref: params.merchantRef,
-  expired: params.expired || 60,
-  'produk[0]': params.productName,
-  'qty[0]': 1,
-  'harga[0]': params.amount,
-  callback_url: SAKURUPIAH_CALLBACK_URL,
-  return_url: 'https://t.me/FizaTalkBot',
-  signature: signature,
-};
-...
-body: JSON.stringify(jsonBody)
+// Headers dan body:
+headers: {
+  'Authorization': `Bearer ${apiKey}`,
+  'Content-Type': 'application/x-www-form-urlencoded',
+},
+body: formData.toString(),
 ```
 
+### Langkah
+1. Ubah body request dari JSON ke URLSearchParams
+2. Ubah Content-Type header ke `application/x-www-form-urlencoded`
 3. Deploy ulang edge function dan setup webhook
 
