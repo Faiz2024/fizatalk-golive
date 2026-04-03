@@ -192,33 +192,32 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
   const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signatureData));
   const signature = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
 
-  const jsonBody = {
-    api_id: apiId,
-    method: params.method,
-    name: params.customerName || 'FizaTalk User',
-    phone: '6280000000000',
-    amount: params.amount,
-    merchant_fee: 2,
-    merchant_ref: params.merchantRef,
-    expired: params.expired || 60,
-    'produk[0]': params.productName,
-    'qty[0]': 1,
-    'harga[0]': params.amount,
-    callback_url: SAKURUPIAH_CALLBACK_URL,
-    return_url: 'https://t.me/FizaTalkBot',
-    signature: signature,
-  };
+  const formData = new URLSearchParams();
+  formData.append('api_id', apiId);
+  formData.append('method', params.method);
+  formData.append('name', params.customerName || 'FizaTalk User');
+  formData.append('phone', '6280000000000');
+  formData.append('amount', String(params.amount));
+  formData.append('merchant_fee', '2');
+  formData.append('merchant_ref', params.merchantRef);
+  formData.append('expired', String(params.expired || 60));
+  formData.append('produk[0]', params.productName);
+  formData.append('qty[0]', '1');
+  formData.append('harga[0]', String(params.amount));
+  formData.append('callback_url', SAKURUPIAH_CALLBACK_URL);
+  formData.append('return_url', 'https://t.me/FizaTalkBot');
+  formData.append('signature', signature);
 
-  console.log('[SAKURUPIAH] Request body:', JSON.stringify(jsonBody));
+  console.log('[SAKURUPIAH] Request body:', formData.toString());
 
   try {
     const resp = await fetch(SAKURUPIAH_API_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify(jsonBody),
+      body: formData.toString(),
     });
 
     const text = await resp.text();
