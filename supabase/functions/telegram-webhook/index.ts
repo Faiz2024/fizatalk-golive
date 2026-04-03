@@ -3488,13 +3488,12 @@ Deno.serve(async (req) => {
 
       // --- HANDLER PROSES PEMBAYARAN DENDA VIA SAKURUPIAH/STARS ---
       if (callbackData.startsWith('fine_pay_')) {
-        // UBAH BARIS INI:
-        const method = callbackData.replace('fine_pay_', '') as 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO' | 'STARS';
+        const method = callbackData.replace('fine_pay_', '') as string;
         
         if (method === 'STARS') {
           await processStarsFinePayment(botToken, userId, query.id, message);
         } else {
-          await processSakurupiahFinePayment(supabase, botToken, userId, method, query.id, message);
+          await processManualQRISFinePayment(supabase, botToken, userId, query.id, message);
         }
         return new Response('OK', { status: 200 });
       }
