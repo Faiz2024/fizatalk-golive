@@ -1011,35 +1011,28 @@ function getMessageByGender(gender: string | null) {
   }
 }
 
-// === SAKURUPIAH TOPUP PAYMENT HELPER ===
-async function processSakurupiahTopupPayment(
+// === MANUAL QRIS TOPUP PAYMENT HELPER ===
+async function processManualQRISTopupPayment(
   supabase: any, botToken: string, userId: number,
-  amount: number, method: 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO', // <--- Update di sini
+  amount: number,
   queryId: string, message: any
 ): Promise<void> {
-  const COIN_PRICE = 10; // 1 koin = Rp 10
+  const COIN_PRICE = 10;
   const totalPrice = amount * COIN_PRICE;
 
   if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
 
-  // Cancel old pending topups without sakurupiah_trx_id
-  await supabase.from('topup_requests')
-    .update({ status: 'cancelled' })
-    .eq('user_id', userId).eq('status', 'pending')
-    .is('sakurupiah_trx_id', null);
-
   // Cancel ALL old pending topup transactions
   await supabase.from('topup_requests')
     .update({ status: 'cancelled' })
-    .eq('user_id', userId).eq('status', 'pending')
-    .not('sakurupiah_trx_id', 'is', null);
+    .eq('user_id', userId).eq('status', 'pending');
 
   await answerCallbackQuery(botToken, queryId, '✅ Memproses pembayaran...');
 
   const { data: topupReq, error: insertErr } = await supabase.from('topup_requests')
     .insert({
       user_id: userId, amount, unique_code: 0,
-      status: 'pending', payment_method: method,
+      status: 'pending', payment_method: 'QRIS_MANUAL',
     }).select('id').single();
 
   if (insertErr || !topupReq) {
@@ -1048,92 +1041,50 @@ async function processSakurupiahTopupPayment(
     return;
   }
 
-  const merchantRef = `t_${topupReq.id}`;
+  // Set user state to awaiting_payment
+  await supabase.rpc('set_user_payment_state', { p_user_id: userId });
+
   const { data: userData } = await supabase.from('telegram_users')
     .select('username, first_name').eq('id', userId).single();
   const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'FizaTalk User';
 
-  const invoice = await createSakurupiahInvoice({
-    method, amount: totalPrice, merchantRef,
-    productName: `Top-up ${amount} Koin`, customerName: userName, expired: 60,
-  });
+  const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan', callback_data: 'cancel_topup' }]] };
 
-  if (!invoice.success) {
-    await supabase.from('topup_requests').update({ status: 'cancelled' }).eq('id', topupReq.id);
-    await sendTelegramMessage(botToken, userId, `❌ Gagal membuat invoice: ${invoice.error}\n\nSilakan coba lagi.`);
-    return;
-  }
+  const caption = `💰  <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n` +
+    `💳  Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n` +
+    `🆔  ID Transaksi: <code>${topupReq.id.substring(0, 8)}</code>\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📱  <b>CARA BAYAR:</b>\n\n` +
+    `1️⃣  Screenshot / Scan QR di atas\n` +
+    `2️⃣  Buka E-Wallet / M-Banking\n` +
+    `3️⃣  Bayar <b>tepat</b> Rp ${totalPrice.toLocaleString('id-ID')}\n` +
+    `4️⃣  <b>Kirim foto bukti bayar</b> ke chat ini\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📸  Setelah bayar, <b>kirim screenshot bukti pembayaran</b> langsung ke sini\n` +
+    `⏰  Admin akan verifikasi dalam <b>1-5 menit</b>`;
 
-  await supabase.from('topup_requests')
-    .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', topupReq.id);
-
-  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: `init_topup_${amount}` }]] };
-
-  if (method === 'QRIS' && invoice.qrString) {
-      const qrUrl = invoice.qrString;
-      const caption = `💰  <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n` +
-      `💳  Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `📱  <b>CARA BAYAR:</b>\n\n` +
-      `1️⃣  Screenshot QR di atas\n` +
-      `2️⃣  Buka E-Wallet/M-Banking favorit kamu\n` +
-      `3️⃣  Pilih Scan QR / Bayar dari Galeri\n` +
-      `4️⃣  Konfirmasi pembayaran\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>60 menit</b>`;
-    try {
-      const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: userId, photo: qrUrl, caption, parse_mode: 'HTML', reply_markup: cancelKb })
-      });
-      const rj = await resp.json();
-      if (rj.ok) {
-        await supabase.from('topup_requests').update({ message_id: rj.result.message_id }).eq('id', topupReq.id);
-      } else {
-        console.error('[TOPUP QRIS] sendPhoto failed:', JSON.stringify(rj));
-        await sendTelegramMessage(botToken, userId,
-          `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
-      }
-    } catch (e) {
-      console.error('[TOPUP QRIS] Error:', e);
-      await sendTelegramMessage(botToken, userId,
-        `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
+  try {
+    const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: userId, photo: QRIS_IMAGE_URL, caption, parse_mode: 'HTML', reply_markup: cancelKb })
+    });
+    const rj = await resp.json();
+    if (rj.ok) {
+      await supabase.from('topup_requests').update({ message_id: rj.result.message_id }).eq('id', topupReq.id);
+    } else {
+      console.error('[TOPUP QRIS MANUAL] sendPhoto failed:', JSON.stringify(rj));
+      await sendTelegramMessage(botToken, userId, caption, cancelKb);
     }
-  } else {
-    // --- LOGIKA E-WALLET BARU ---
-    console.log(`[TOPUP ${method}] paymentNo:`, invoice.paymentNo, 'checkoutUrl:', invoice.checkoutUrl);
-    
-    const eWalletConfig: Record<string, { name: string, emoji: string }> = {
-      'DANA': { name: 'DANA', emoji: '💙' }, 'GOPAY': { name: 'GoPay', emoji: '🟢' },
-      'SHOPEEPAY': { name: 'ShopeePay', emoji: '🟠' }, 'OVO': { name: 'OVO', emoji: '💜' }
-    };
-    const walletInfo = eWalletConfig[method] || { name: method, emoji: '💳' };
-    
-    const payUrl = invoice.paymentNo || invoice.checkoutUrl!;
-    
-    const walletButtons: any[][] = [
-      [{ text: `${walletInfo.emoji} Bayar via ${walletInfo.name}`, url: payUrl }]
-    ];
-    
-
-    walletButtons.push([{ text: '🔙 Kembali', callback_data: `init_topup_${amount}` }]);
-    const walletKb = { inline_keyboard: walletButtons };
-
-    await sendTelegramMessage(botToken, userId,
-      `💰  <b>TOP-UP ${amount.toLocaleString('id-ID')} KOIN</b>\n\n` +
-      `💳  Total: <b>Rp ${totalPrice.toLocaleString('id-ID')}</b>\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `📱  Klik tombol di bawah untuk membayar langsung via aplikasi <b>${walletInfo.name}</b>\n\n` +
-      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>60 menit</b>`,
-      walletKb);
+  } catch (e) {
+    console.error('[TOPUP QRIS MANUAL] Error:', e);
+    await sendTelegramMessage(botToken, userId, caption, cancelKb);
   }
-  // Notify admin (Pembayaran Top Up)
+
+  // Notify admin
   const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
   if (csChatId) {
     await sendTelegramMessage(botToken, parseInt(csChatId),
-      `💰 <b>PEMBAYARAN TOP-UP DIMULAI</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n🪙 Nominal: ${amount.toLocaleString('id-ID')} Koin\n💵 Total: Rp ${totalPrice.toLocaleString('id-ID')}\n📱 Via: ${method}\n\n⏳ Menunggu pembayaran (auto-verify)...`
+      `💰 <b>PEMBAYARAN TOP-UP (QRIS MANUAL)</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n🪙 Nominal: ${amount.toLocaleString('id-ID')} Koin\n💵 Total: Rp ${totalPrice.toLocaleString('id-ID')}\n🆔 TRX: <code>${topupReq.id.substring(0, 8)}</code>\n\n⏳ Menunggu bukti pembayaran...`
     );
   }
 }
