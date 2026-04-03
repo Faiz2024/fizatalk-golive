@@ -218,8 +218,15 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
       body: formData.toString(),
     });
 
-    const json = await resp.json();
-    console.log('[SAKURUPIAH] Response:', JSON.stringify(json));
+    const text = await resp.text();
+    console.log('[SAKURUPIAH] STATUS:', resp.status);
+    console.log('[SAKURUPIAH] RAW RESPONSE:', text);
+
+    if (!text.startsWith('{')) {
+      throw new Error('Response bukan JSON (kemungkinan signature / parameter tidak valid)');
+    }
+
+    const json = JSON.parse(text);
 
     if (json.status === '200' && json.data?.[0]) {
       const inv = json.data[0];
