@@ -3980,13 +3980,12 @@ Deno.serve(async (req) => {
       if (callbackData.startsWith('topup_pay_')) {
         const parts = callbackData.replace('topup_pay_', '').split('_');
         const amount = parseInt(parts[0]);
-        // UBAH BARIS INI:
-        const method = parts[1] as 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO' | 'STARS';
+        const method = parts[1] as string;
         
         if (method === 'STARS') {
           await processStarsTopupPayment(botToken, userId, amount, query.id, message);
         } else {
-          await processSakurupiahTopupPayment(supabase, botToken, userId, amount, method, query.id, message);
+          await processManualQRISTopupPayment(supabase, botToken, userId, amount, query.id, message);
         }
         return new Response('OK', { status: 200 });
       }
