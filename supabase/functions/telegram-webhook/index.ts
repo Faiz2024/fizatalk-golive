@@ -213,7 +213,7 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
       body: formData.toString(),
     });
