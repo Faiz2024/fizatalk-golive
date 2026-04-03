@@ -248,6 +248,9 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
   }
 }
 
+// === STATIC QRIS IMAGE URL ===
+const QRIS_IMAGE_URL = 'https://id-preview--9f689ae5-660d-4e87-8e27-f5d90194599e.lovable.app/qris-payment.jpg';
+
 // === PAYMENT METHOD SELECTION HELPER ===
 function buildPaymentMethodKeyboard(
   baseCallback: string, 
@@ -259,15 +262,7 @@ function buildPaymentMethodKeyboard(
   const starsCallback = `${baseCallback}_STARS`;
   
   const kb: any[][] = [
-    [{ text: '📱 QRIS (Scan Semua E-Wallet & Bank)', callback_data: `${baseCallback}_QRIS` }],
-    [
-      { text: '💙 DANA', callback_data: `${baseCallback}_DANA` },
-      { text: '🟢 GoPay', callback_data: `${baseCallback}_GOPAY` }
-    ]
-    // [
-    //   { text: '🟠 ShopeePay', callback_data: `${baseCallback}_SHOPEEPAY` },
-    //   { text: '💜 OVO', callback_data: `${baseCallback}_OVO` }
-    // ]
+    [{ text: '📱 QRIS Manual (Scan & Upload Bukti)', callback_data: `${baseCallback}_QRIS` }],
   ];
 
   // Tombol Stars
