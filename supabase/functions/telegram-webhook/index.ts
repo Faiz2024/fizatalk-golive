@@ -249,7 +249,7 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
 }
 
 // === STATIC QRIS IMAGE URL ===
-const QRIS_IMAGE_URL = 'https://id-preview--9f689ae5-660d-4e87-8e27-f5d90194599e.lovable.app/qris-payment.jpg';
+const QRIS_IMAGE_URL = 'https://chwopnsmykwzqflqozvf.supabase.co/storage/v1/object/public/qris-assets/qris-payment.png';
 
 // === PAYMENT METHOD SELECTION HELPER ===
 function buildPaymentMethodKeyboard(
