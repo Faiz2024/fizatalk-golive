@@ -192,21 +192,24 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
   const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signatureData));
   const signature = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
 
-  const formData = new URLSearchParams();
-  formData.append('api_id', apiId);
-  formData.append('method', params.method);
-  formData.append('name', params.customerName || 'FizaTalk User');
-  formData.append('phone', '6280000000000');
-  formData.append('amount', params.amount.toString());
-  formData.append('merchant_fee', '2'); // 2 = biaya fee ditanggung pelanggan
-  formData.append('merchant_ref', params.merchantRef);
-  formData.append('expired', (params.expired || 60).toString());
-  formData.append('produk[0]', params.productName);
-  formData.append('qty[0]', '1');
-  formData.append('harga[0]', params.amount.toString());
-  formData.append('callback_url', SAKURUPIAH_CALLBACK_URL);
-  formData.append('return_url', 'https://t.me/FizaTalkBot');
-  formData.append('signature', signature);
+  const jsonBody = {
+    api_id: apiId,
+    method: params.method,
+    name: params.customerName || 'FizaTalk User',
+    phone: '6280000000000',
+    amount: params.amount,
+    merchant_fee: 2,
+    merchant_ref: params.merchantRef,
+    expired: params.expired || 60,
+    'produk[0]': params.productName,
+    'qty[0]': 1,
+    'harga[0]': params.amount,
+    callback_url: SAKURUPIAH_CALLBACK_URL,
+    return_url: 'https://t.me/FizaTalkBot',
+    signature: signature,
+  };
+
+  console.log('[SAKURUPIAH] Request body:', JSON.stringify(jsonBody));
 
   try {
     const resp = await fetch(SAKURUPIAH_API_URL, {
@@ -215,7 +218,7 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: formData.toString(),
+      body: JSON.stringify(jsonBody),
     });
 
     const text = await resp.text();
