@@ -4597,13 +4597,12 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         const payload = callbackData.replace('prem_pay_', '');
         const lastUnderscore = payload.lastIndexOf('_');
         const configKey = payload.substring(0, lastUnderscore);
-        // UBAH BARIS INI:
-        const method = payload.substring(lastUnderscore + 1) as 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO' | 'STARS';
+        const method = payload.substring(lastUnderscore + 1) as string;
         
         if (method === 'STARS') {
           await processStarsPremiumPayment(botToken, userId, configKey, query.id, message);
         } else {
-          await processSakurupiahPremiumPayment(supabase, botToken, userId, configKey, method, query.id, message);
+          await processManualQRISPremiumPayment(supabase, botToken, userId, configKey, query.id, message);
         }
         return new Response('OK', { status: 200 });
       }
