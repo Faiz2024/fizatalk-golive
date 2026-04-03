@@ -1411,16 +1411,25 @@ async function handleCSApproveReject(
   // Edit pesan admin: hapus tombol agar tidak double-click
   if (message) {
     try {
-      await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: message.chat.id,
-          message_id: message.message_id,
-          text: `✅ <b>DIAPPROVE</b>\n\n${message.text || ''}\n\n⏰ Diproses oleh admin`,
-          parse_mode: 'HTML'
-        })
-      });
+      const originalCaption = message.caption || message.text || '';
+      const editBody: any = {
+        chat_id: message.chat.id,
+        message_id: message.message_id,
+        parse_mode: 'HTML'
+      };
+      if (message.photo) {
+        editBody.caption = `✅ <b>DIAPPROVE</b>\n\n${originalCaption}\n\n⏰ Diproses oleh admin`;
+        await fetch(`${TELEGRAM_API}${botToken}/editMessageCaption`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editBody)
+        });
+      } else {
+        editBody.text = `✅ <b>DIAPPROVE</b>\n\n${originalCaption}\n\n⏰ Diproses oleh admin`;
+        await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editBody)
+        });
+      }
     } catch (e) { console.error('Failed to edit approve message:', e); }
   }
 }
