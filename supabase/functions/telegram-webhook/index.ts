@@ -1089,27 +1089,19 @@ async function processManualQRISTopupPayment(
   }
 }
 
-// === SAKURUPIAH FINE PAYMENT HELPER ===
-async function processSakurupiahFinePayment(
+// === MANUAL QRIS FINE PAYMENT HELPER ===
+async function processManualQRISFinePayment(
   supabase: any, botToken: string, userId: number,
-  method: 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO', // <--- Update di sini
   queryId: string, message: any
 ): Promise<void> {
   const FINE_AMOUNT = 10000;
 
   if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
 
-  // Cancel old pending fine without sakurupiah_trx_id
-  await supabase.from('pending_transactions')
-    .update({ status: 'cancelled' })
-    .eq('user_id', userId).eq('status', 'pending').eq('admin_notes', 'FINE_PAYMENT')
-    .is('sakurupiah_trx_id', null);
-
   // Cancel ALL old pending fine transactions
   await supabase.from('pending_transactions')
     .update({ status: 'cancelled' })
-    .eq('user_id', userId).eq('status', 'pending').eq('admin_notes', 'FINE_PAYMENT')
-    .not('sakurupiah_trx_id', 'is', null);
+    .eq('user_id', userId).eq('status', 'pending').eq('admin_notes', 'FINE_PAYMENT');
 
   await answerCallbackQuery(botToken, queryId, '✅ Memproses pembayaran...');
 
@@ -1126,94 +1118,275 @@ async function processSakurupiahFinePayment(
     return;
   }
 
-  const merchantRef = `f_${fineReq.id}`;
+  // Set user state to awaiting_payment
+  await supabase.rpc('set_user_payment_state', { p_user_id: userId });
+
   const { data: userData } = await supabase.from('telegram_users')
     .select('username, first_name').eq('id', userId).single();
   const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'FizaTalk User';
 
-  const invoice = await createSakurupiahInvoice({
-    method, amount: FINE_AMOUNT, merchantRef,
-    productName: 'Pembayaran Denda Buka Blokir', customerName: userName, expired: 60,
-  });
+  const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan', callback_data: 'cancel_fine' }]] };
 
-  if (!invoice.success) {
-    await supabase.from('pending_transactions').update({ status: 'cancelled' }).eq('id', fineReq.id);
-    await sendTelegramMessage(botToken, userId, `❌ Gagal membuat invoice: ${invoice.error}\n\nSilakan coba lagi.`);
-    return;
-  }
+  const caption = `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
+    `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n` +
+    `🆔  ID Transaksi: <code>${fineReq.id.substring(0, 8)}</code>\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📱  <b>CARA BAYAR:</b>\n\n` +
+    `1️⃣  Screenshot / Scan QR di atas\n` +
+    `2️⃣  Buka E-Wallet / M-Banking\n` +
+    `3️⃣  Bayar <b>tepat</b> Rp ${FINE_AMOUNT.toLocaleString('id-ID')}\n` +
+    `4️⃣  <b>Kirim foto bukti bayar</b> ke chat ini\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📸  Setelah bayar, <b>kirim screenshot bukti pembayaran</b> langsung ke sini\n` +
+    `⏰  Admin akan verifikasi dalam <b>1-5 menit</b>`;
 
-  await supabase.from('pending_transactions')
-    .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', fineReq.id);
-
-  const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: 'pay_fine' }]] };
-
-  if (method === 'QRIS' && invoice.qrString) {
-      const qrUrl = invoice.qrString;
-      const caption = `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
-      `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `📱  <b>CARA BAYAR:</b>\n\n` +
-      `1️⃣  Screenshot QR di atas\n` +
-      `2️⃣  Buka E-Wallet/M-Banking favorit kamu\n` +
-      `3️⃣  Pilih Scan QR / Bayar dari Galeri\n` +
-      `4️⃣  Konfirmasi pembayaran\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>60 menit</b>`;
-    try {
-      const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: userId, photo: qrUrl, caption, parse_mode: 'HTML', reply_markup: cancelKb })
-      });
-      const rj = await resp.json();
-      if (!rj.ok) {
-        console.error('[FINE QRIS] sendPhoto failed:', JSON.stringify(rj));
-        await sendTelegramMessage(botToken, userId,
-          `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
-      }
-    } catch (e) {
-      console.error('[FINE QRIS] Error:', e);
-      await sendTelegramMessage(botToken, userId,
-        `${caption}\n\n🔗 <a href="${invoice.checkoutUrl}">Klik di sini untuk bayar</a>`, cancelKb);
+  try {
+    const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: userId, photo: QRIS_IMAGE_URL, caption, parse_mode: 'HTML', reply_markup: cancelKb })
+    });
+    const rj = await resp.json();
+    if (!rj.ok) {
+      console.error('[FINE QRIS MANUAL] sendPhoto failed:', JSON.stringify(rj));
+      await sendTelegramMessage(botToken, userId, caption, cancelKb);
     }
-  } else {
-    // --- LOGIKA E-WALLET BARU ---
-    console.log(`[FINE ${method}] paymentNo:`, invoice.paymentNo, 'checkoutUrl:', invoice.checkoutUrl);
-    
-    const eWalletConfig: Record<string, { name: string, emoji: string }> = {
-      'DANA': { name: 'DANA', emoji: '💙' }, 'GOPAY': { name: 'GoPay', emoji: '🟢' },
-      'SHOPEEPAY': { name: 'ShopeePay', emoji: '🟠' }, 'OVO': { name: 'OVO', emoji: '💜' }
-    };
-    const walletInfo = eWalletConfig[method] || { name: method, emoji: '💳' };
-    
-    const payUrl = invoice.paymentNo || invoice.checkoutUrl!;
-    
-    const walletButtons: any[][] = [
-      [{ text: `${walletInfo.emoji} Bayar via ${walletInfo.name}`, url: payUrl }]
-    ];
-    
-    walletButtons.push([{ text: '🔙 Kembali', callback_data: 'pay_fine' }]);
-    const walletKb = { inline_keyboard: walletButtons };
-
-    await sendTelegramMessage(botToken, userId,
-      `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
-      `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `📱  Klik tombol di bawah untuk membayar langsung via aplikasi <b>${walletInfo.name}</b>\n\n` +
-      `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-      `⏰  Batas waktu: <b>60 menit</b>`,
-      walletKb);
+  } catch (e) {
+    console.error('[FINE QRIS MANUAL] Error:', e);
+    await sendTelegramMessage(botToken, userId, caption, cancelKb);
   }
 
   // Notify admin
   const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
   if (csChatId) {
     await sendTelegramMessage(botToken, parseInt(csChatId),
-      `💰 <b>PEMBAYARAN DENDA DIMULAI</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n💵 Total: Rp ${FINE_AMOUNT.toLocaleString('id-ID')}\n📱 Via: ${method}\n\n⏳ Menunggu pembayaran (auto-verify)...`
+      `💰 <b>PEMBAYARAN DENDA (QRIS MANUAL)</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n💵 Total: Rp ${FINE_AMOUNT.toLocaleString('id-ID')}\n🆔 TRX: <code>${fineReq.id.substring(0, 8)}</code>\n\n⏳ Menunggu bukti pembayaran...`
     );
   }
 }
 
+// === HANDLER: Photo proof for manual QRIS payment ===
+async function handlePaymentProofPhoto(
+  supabase: any, botToken: string, userId: number, photoFileId: string
+): Promise<boolean> {
+  // Check for pending premium request
+  const { data: premReq } = await supabase.from('premium_requests')
+    .select('id, price, duration_days')
+    .eq('user_id', userId).eq('status', 'pending').eq('payment_method', 'QRIS_MANUAL')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+  // Check for pending topup request
+  const { data: topupReq } = await supabase.from('topup_requests')
+    .select('id, amount')
+    .eq('user_id', userId).eq('status', 'pending').eq('payment_method', 'QRIS_MANUAL')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+  // Check for pending fine payment
+  const { data: fineReq } = await supabase.from('pending_transactions')
+    .select('id, amount')
+    .eq('user_id', userId).eq('status', 'pending').eq('admin_notes', 'FINE_PAYMENT')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+  if (!premReq && !topupReq && !fineReq) return false;
+
+  let txType = '';
+  let txId = '';
+  let txAmount = 0;
+  let txDesc = '';
+
+  if (premReq) {
+    txType = 'premium';
+    txId = premReq.id;
+    txAmount = premReq.price;
+    txDesc = `Premium ${premReq.duration_days} hari`;
+    await supabase.from('premium_requests')
+      .update({ payment_proof: photoFileId, status: 'waiting_approval' })
+      .eq('id', premReq.id);
+  } else if (topupReq) {
+    txType = 'topup';
+    txId = topupReq.id;
+    txAmount = topupReq.amount * 10;
+    txDesc = `Top-up ${topupReq.amount} koin`;
+    await supabase.from('topup_requests')
+      .update({ payment_proof: photoFileId, status: 'waiting_approval' })
+      .eq('id', topupReq.id);
+  } else if (fineReq) {
+    txType = 'fine';
+    txId = fineReq.id;
+    txAmount = fineReq.amount;
+    txDesc = 'Denda buka blokir';
+    await supabase.from('pending_transactions')
+      .update({ payment_proof_url: photoFileId, status: 'waiting_approval' })
+      .eq('id', fineReq.id);
+  }
+
+  // Reset user state
+  await supabase.rpc('reset_payment_state', { p_user_id: userId });
+
+  // Confirm to user
+  await sendTelegramMessage(botToken, userId,
+    `✅ <b>Bukti pembayaran diterima!</b>\n\n` +
+    `📋 ${txDesc}\n💰 Rp ${txAmount.toLocaleString('id-ID')}\n\n` +
+    `⏳ Mohon tunggu, admin akan memverifikasi dalam <b>1-5 menit</b>.\n` +
+    `Kamu akan mendapat notifikasi saat transaksi disetujui. 🔔`
+  );
+
+  // Get user info
+  const { data: userData } = await supabase.from('telegram_users')
+    .select('username, first_name').eq('id', userId).single();
+  const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'User';
+
+  // Forward proof to CS with approve/reject buttons
+  const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+  if (csChatId) {
+    const approveKb = { inline_keyboard: [
+      [
+        { text: '✅ Approve', callback_data: `cs_approve_${txType}_${txId}` },
+        { text: '❌ Reject', callback_data: `cs_reject_${txType}_${txId}` }
+      ]
+    ]};
+
+    try {
+      await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: parseInt(csChatId),
+          photo: photoFileId,
+          caption: `📸 <b>BUKTI PEMBAYARAN BARU</b>\n\n` +
+            `👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n` +
+            `📋 Tipe: ${txDesc}\n💰 Total: Rp ${txAmount.toLocaleString('id-ID')}\n` +
+            `🆔 TRX: <code>${txId.substring(0, 8)}</code>\n\n` +
+            `Klik tombol di bawah untuk approve/reject:`,
+          parse_mode: 'HTML',
+          reply_markup: approveKb
+        })
+      });
+    } catch (e) {
+      console.error('[CS NOTIFY] Error:', e);
+    }
+  }
+
+  return true;
+}
+
+// === HANDLER: CS Approve/Reject transaction ===
+async function handleCSApproveReject(
+  supabase: any, botToken: string, csUserId: number,
+  action: 'approve' | 'reject', txType: string, txId: string,
+  queryId: string, message: any
+): Promise<void> {
+  const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+  if (csUserId.toString() !== csChatId) {
+    await answerCallbackQuery(botToken, queryId, '❌ Hanya admin yang bisa melakukan ini');
+    return;
+  }
+
+  if (action === 'reject') {
+    if (txType === 'premium') {
+      const { data: req } = await supabase.from('premium_requests').select('user_id').eq('id', txId).single();
+      await supabase.from('premium_requests').update({ status: 'rejected', processed_at: new Date().toISOString() }).eq('id', txId);
+      if (req) {
+        await sendTelegramMessage(botToken, req.user_id,
+          `❌ <b>Pembayaran Ditolak</b>\n\nMaaf, pembayaran premium kamu tidak dapat diverifikasi.\nSilakan coba lagi atau hubungi CS.`);
+      }
+    } else if (txType === 'topup') {
+      const { data: req } = await supabase.from('topup_requests').select('user_id').eq('id', txId).single();
+      await supabase.from('topup_requests').update({ status: 'rejected', processed_at: new Date().toISOString() }).eq('id', txId);
+      if (req) {
+        await sendTelegramMessage(botToken, req.user_id,
+          `❌ <b>Pembayaran Ditolak</b>\n\nMaaf, pembayaran top-up kamu tidak dapat diverifikasi.\nSilakan coba lagi atau hubungi CS.`);
+      }
+    } else if (txType === 'fine') {
+      const { data: req } = await supabase.from('pending_transactions').select('user_id').eq('id', txId).single();
+      await supabase.from('pending_transactions').update({ status: 'rejected' }).eq('id', txId);
+      if (req) {
+        await sendTelegramMessage(botToken, req.user_id,
+          `❌ <b>Pembayaran Ditolak</b>\n\nMaaf, pembayaran denda kamu tidak dapat diverifikasi.\nSilakan coba lagi atau hubungi CS.`);
+      }
+    }
+    await answerCallbackQuery(botToken, queryId, '❌ Transaksi ditolak');
+    await sendTelegramMessage(botToken, csUserId, `❌ Transaksi <code>${txId.substring(0, 8)}</code> telah <b>DITOLAK</b>.`);
+    return;
+  }
+
+  // APPROVE
+  if (txType === 'premium') {
+    const { data: req } = await supabase.from('premium_requests')
+      .select('user_id, duration_days, price').eq('id', txId).single();
+    if (!req) { await answerCallbackQuery(botToken, queryId, '❌ Transaksi tidak ditemukan'); return; }
+
+    const { data: userData } = await supabase.from('telegram_users')
+      .select('premium_until').eq('id', req.user_id).single();
+
+    let premiumEndDate: Date;
+    const existing = userData?.premium_until;
+    if (existing && new Date(existing) > new Date()) {
+      premiumEndDate = new Date(existing);
+      premiumEndDate.setDate(premiumEndDate.getDate() + req.duration_days);
+    } else {
+      premiumEndDate = new Date();
+      premiumEndDate.setDate(premiumEndDate.getDate() + req.duration_days);
+    }
+
+    await supabase.from('telegram_users')
+      .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0 })
+      .eq('id', req.user_id);
+    await supabase.from('blocked_users').update({ is_active: false }).eq('user_id', req.user_id);
+    await supabase.from('premium_requests')
+      .update({ status: 'approved', processed_at: new Date().toISOString() }).eq('id', txId);
+    await supabase.from('coin_transactions').insert({
+      user_id: req.user_id, amount: -req.price, type: 'purchase',
+      description: `Premium ${req.duration_days} hari via QRIS Manual`
+    });
+
+    const formattedDate = premiumEndDate.toLocaleDateString('id-ID', {
+      timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric'
+    });
+
+    await sendTelegramMessage(botToken, req.user_id,
+      `🎉 <b>SELAMAT! PREMIUM AKTIF!</b>\n\n✨ Kamu sekarang user Premium!\n📅 Berlaku hingga: ${formattedDate}\n\n🎯 Gunakan /target untuk pilih gender chat!\n\nTerima kasih! 💎`);
+
+  } else if (txType === 'topup') {
+    const { data: req } = await supabase.from('topup_requests')
+      .select('user_id, amount').eq('id', txId).single();
+    if (!req) { await answerCallbackQuery(botToken, queryId, '❌ Transaksi tidak ditemukan'); return; }
+
+    const { data: userData } = await supabase.from('telegram_users')
+      .select('coins').eq('id', req.user_id).single();
+    const newBalance = (userData?.coins || 0) + req.amount;
+    await supabase.from('telegram_users').update({ coins: newBalance }).eq('id', req.user_id);
+    await supabase.from('topup_requests')
+      .update({ status: 'approved', processed_at: new Date().toISOString() }).eq('id', txId);
+    await supabase.from('coin_transactions').insert({
+      user_id: req.user_id, amount: req.amount, type: 'topup',
+      description: `Top-up ${req.amount} koin via QRIS Manual`
+    });
+
+    await sendTelegramMessage(botToken, req.user_id,
+      `✅ <b>TOP-UP BERHASIL!</b>\n\n💰 +${req.amount.toLocaleString('id-ID')} koin\n💳 Saldo baru: ${newBalance.toLocaleString('id-ID')} koin\n\nTerima kasih! 🎉`);
+
+  } else if (txType === 'fine') {
+    const { data: req } = await supabase.from('pending_transactions')
+      .select('user_id, amount').eq('id', txId).single();
+    if (!req) { await answerCallbackQuery(botToken, queryId, '❌ Transaksi tidak ditemukan'); return; }
+
+    await supabase.from('blocked_users')
+      .update({ is_active: false, unblocked_at: new Date().toISOString() }).eq('user_id', req.user_id);
+    await supabase.from('telegram_users').update({ penalty_points: 0 }).eq('id', req.user_id);
+    await supabase.from('pending_transactions')
+      .update({ status: 'approved', approved_at: new Date().toISOString(), approved_by: csUserId }).eq('id', txId);
+    await supabase.from('coin_transactions').insert({
+      user_id: req.user_id, amount: -req.amount, type: 'fine_payment',
+      description: `Denda buka blokir via QRIS Manual`
+    });
+
+    const welcomeKeyboard = { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] };
+    await sendTelegramMessage(botToken, req.user_id,
+      `✅ <b>AKUN TELAH DIBUKA BLOKIR!</b>\n\n🎉 Pembayaran denda berhasil!\n\nSilakan mulai chat:`, welcomeKeyboard);
+  }
+
+  await answerCallbackQuery(botToken, queryId, '✅ Transaksi diapprove!');
+  await sendTelegramMessage(botToken, csUserId, `✅ Transaksi <code>${txId.substring(0, 8)}</code> telah <b>DIAPPROVE</b>.`);
+}
 
 
 // 1. DAFTAR GIFT (18 Item, 6 Baris x 3 Kolom)
