@@ -1,91 +1,48 @@
 
-Masalah utama yang terlihat saat ini bukan lagi dari webhook Telegram, melainkan dari alur pembayaran Sakurupiah yang belum memberi bukti runtime yang cukup dan kemungkinan masih gagal di salah satu dari dua titik berikut:
 
-1. Pembuatan invoice gagal di `telegram-webhook`
-2. Callback pembayaran tidak pernah masuk atau tidak lolos validasi di `sakurupiah-callback`
+## Analisis Log Transaksi Sakurupiah
 
-Temuan dari kode dan log:
-- Di kode terbaru, request invoice memang sudah dikirim sebagai `application/x-www-form-urlencoded` memakai `URLSearchParams`, jadi mismatch format request sebelumnya sudah diperbaiki.
-- Fungsi `setup-telegram-webhook` sehat; log menunjukkan webhook Telegram berhasil di-set ulang.
-- Log `telegram-webhook` yang tersedia hanya berisi boot/shutdown dan debounce cleanup, tidak ada log `"[SAKURUPIAH] STATUS"` atau `"[SAKURUPIAH] RAW RESPONSE"`. Artinya:
-  - belum ada percobaan transaksi yang benar-benar menembus jalur invoice setelah deploy terakhir, atau
-  - log penting tidak muncul karena request pembayaran berhenti sebelum `createSakurupiahInvoice`, atau
-  - deployment aktif belum sama dengan kode yang sedang kita baca.
-- Tidak ada log sama sekali di `sakurupiah-callback`, jadi callback pembayaran belum pernah diterima, belum pernah dipanggil, atau dipanggil tapi tidak sampai ke function yang aktif.
+### Temuan
 
-Analisis penyebab paling mungkin:
-- Request invoice ke Sakurupiah masih ditolak karena detail payload belum sesuai spesifikasi mereka, walau content-type sudah benar.
-  - kandidat masalah: `merchant_fee='2'`, `phone='6280000000000'`, nama field `produk[0] / qty[0] / harga[0]`, atau signature HMAC yang tidak sesuai versi API mereka.
-- Callback URL belum benar-benar dipakai atau belum terdaftar/diizinkan oleh pihak Sakurupiah.
-- Validasi callback terlalu ketat atau tidak cocok dengan format callback aktual:
-  - kode sekarang hanya menerima header `x-callback-event === 'payment_status'`
-  - kode hanya memproses `status === 'berhasil'` atau `status === 'expired'`
-  - bila provider mengirim nilai lain seperti `paid`, `success`, `settlement`, atau header berbeda, pembayaran tetap tidak diproses walaupun callback masuk.
-- Callback handler lookup berdasarkan `merchant_ref`, bukan `trx_id`. Ini aman jika `merchant_ref` selalu dipantulkan kembali, tetapi bila callback aktual tidak mengirim field itu secara konsisten, proses approval akan gagal.
-- Ada kemungkinan log yang Anda butuhkan belum tersedia karena belum ada transaksi uji baru sesudah perubahan terakhir.
+**Log telegram-webhook:**
+- Timestamp: 2026-04-03 12:09:08 UTC
+- Request body terkirim dalam format form-urlencoded (benar): `api_id=ID-13542277&method=QRIS&name=%40Aldn000&...`
+- Response: **HTTP 415 Unsupported Media Type** dari `openresty/1.27.1.1`
+- Error: "Response bukan JSON"
 
-Rencana solusi yang saya sarankan:
-1. Perkuat logging di `telegram-webhook`
-- Log metode pembayaran, merchant ref, body request final, status HTTP, raw response, dan parsed JSON/error secara konsisten.
-- Bedakan error:
-  - response non-JSON
-  - JSON tapi status gagal
-  - network error
-  - insert/update database gagal
+**Log sakurupiah-callback:**
+- Tidak ada log sama sekali (callback belum pernah dipanggil karena invoice tidak pernah berhasil dibuat)
 
-2. Perkuat logging di `sakurupiah-callback`
-- Log semua header penting:
-  - `x-callback-signature`
-  - `x-callback-event`
-  - content-type
-- Log raw body dan hasil parsing.
-- Log hasil verifikasi signature: valid/tidak valid.
-- Log jalur keputusan:
-  - premium/topup/fine
-  - request ditemukan/tidak
-  - update database berhasil/gagal
+### Masalah
 
-3. Longgarkan kompatibilitas callback
-- Terima beberapa kemungkinan nilai status sukses/expired yang umum.
-- Jangan langsung abaikan jika `x-callback-event` kosong; log dulu dan fallback ke isi body bila memungkinkan.
-- Tambahkan fallback lookup berdasarkan `sakurupiah_trx_id` jika `merchant_ref` tidak dapat dipakai.
+Kode di file sudah benar menggunakan `Content-Type: application/x-www-form-urlencoded`, namun server Sakurupiah tetap menolak dengan 415. Ada dua kemungkinan penyebab:
 
-4. Validasi payload invoice dengan data provider
-- Cocokkan persis format signature dan field request dengan dokumentasi atau contoh resmi provider.
-- Jika perlu, siapkan dua mode parser:
-  - form-encoded versi saat ini
-  - alternatif jika provider minta JSON di environment tertentu
-- Pastikan `callback_url` mengarah ke function aktif yang sama dengan deployment saat ini.
+1. **Deploy belum aktif** - Function yang berjalan di runtime masih versi lama (yang pakai `application/json`). Ini paling mungkin karena log request body menunjukkan format URL-encoded yang benar, tapi server tetap menolak.
 
-5. Uji end-to-end setelah deploy
-- Buat satu transaksi uji baru setelah perubahan logging.
-- Ambil:
-  - log request invoice terakhir
-  - raw response dari provider
-  - apakah callback masuk
-  - payload callback mentah
-- Dari situ baru bisa dipastikan apakah gagal di pembuatan invoice atau di pemrosesan callback.
+2. **Header `Authorization: Bearer` mengganggu** - Beberapa API berbasis PHP/openresty tidak mengharapkan header Authorization terpisah. `api_id` dan `signature` di body sudah cukup untuk autentikasi. Header `Authorization: Bearer` bisa menyebabkan openresty menolak request sebelum sampai ke PHP.
 
-Detail teknis perubahan yang layak diimplementasikan:
-- `supabase/functions/telegram-webhook/index.ts`
-  - pertahankan format form-urlencoded
-  - tambah structured logs sebelum dan sesudah fetch ke Sakurupiah
-  - log `invoice.success` false dengan penyebab yang lebih spesifik
-- `supabase/functions/sakurupiah-callback/index.ts`
-  - tambah log headers + raw body + branch processing
-  - tambah fallback mapping status
-  - tambah fallback pencarian transaksi via `sakurupiah_trx_id`
-- Tidak perlu perubahan website.
-- Tidak perlu perubahan database wajib untuk tahap investigasi, kecuali nanti ingin menyimpan audit log callback secara permanen untuk hemat debugging jangka panjang.
+### Solusi
 
-Prioritas implementasi:
-1. Tambah logging lengkap di kedua edge function
-2. Tambah kompatibilitas callback
-3. Deploy ulang function pembayaran
-4. Jalankan 1 transaksi uji baru
-5. Evaluasi raw response provider dan raw callback aktual
+1. **Hapus header `Authorization: Bearer`** dari request — autentikasi sudah dijamin oleh `api_id` dan `signature` HMAC di body
+2. **Deploy ulang** edge function telegram-webhook dengan force
+3. **Setup webhook** ulang
 
-Hasil yang diharapkan setelah itu:
-- Kita bisa memastikan apakah kegagalan terjadi saat create invoice atau saat callback.
-- Anda akan punya log mentah yang cukup untuk dikirim ke dukungan Sakurupiah.
-- Proses approval otomatis menjadi lebih tahan terhadap variasi format callback dari provider.
+### Perubahan Teknis
+
+**File**: `supabase/functions/telegram-webhook/index.ts` (baris 216-219)
+
+```typescript
+// SEBELUM
+headers: {
+  'Authorization': `Bearer ${apiKey}`,
+  'Content-Type': 'application/x-www-form-urlencoded',
+},
+
+// SESUDAH
+headers: {
+  'Content-Type': 'application/x-www-form-urlencoded',
+},
+```
+
+Hanya satu perubahan kecil: hapus baris `Authorization` header, lalu deploy ulang dan setup webhook.
+
