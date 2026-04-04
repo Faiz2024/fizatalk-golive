@@ -5009,6 +5009,15 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
     }
 
 
+    // === HANDLER BUKTI PEMBAYARAN QRIS MANUAL ===
+    // Jika user mengirim foto dan state awaiting_payment, cek apakah ada transaksi QRIS_MANUAL pending
+    if (message.photo && currentUser?.state === 'awaiting_payment') {
+      const handled = await handlePaymentProofUpload(supabase, botToken, userId, message);
+      if (handled) {
+        return new Response('OK', { status: 200 });
+      }
+    }
+
     // ************************************************
     // LOGIKA CHATTING & FORWARDING (TANPA TAG)
     // ************************************************
