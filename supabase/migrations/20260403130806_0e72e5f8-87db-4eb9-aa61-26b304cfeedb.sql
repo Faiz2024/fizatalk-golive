@@ -1,1 +1,0 @@
-INSERT INTO storage.buckets (id, name, public) VALUES ('qris-assets', 'qris-assets', true) ON CONFLICT (id) DO NOTHING;
