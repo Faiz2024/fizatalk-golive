@@ -1516,8 +1516,9 @@ async function processSakurupiahTopupPayment(
   });
 
   if (!invoice.success) {
-    await supabase.from('topup_requests').update({ status: 'cancelled' }).eq('id', topupReq.id);
-    await sendTelegramMessage(botToken, userId, `❌ Gagal membuat invoice: ${invoice.error}\n\nSilakan coba lagi.`);
+    // Fallback ke QRIS Manual
+    console.log(`[TOPUP] Sakurupiah failed, fallback to QRIS Manual: ${invoice.error}`);
+    await sendManualQRISPayment(supabase, botToken, userId, 'topup', topupReq.id, totalPrice, `Top-up ${amount.toLocaleString('id-ID')} Koin`, `init_topup_${amount}`);
     return;
   }
 
