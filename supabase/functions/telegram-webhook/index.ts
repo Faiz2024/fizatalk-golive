@@ -746,6 +746,406 @@ async function setBotSetting(supabase: any, key: string, value: string, updatedB
   return !error;
 }
 
+// === QRIS MANUAL FALLBACK HELPER ===
+// Digunakan saat Sakurupiah gagal membuat invoice
+async function sendManualQRISPayment(
+  supabase: any, botToken: string, userId: number,
+  type: 'prem' | 'topup' | 'fine', transactionId: string,
+  totalAmount: number, productLabel: string, cancelCallback: string
+): Promise<void> {
+  // Generate unique code untuk identifikasi pembayaran
+  const { data: uniqueCode } = await supabase.rpc('generate_unique_payment_code');
+  const code = uniqueCode || Math.floor(Math.random() * 999 + 1);
+  const totalWithCode = totalAmount + code;
+
+  // Update transaction dengan unique_code dan payment_method
+  if (type === 'prem') {
+    await supabase.from('premium_requests')
+      .update({ unique_code: code, payment_method: 'QRIS_MANUAL', status: 'pending' })
+      .eq('id', transactionId);
+  } else if (type === 'topup') {
+    await supabase.from('topup_requests')
+      .update({ unique_code: code, payment_method: 'QRIS_MANUAL', status: 'pending' })
+      .eq('id', transactionId);
+  } else if (type === 'fine') {
+    await supabase.from('pending_transactions')
+      .update({ unique_code: code, payment_method: 'QRIS_MANUAL', total_amount: totalWithCode, status: 'pending' })
+      .eq('id', transactionId);
+  }
+
+  // Set user state ke awaiting_payment
+  await supabase.rpc('set_user_payment_state', { p_user_id: userId });
+
+  // Ambil QRIS file_id dari bot_settings atau gunakan URL storage
+  let qrisSource = await getBotSetting(supabase, 'qris_file_id');
+  if (!qrisSource) {
+    // Fallback ke Supabase Storage URL
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    qrisSource = `${supabaseUrl}/storage/v1/object/public/qris-assets/qris-payment.png`;
+  }
+
+  const caption = `📱 <b>${productLabel}</b>\n\n` +
+    `💰 Total Bayar: <b>Rp ${totalWithCode.toLocaleString('id-ID')}</b>\n` +
+    `🔢 Kode Unik: <b>${code}</b>\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📱 <b>CARA BAYAR:</b>\n\n` +
+    `1️⃣ Scan QR Code di atas\n` +
+    `2️⃣ Bayar sebesar <b>Rp ${totalWithCode.toLocaleString('id-ID')}</b>\n` +
+    `3️⃣ <b>Kirim foto bukti transfer</b> ke chat ini\n` +
+    `4️⃣ Tunggu verifikasi dari admin\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `⚠️ <b>PENTING:</b> Pastikan nominal TEPAT termasuk kode unik!\n` +
+    `⏰ Batas waktu: <b>60 menit</b>`;
+
+  const cancelKb = { inline_keyboard: [[{ text: '❌ Batalkan', callback_data: cancelCallback }]] };
+
+  try {
+    const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: userId, photo: qrisSource, caption, parse_mode: 'HTML', reply_markup: cancelKb })
+    });
+    const rj = await resp.json();
+    if (rj.ok) {
+      // Simpan file_id untuk penggunaan berikutnya (hemat bandwidth)
+      if (!await getBotSetting(supabase, 'qris_file_id') && rj.result.photo) {
+        const photos = rj.result.photo;
+        const fileId = photos[photos.length - 1].file_id;
+        await setBotSetting(supabase, 'qris_file_id', fileId, userId);
+      }
+      // Simpan message_id di transaksi
+      if (type === 'prem') {
+        await supabase.from('premium_requests').update({ message_id: rj.result.message_id }).eq('id', transactionId);
+      } else if (type === 'topup') {
+        await supabase.from('topup_requests').update({ message_id: rj.result.message_id }).eq('id', transactionId);
+      }
+    } else {
+      console.error('[QRIS MANUAL] sendPhoto failed:', JSON.stringify(rj));
+      // Fallback: kirim teks saja
+      await sendTelegramMessage(botToken, userId, caption, cancelKb);
+    }
+  } catch (e) {
+    console.error('[QRIS MANUAL] Error:', e);
+    await sendTelegramMessage(botToken, userId, caption, cancelKb);
+  }
+
+  // Notify CS
+  const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+  if (csChatId) {
+    const { data: userData } = await supabase.from('telegram_users')
+      .select('username, first_name').eq('id', userId).single();
+    const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'User';
+    await sendTelegramMessage(botToken, parseInt(csChatId),
+      `📱 <b>QRIS MANUAL - MENUNGGU BUKTI</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n📦 Produk: ${productLabel}\n💵 Total: Rp ${totalWithCode.toLocaleString('id-ID')}\n🔢 Kode Unik: ${code}\n📋 Tipe: ${type}\n🆔 TRX: <code>${transactionId}</code>\n\n⏳ Menunggu user upload bukti transfer...`
+    );
+  }
+}
+
+// === HANDLER: Proses bukti pembayaran QRIS Manual ===
+async function handlePaymentProofUpload(
+  supabase: any, botToken: string, userId: number, message: TelegramMessage
+): Promise<boolean> {
+  // Cari pending QRIS_MANUAL transaction terbaru milik user
+  // Cek di 3 tabel: premium_requests, topup_requests, pending_transactions
+  let txType: 'prem' | 'topup' | 'fine' | null = null;
+  let txData: any = null;
+
+  // 1. Cek premium_requests
+  const { data: premReq } = await supabase.from('premium_requests')
+    .select('id, price, unique_code, duration_days')
+    .eq('user_id', userId).eq('status', 'pending').eq('payment_method', 'QRIS_MANUAL')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+  if (premReq) {
+    txType = 'prem';
+    txData = premReq;
+  }
+
+  // 2. Cek topup_requests
+  if (!txType) {
+    const { data: topupReq } = await supabase.from('topup_requests')
+      .select('id, amount, unique_code')
+      .eq('user_id', userId).eq('status', 'pending').eq('payment_method', 'QRIS_MANUAL')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (topupReq) {
+      txType = 'topup';
+      txData = topupReq;
+    }
+  }
+
+  // 3. Cek pending_transactions (fine)
+  if (!txType) {
+    const { data: fineReq } = await supabase.from('pending_transactions')
+      .select('id, amount, unique_code, total_amount')
+      .eq('user_id', userId).eq('status', 'pending').eq('admin_notes', 'FINE_PAYMENT')
+      .is('sakurupiah_trx_id', null)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (fineReq) {
+      txType = 'fine';
+      txData = fineReq;
+    }
+  }
+
+  if (!txType || !txData) return false;
+
+  // Simpan file_id foto bukti
+  const photo = message.photo!;
+  const fileId = photo[photo.length - 1].file_id;
+
+  if (txType === 'prem') {
+    await supabase.from('premium_requests').update({ payment_proof: fileId }).eq('id', txData.id);
+  } else if (txType === 'topup') {
+    await supabase.from('topup_requests').update({ payment_proof: fileId }).eq('id', txData.id);
+  } else if (txType === 'fine') {
+    await supabase.from('pending_transactions').update({ payment_proof_url: fileId }).eq('id', txData.id);
+  }
+
+  // Kirim konfirmasi ke user
+  await sendTelegramMessage(botToken, userId,
+    `✅ <b>Bukti pembayaran diterima!</b>\n\nBukti transfer kamu sedang diverifikasi oleh admin.\n⏳ Mohon tunggu, proses biasanya memakan waktu 1-15 menit.\n\n📋 ID Transaksi: <code>${txData.id}</code>`
+  );
+
+  // Forward ke CS dengan tombol approve/reject
+  const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+  if (csChatId) {
+    const { data: userData } = await supabase.from('telegram_users')
+      .select('username, first_name').eq('id', userId).single();
+    const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'User';
+
+    let productInfo = '';
+    let totalAmount = 0;
+    if (txType === 'prem') {
+      productInfo = `Premium ${txData.duration_days} hari`;
+      totalAmount = txData.price + txData.unique_code;
+    } else if (txType === 'topup') {
+      const COIN_PRICE = 10;
+      productInfo = `Top-up ${txData.amount} Koin`;
+      totalAmount = txData.amount * COIN_PRICE + txData.unique_code;
+    } else if (txType === 'fine') {
+      productInfo = 'Denda Buka Blokir';
+      totalAmount = txData.total_amount;
+    }
+
+    const csCaption = `🧾 <b>BUKTI PEMBAYARAN QRIS MANUAL</b>\n\n` +
+      `👤 User: ${userName}\n` +
+      `🆔 ID: <code>${userId}</code>\n` +
+      `📦 Produk: ${productInfo}\n` +
+      `💵 Total: Rp ${totalAmount.toLocaleString('id-ID')}\n` +
+      `🔢 Kode Unik: ${txData.unique_code}\n` +
+      `📋 TRX ID: <code>${txData.id}</code>\n\n` +
+      `⬇️ Verifikasi bukti di bawah:`;
+
+    const csKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '✅ Approve', callback_data: `cs_approve_${txType}_${txData.id}` },
+          { text: '❌ Reject', callback_data: `cs_reject_${txType}_${txData.id}` }
+        ]
+      ]
+    };
+
+    // Kirim info teks dulu
+    await sendTelegramMessage(botToken, parseInt(csChatId), csCaption, csKeyboard);
+    // Forward foto bukti
+    await copyTelegramMessage(botToken, parseInt(csChatId), userId, message.message_id);
+  }
+
+  // Reset state user ke idle/chatting
+  await supabase.rpc('reset_payment_state', { p_user_id: userId });
+
+  return true;
+}
+
+// === HANDLER: CS Approve/Reject QRIS Manual ===
+async function handleCSApproveReject(
+  supabase: any, botToken: string, action: 'approve' | 'reject',
+  txType: 'prem' | 'topup' | 'fine', txId: string,
+  csMessage: any, csChatId: number
+): Promise<void> {
+  const originalText = (csMessage as any)?.text || '';
+
+  if (action === 'approve') {
+    if (txType === 'prem') {
+      // Ambil data premium request
+      const { data: premReq } = await supabase.from('premium_requests')
+        .select('user_id, duration_days, price, status').eq('id', txId).single();
+      
+      if (!premReq || premReq.status !== 'pending') {
+        await editCSMessage(botToken, csChatId, csMessage.message_id, originalText, '⚠️ Transaksi sudah diproses sebelumnya.');
+        return;
+      }
+
+      const userId = premReq.user_id;
+
+      // Update premium request
+      await supabase.from('premium_requests')
+        .update({ status: 'approved', processed_at: new Date().toISOString() })
+        .eq('id', txId);
+
+      // Activate premium
+      const { data: userData } = await supabase.from('telegram_users')
+        .select('premium_until').eq('id', userId).single();
+
+      let premiumEndDate: Date;
+      const existing = userData?.premium_until;
+      if (existing && new Date(existing) > new Date()) {
+        premiumEndDate = new Date(existing);
+        premiumEndDate.setDate(premiumEndDate.getDate() + premReq.duration_days);
+      } else {
+        premiumEndDate = new Date();
+        premiumEndDate.setDate(premiumEndDate.getDate() + premReq.duration_days);
+      }
+
+      await supabase.from('telegram_users')
+        .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0 })
+        .eq('id', userId);
+
+      // Unblock if blocked
+      await supabase.from('blocked_users')
+        .update({ is_active: false }).eq('user_id', userId);
+
+      // Record transaction
+      await supabase.from('coin_transactions').insert({
+        user_id: userId, amount: -premReq.price, type: 'purchase',
+        description: `Premium ${premReq.duration_days} hari via QRIS Manual`
+      });
+
+      const formattedDate = premiumEndDate.toLocaleDateString('id-ID', {
+        timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric'
+      });
+
+      await sendTelegramMessage(botToken, userId,
+        `🎉 <b>SELAMAT! PREMIUM AKTIF!</b>\n\n` +
+        `✨ Kamu sekarang user Premium!\n` +
+        `📅 Berlaku hingga: ${formattedDate}\n\n` +
+        `🎯 Gunakan /target untuk pilih gender chat!\nTerima kasih! 💎`
+      );
+
+      await editCSMessage(botToken, csChatId, csMessage.message_id, originalText, '✅ DIAPPROVE - Premium diaktifkan');
+
+    } else if (txType === 'topup') {
+      const { data: topupReq } = await supabase.from('topup_requests')
+        .select('user_id, amount, status').eq('id', txId).single();
+      
+      if (!topupReq || topupReq.status !== 'pending') {
+        await editCSMessage(botToken, csChatId, csMessage.message_id, originalText, '⚠️ Transaksi sudah diproses sebelumnya.');
+        return;
+      }
+
+      const userId = topupReq.user_id;
+      const coinAmount = topupReq.amount;
+
+      await supabase.from('topup_requests')
+        .update({ status: 'approved', processed_at: new Date().toISOString() })
+        .eq('id', txId);
+
+      const { data: userData } = await supabase.from('telegram_users')
+        .select('coins').eq('id', userId).single();
+      const newBalance = (userData?.coins || 0) + coinAmount;
+
+      await supabase.from('telegram_users')
+        .update({ coins: newBalance }).eq('id', userId);
+
+      await supabase.from('coin_transactions').insert({
+        user_id: userId, amount: coinAmount, type: 'topup',
+        description: `Top-up ${coinAmount} koin via QRIS Manual`
+      });
+
+      await sendTelegramMessage(botToken, userId,
+        `✅ <b>TOP-UP BERHASIL!</b>\n\n💰 +${coinAmount.toLocaleString('id-ID')} koin\n💳 Saldo baru: ${newBalance.toLocaleString('id-ID')} koin\n\nTerima kasih! 🎉`
+      );
+
+      await editCSMessage(botToken, csChatId, csMessage.message_id, originalText, `✅ DIAPPROVE - +${coinAmount} koin`);
+
+    } else if (txType === 'fine') {
+      const { data: fineReq } = await supabase.from('pending_transactions')
+        .select('user_id, amount, status').eq('id', txId).single();
+      
+      if (!fineReq || fineReq.status !== 'pending') {
+        await editCSMessage(botToken, csChatId, csMessage.message_id, originalText, '⚠️ Transaksi sudah diproses sebelumnya.');
+        return;
+      }
+
+      const userId = fineReq.user_id;
+
+      await supabase.from('pending_transactions')
+        .update({ status: 'approved', approved_at: new Date().toISOString(), approved_by: csChatId })
+        .eq('id', txId);
+
+      // Unblock user
+      await supabase.from('blocked_users')
+        .update({ is_active: false, unblocked_at: new Date().toISOString() })
+        .eq('user_id', userId);
+
+      // Reset penalty
+      await supabase.from('telegram_users')
+        .update({ penalty_points: 0 }).eq('id', userId);
+
+      await supabase.from('coin_transactions').insert({
+        user_id: userId, amount: -fineReq.amount, type: 'fine_payment',
+        description: 'Denda buka blokir via QRIS Manual'
+      });
+
+      const welcomeKeyboard = {
+        inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]]
+      };
+
+      await sendTelegramMessage(botToken, userId,
+        `✅ <b>AKUN TELAH DIBUKA BLOKIR!</b>\n\n🎉 Pembayaran denda berhasil diverifikasi!\n\nSilakan mulai chat:`,
+        welcomeKeyboard
+      );
+
+      await editCSMessage(botToken, csChatId, csMessage.message_id, originalText, '✅ DIAPPROVE - Akun dibuka blokir');
+    }
+  } else {
+    // REJECT
+    let userId: number | null = null;
+
+    if (txType === 'prem') {
+      const { data } = await supabase.from('premium_requests')
+        .select('user_id').eq('id', txId).single();
+      userId = data?.user_id;
+      await supabase.from('premium_requests').update({ status: 'rejected' }).eq('id', txId);
+    } else if (txType === 'topup') {
+      const { data } = await supabase.from('topup_requests')
+        .select('user_id').eq('id', txId).single();
+      userId = data?.user_id;
+      await supabase.from('topup_requests').update({ status: 'rejected' }).eq('id', txId);
+    } else if (txType === 'fine') {
+      const { data } = await supabase.from('pending_transactions')
+        .select('user_id').eq('id', txId).single();
+      userId = data?.user_id;
+      await supabase.from('pending_transactions').update({ status: 'rejected' }).eq('id', txId);
+    }
+
+    if (userId) {
+      await sendTelegramMessage(botToken, userId,
+        `❌ <b>Pembayaran Ditolak</b>\n\nBukti pembayaran kamu tidak valid atau tidak sesuai.\n\nSilakan coba lagi dengan bukti yang benar.`
+      );
+    }
+
+    await editCSMessage(botToken, csChatId, csMessage.message_id, originalText, '❌ DITOLAK');
+  }
+}
+
+// Helper: Edit pesan CS setelah approve/reject
+async function editCSMessage(botToken: string, chatId: number, messageId: number, originalText: string, statusText: string): Promise<void> {
+  try {
+    await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text: originalText + `\n\n<b>${statusText}</b>\n⏰ ${formatDateTimeWIB(new Date())}`,
+        parse_mode: 'HTML'
+      })
+    });
+  } catch (e) {
+    console.error('[CS EDIT] Error:', e);
+  }
+}
+
 
 // NOTE: Helper functions isUserBlocked, simpleUpsertUser, smartUpsertUser, shouldShowChannelJoin
 // telah DIHAPUS - logika sudah terintegrasi dalam comprehensive_search_action RPC
