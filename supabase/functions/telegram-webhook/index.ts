@@ -628,8 +628,10 @@ async function processSakurupiahPremiumPayment(
   });
 
   if (!invoice.success) {
-    await supabase.from('premium_requests').update({ status: 'cancelled' }).eq('id', premReq.id);
-    await sendTelegramMessage(botToken, userId, `❌ Gagal membuat invoice: ${invoice.error}\n\nSilakan coba lagi.`);
+    // Fallback ke QRIS Manual
+    console.log(`[PREMIUM] Sakurupiah failed, fallback to QRIS Manual: ${invoice.error}`);
+    const origCallback = Object.keys(BUY_PREMIUM_MAP).find(k => BUY_PREMIUM_MAP[k] === configKey) || 'cancel_premium';
+    await sendManualQRISPayment(supabase, botToken, userId, 'prem', premReq.id, config.price, config.label, origCallback);
     return;
   }
 
