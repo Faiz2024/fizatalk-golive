@@ -2469,6 +2469,7 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData === 'change_target' || callbackData === 'change_location') return 'default';
   if (callbackData === 'check_channel_joined') return 'search_partner'; // Sama dengan search
   if (callbackData.startsWith('dismiss_promo')) return 'search_partner'; // Dismiss promo = search
+  if (callbackData.startsWith('cs_approve_') || callbackData.startsWith('cs_reject_')) return 'cs_action';
   return 'default';
 }
 
