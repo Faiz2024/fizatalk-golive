@@ -2397,6 +2397,7 @@ const BUTTON_COOLDOWNS: Record<string, number> = {
   'cancel_topup': 2000,      // 2 detik - cancel topup
   'cancel_premium': 2000,    // 2 detik - cancel premium
   'cancel_fine': 2000,       // 2 detik - cancel fine
+  'cs_action': 5000,         // 5 detik - CS approve/reject
   'gender': 2000,            // 2 detik - pilih gender
   'target': 2000,            // 2 detik - pilih target
   'location': 2000,          // 2 detik - pilih lokasi
