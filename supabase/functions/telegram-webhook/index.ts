@@ -1644,8 +1644,9 @@ async function processSakurupiahFinePayment(
   });
 
   if (!invoice.success) {
-    await supabase.from('pending_transactions').update({ status: 'cancelled' }).eq('id', fineReq.id);
-    await sendTelegramMessage(botToken, userId, `❌ Gagal membuat invoice: ${invoice.error}\n\nSilakan coba lagi.`);
+    // Fallback ke QRIS Manual
+    console.log(`[FINE] Sakurupiah failed, fallback to QRIS Manual: ${invoice.error}`);
+    await sendManualQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Denda Buka Blokir', 'pay_fine');
     return;
   }
 
