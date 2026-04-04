@@ -3733,6 +3733,18 @@ Deno.serve(async (req) => {
         return new Response('OK');
       }
 
+      // --- HANDLER CS APPROVE/REJECT QRIS MANUAL ---
+      if (callbackData.startsWith('cs_approve_') || callbackData.startsWith('cs_reject_')) {
+        const isApprove = callbackData.startsWith('cs_approve_');
+        const parts = callbackData.replace(isApprove ? 'cs_approve_' : 'cs_reject_', '').split('_');
+        const txType = parts[0] as 'prem' | 'topup' | 'fine';
+        const txId = parts.slice(1).join('_'); // UUID bisa mengandung underscore? Tidak, tapi join untuk safety
+
+        await answerCallbackQuery(botToken, query.id, isApprove ? '✅ Memproses...' : '❌ Menolak...');
+        await handleCSApproveReject(supabase, botToken, isApprove ? 'approve' : 'reject', txType, txId, message, userId);
+        return new Response('OK', { status: 200 });
+      }
+
       // Eksekusi Blokir
       if (callbackData.startsWith('admin_block_')) {
         const targetId = parseInt(callbackData.split('_')[2]);
