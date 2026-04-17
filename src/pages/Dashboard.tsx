@@ -26,101 +26,14 @@ import {
 } from "recharts";
 import { useEffect } from "react";
 
-// Helper: WIB timezone-aware day boundaries
-const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
-
-function startOfTodayWIB(): Date {
-  const now = new Date();
-  const wibNow = new Date(now.getTime() + WIB_OFFSET_MS);
-  wibNow.setUTCHours(0, 0, 0, 0);
-  return new Date(wibNow.getTime() - WIB_OFFSET_MS);
-}
-
-function daysAgoWIB(days: number): Date {
-  const start = startOfTodayWIB();
-  return new Date(start.getTime() - days * 24 * 60 * 60 * 1000);
-}
-
-const formatDateID = (date: Date) =>
-  date.toLocaleDateString("id-ID", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-
-const fetchKPIs = async () => {
-  const todayStart = startOfTodayWIB().toISOString();
-  const day30 = daysAgoWIB(30).toISOString();
-  const day31 = daysAgoWIB(31).toISOString();
-
-  const [newToday, activeToday, inactive30, churn] = await Promise.all([
-    supabase
-      .from("telegram_users")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", todayStart),
-    supabase
-      .from("telegram_users")
-      .select("id", { count: "exact", head: true })
-      .gte("last_active", todayStart),
-    supabase
-      .from("telegram_users")
-      .select("id", { count: "exact", head: true })
-      .lt("last_active", day30),
-    supabase
-      .from("telegram_users")
-      .select("id", { count: "exact", head: true })
-      .gte("last_active", day31)
-      .lt("last_active", day30),
-  ]);
-
-  const errs = [newToday, activeToday, inactive30, churn].find((r) => r.error);
-  if (errs?.error) throw errs.error;
-
-  return {
-    newToday: newToday.count ?? 0,
-    activeToday: activeToday.count ?? 0,
-    inactive30: inactive30.count ?? 0,
-    churn: churn.count ?? 0,
+const fetchStats = async () => {
+  const { data, error } = await supabase.functions.invoke("admin-stats");
+  if (error) throw error;
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return data as {
+    kpis: { newToday: number; activeToday: number; inactive30: number; churn: number };
+    activity: { label: string; baru: number; aktif: number }[];
   };
-};
-
-const fetch7DayActivity = async () => {
-  const start = daysAgoWIB(6).toISOString();
-  const [created, active] = await Promise.all([
-    supabase
-      .from("telegram_users")
-      .select("created_at")
-      .gte("created_at", start),
-    supabase
-      .from("telegram_users")
-      .select("last_active")
-      .gte("last_active", start),
-  ]);
-  if (created.error) throw created.error;
-  if (active.error) throw active.error;
-
-  const days: { date: Date; key: string; label: string; baru: number; aktif: number }[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = daysAgoWIB(i);
-    const key = d.toISOString().slice(0, 10);
-    days.push({ date: d, key, label: formatDateID(d), baru: 0, aktif: 0 });
-  }
-  const bucket = (iso: string) => {
-    const d = new Date(iso);
-    const wib = new Date(d.getTime() + WIB_OFFSET_MS);
-    return wib.toISOString().slice(0, 10);
-  };
-  for (const row of created.data ?? []) {
-    const k = bucket(row.created_at as string);
-    const day = days.find((x) => x.key === k);
-    if (day) day.baru++;
-  }
-  for (const row of active.data ?? []) {
-    const k = bucket(row.last_active as string);
-    const day = days.find((x) => x.key === k);
-    if (day) day.aktif++;
-  }
-  return days.map(({ label, baru, aktif }) => ({ label, baru, aktif }));
 };
 
 const KPICard = ({
@@ -156,22 +69,22 @@ const KPICard = ({
 const Dashboard = () => {
   const { theme, setTheme } = useTheme();
 
-  const kpiQ = useQuery({ queryKey: ["kpis"], queryFn: fetchKPIs });
-  const chartQ = useQuery({ queryKey: ["activity-7d"], queryFn: fetch7DayActivity });
+  const statsQ = useQuery({ queryKey: ["admin-stats"], queryFn: fetchStats });
+  const kpis = statsQ.data?.kpis;
+  const activity = statsQ.data?.activity ?? [];
 
   useEffect(() => {
-    if (kpiQ.error || chartQ.error) {
+    if (statsQ.error) {
       toast.error("Gagal mengambil data dari database");
     }
-  }, [kpiQ.error, chartQ.error]);
+  }, [statsQ.error]);
 
   const handleRefresh = () => {
-    kpiQ.refetch();
-    chartQ.refetch();
+    statsQ.refetch();
     toast.success("Data sedang disegarkan");
   };
 
-  const isLoading = kpiQ.isLoading || chartQ.isLoading;
+  const isLoading = statsQ.isLoading;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
@@ -206,30 +119,30 @@ const Dashboard = () => {
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KPICard
             title="Pengguna Baru (Hari Ini)"
-            value={kpiQ.data?.newToday ?? 0}
+            value={kpis?.newToday ?? 0}
             Icon={UserPlus}
-            loading={kpiQ.isLoading}
+            loading={isLoading}
             accent="bg-primary"
           />
           <KPICard
             title="Pengguna Aktif (Hari Ini)"
-            value={kpiQ.data?.activeToday ?? 0}
+            value={kpis?.activeToday ?? 0}
             Icon={Activity}
-            loading={kpiQ.isLoading}
+            loading={isLoading}
             accent="bg-accent"
           />
           <KPICard
             title="Tidak Aktif (>30 Hari)"
-            value={kpiQ.data?.inactive30 ?? 0}
+            value={kpis?.inactive30 ?? 0}
             Icon={UserMinus}
-            loading={kpiQ.isLoading}
+            loading={isLoading}
             accent="bg-muted-foreground/60"
           />
           <KPICard
             title="User Churn (Tepat 30 Hari)"
-            value={kpiQ.data?.churn ?? 0}
+            value={kpis?.churn ?? 0}
             Icon={AlertTriangle}
-            loading={kpiQ.isLoading}
+            loading={isLoading}
             accent="bg-destructive"
           />
         </section>
@@ -239,12 +152,12 @@ const Dashboard = () => {
             <CardTitle>Statistik Aktivitas (7 Hari Terakhir)</CardTitle>
           </CardHeader>
           <CardContent>
-            {chartQ.isLoading ? (
+            {isLoading ? (
               <Skeleton className="h-[320px] w-full" />
             ) : (
               <div className="h-[320px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartQ.data ?? []} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+                  <LineChart data={activity} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                     <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
