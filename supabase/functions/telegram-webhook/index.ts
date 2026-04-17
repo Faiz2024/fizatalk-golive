@@ -5800,6 +5800,82 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
             await sendTelegramMessage(botToken, userId, '⚠️ Reply ke foto Promo dengan command /set_promo');
           }
         }
+        // COMMAND /STATS - ADMIN ONLY (Melihat statistik user)
+        if (text === '/stats') {
+          const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+          if (userId.toString() !== csChatId) {
+            await sendTelegramMessage(botToken, userId, '❌ Command ini hanya untuk admin.');
+            return new Response('OK', { status: 200 });
+          }
+
+          // Kirim pesan loading karena query ke DB mungkin memakan waktu
+          await sendTelegramMessage(botToken, userId, '⏳ Menghitung statistik... Mohon tunggu.');
+
+          try {
+            // Setup Waktu (Referensi: Kemarin)
+            const now = new Date();
+            // Reset ke jam 00:00:00 hari ini
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            
+            // Awal hari kemarin (00:00:00 kemarin)
+            const yesterdayStart = new Date(todayStart);
+            yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+            
+            // Batas 30 hari sebelum kemarin (untuk menghitung churn)
+            const churnDateStart = new Date(yesterdayStart);
+            churnDateStart.setDate(churnDateStart.getDate() - 30);
+            
+            const churnDateEnd = new Date(todayStart);
+            churnDateEnd.setDate(churnDateEnd.getDate() - 30);
+
+            // Format tanggal untuk ditampilkan di pesan
+            const displayDate = yesterdayStart.toLocaleDateString('id-ID', {
+              day: 'numeric', month: 'long', year: 'numeric'
+            });
+
+            // 1. Pengguna Baru pada hari kemarin (created_at >= yesterdayStart AND < todayStart)
+            const { count: newUsers } = await supabase
+              .from('telegram_users')
+              .select('*', { count: 'exact', head: true })
+              .gte('created_at', yesterdayStart.toISOString())
+              .lt('created_at', todayStart.toISOString());
+
+            // 2. Pengguna Aktif pada hari kemarin (updated_at >= yesterdayStart AND < todayStart)
+            const { count: activeUsers } = await supabase
+              .from('telegram_users')
+              .select('*', { count: 'exact', head: true })
+              .gte('updated_at', yesterdayStart.toISOString())
+              .lt('updated_at', todayStart.toISOString());
+
+            // 3. Tidak aktif > 30 hari dihitung dari kemarin (updated_at < 30 hari sebelum kemarin)
+            const { count: inactiveUsers } = await supabase
+              .from('telegram_users')
+              .select('*', { count: 'exact', head: true })
+              .lt('updated_at', churnDateStart.toISOString());
+
+            // 4. User Churn (Tepat 30 hari tidak aktif pada hari kemarin)
+            // Berarti terakhir aktif pada rentang waktu `churnDateStart` hingga `churnDateEnd`
+            const { count: churnedUsers } = await supabase
+              .from('telegram_users')
+              .select('*', { count: 'exact', head: true })
+              .gte('updated_at', churnDateStart.toISOString())
+              .lt('updated_at', churnDateEnd.toISOString());
+
+            // Format Pesan Balasan
+            const statsMessage = `📊 <b>Statistik Pengguna Harian</b>\n` +
+              `📅 Tanggal: <b>${displayDate}</b>\n\n` +
+              `📈 <b>Pengguna Baru:</b> ${newUsers || 0} user\n` +
+              `🔥 <b>Pengguna Aktif:</b> ${activeUsers || 0} user\n` +
+              `💤 <b>Tidak Aktif (>30 Hari):</b> ${inactiveUsers || 0} user\n` +
+              `📉 <b>User Churn (Tepat 30 Hari):</b> ${churnedUsers || 0} user`;
+
+            await sendTelegramMessage(botToken, userId, statsMessage);
+          } catch (e) {
+            console.error('[STATS COMMAND] Error:', e);
+            await sendTelegramMessage(botToken, userId, '❌ Terjadi kesalahan sistem saat mengambil data statistik.');
+          }
+          return new Response('OK', { status: 200 });
+        }
     }
     else {
         // Jika TIDAK ada teks (yaitu media non-chatting), maka jatuh ke blok sambutan juga.
