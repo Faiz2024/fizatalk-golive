@@ -1,17 +1,26 @@
-const App = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/20 to-background p-4">
-      <div className="text-center space-y-4 max-w-md">
-        <h1 className="text-4xl font-bold text-foreground">FizaTalk Bot</h1>
-        <p className="text-muted-foreground text-lg">
-          Telegram Random Chat Bot sedang berjalan.
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Untuk menggunakan bot, silakan cari <strong>@FizaTalkBot</strong> di Telegram.
-        </p>
-      </div>
-    </div>
-  );
-};
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
+import { Toaster } from "@/components/ui/sonner";
+import Dashboard from "./pages/Dashboard";
+import NotFound from "./pages/NotFound";
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+});
+
+const App = () => (
+  <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Toaster richColors position="top-right" />
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
+  </ThemeProvider>
+);
 
 export default App;
