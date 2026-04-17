@@ -160,7 +160,13 @@ const Dashboard = () => {
                   <LineChart data={activity} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                      allowDecimals={false}
+                      domain={['auto', 'auto']}
+                      allowDataOverflow={false}
+                    />
                     <Tooltip
                       contentStyle={{
                         background: "hsl(var(--popover))",
@@ -169,6 +175,7 @@ const Dashboard = () => {
                         color: "hsl(var(--popover-foreground))",
                       }}
                       labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                      formatter={(value: number, name: string) => [value.toLocaleString("id-ID"), name]}
                     />
                     <Legend wrapperStyle={{ fontSize: 13 }} />
                     <Line
@@ -186,6 +193,25 @@ const Dashboard = () => {
                       name="Pengguna Aktif"
                       stroke="hsl(var(--accent))"
                       strokeWidth={2.5}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="churn"
+                      name="User Churn"
+                      stroke="hsl(var(--destructive))"
+                      strokeWidth={2.5}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="baru30hariLalu"
+                      name="Pengguna Baru 30 Hari Lalu"
+                      stroke="hsl(32 95% 55%)"
+                      strokeWidth={2.5}
+                      strokeDasharray="5 5"
                       dot={{ r: 3 }}
                       activeDot={{ r: 6 }}
                     />
