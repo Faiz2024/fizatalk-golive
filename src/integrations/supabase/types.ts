@@ -545,6 +545,7 @@ export type Database = {
       end_chat_comprehensive: { Args: { p_user_id: number }; Returns: Json }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
+      get_admin_dashboard_stats: { Args: never; Returns: Json }
       get_partner_settings: { Args: { p_partner_id: number }; Returns: Json }
       get_user_reputation: { Args: { p_user_id: number }; Returns: Json }
       handle_end_chat_promo_logic: {
