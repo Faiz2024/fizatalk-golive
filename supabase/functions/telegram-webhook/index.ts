@@ -5840,26 +5840,26 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
               .gte('created_at', yesterdayStart.toISOString())
               .lt('created_at', todayStart.toISOString());
 
-            // 2. Pengguna Aktif pada hari kemarin (updated_at >= yesterdayStart AND < todayStart)
+            // 2. Pengguna Aktif pada hari kemarin (last_active >= yesterdayStart AND < todayStart)
             const { count: activeUsers } = await supabase
               .from('telegram_users')
               .select('*', { count: 'exact', head: true })
-              .gte('updated_at', yesterdayStart.toISOString())
-              .lt('updated_at', todayStart.toISOString());
+              .gte('last_active', yesterdayStart.toISOString())
+              .lt('last_active', todayStart.toISOString());
 
-            // 3. Tidak aktif > 30 hari dihitung dari kemarin (updated_at < 30 hari sebelum kemarin)
+            // 3. Tidak aktif > 30 hari dihitung dari kemarin (last_active < 30 hari sebelum kemarin)
             const { count: inactiveUsers } = await supabase
               .from('telegram_users')
               .select('*', { count: 'exact', head: true })
-              .lt('updated_at', churnDateStart.toISOString());
+              .lt('last_active', churnDateStart.toISOString());
 
             // 4. User Churn (Tepat 30 hari tidak aktif pada hari kemarin)
             // Berarti terakhir aktif pada rentang waktu `churnDateStart` hingga `churnDateEnd`
             const { count: churnedUsers } = await supabase
               .from('telegram_users')
               .select('*', { count: 'exact', head: true })
-              .gte('updated_at', churnDateStart.toISOString())
-              .lt('updated_at', churnDateEnd.toISOString());
+              .gte('last_active', churnDateStart.toISOString())
+              .lt('last_active', churnDateEnd.toISOString());
 
             // Format Pesan Balasan
             const statsMessage = `📊 <b>Statistik Pengguna Harian</b>\n` +
