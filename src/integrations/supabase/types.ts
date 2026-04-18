@@ -101,6 +101,36 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_user_stats: {
+        Row: {
+          aktif: number
+          baru: number
+          baru30harilalu: number
+          churn: number
+          date: string
+          inactive30: number
+          snapshotted_at: string
+        }
+        Insert: {
+          aktif?: number
+          baru?: number
+          baru30harilalu?: number
+          churn?: number
+          date: string
+          inactive30?: number
+          snapshotted_at?: string
+        }
+        Update: {
+          aktif?: number
+          baru?: number
+          baru30harilalu?: number
+          churn?: number
+          date?: string
+          inactive30?: number
+          snapshotted_at?: string
+        }
+        Relationships: []
+      }
       partner_reports: {
         Row: {
           created_at: string | null
@@ -583,6 +613,7 @@ export type Database = {
         Args: { p_user_id: number }
         Returns: boolean
       }
+      snapshot_daily_stats: { Args: { p_target_date?: string }; Returns: Json }
       submit_partner_report: {
         Args: {
           p_report_type: string
