@@ -1,75 +1,79 @@
 
 
-## Rencana: Fallback QRIS Manual Jika Sakurupiah Gagal
+User menanyakan: kenapa angka di chart untuk hari-hari yang lalu (history) kadang berubah, padahal data historis seharusnya tetap.
 
-### Ringkasan
-Ketika `createSakurupiahInvoice()` gagal (return `!invoice.success`), alih-alih hanya menampilkan pesan error, sistem akan **otomatis fallback** ke alur pembayaran QRIS Manual: tampilkan gambar QRIS statis, user upload bukti transfer, bukti diteruskan ke CS chat untuk di-approve/reject manual via tombol interaktif.
+## Analisis Penyebab
 
-### Perubahan yang Akan Dilakukan
+Saya sudah review RPC `get_admin_dashboard_stats` dan struktur tabel `telegram_users`. Ada **3 alasan teknis** kenapa angka chart untuk hari kemarin/lusa terus berubah setiap kali user refresh:
 
-#### 1. Buat Helper Function `sendManualQRISPayment()`
-Fungsi baru yang menangani alur QRIS manual:
-- Kirim gambar QRIS statis (dari `src/assets/qris-payment.jpg`, akan disimpan `file_id`-nya di `bot_settings` dengan key `qris_file_id`)
-- Tampilkan instruksi: total bayar + kode unik 3 digit (dari `generate_unique_payment_code()` RPC) untuk identifikasi
-- Tampilkan tombol "Batalkan"
-- Update state user ke `awaiting_payment_proof` agar bot tahu user sedang menunggu upload bukti
+### 1. `aktif` per hari dihitung dari kolom `last_active` yang TERUS DI-UPDATE
 
-#### 2. Buat Handler Upload Bukti Pembayaran
-Di bagian message handler, ketika user mengirim **foto** dan state-nya `awaiting_payment_proof`:
-- Simpan `file_id` foto sebagai `payment_proof` di tabel terkait (premium_requests / topup_requests / pending_transactions)
-- Forward foto + detail transaksi ke CS chat (via `TELEGRAM_CS_CHAT_ID`)
-- Tambahkan tombol inline `Approve` dan `Reject` di pesan CS
-- Kirim konfirmasi ke user bahwa bukti sudah diterima dan sedang diverifikasi
-
-#### 3. Buat Handler Callback CS Approve/Reject
-Callback data format: `cs_approve_{type}_{id}` dan `cs_reject_{type}_{id}`
-- **type**: `prem`, `topup`, `fine`
-- **Approve**: Jalankan logika yang sama seperti callback Sakurupiah success (activate premium / add coins / unblock)
-- **Reject**: Update status jadi `rejected`, kirim notifikasi ke user
-- Setelah aksi, edit pesan CS: hapus keyboard, tambahkan status DIAPPROVE/DITOLAK
-
-#### 4. Modifikasi 3 Fungsi Payment (Titik Fallback)
-
-**`processSakurupiahPremiumPayment()`** (baris ~630-633):
-- Saat `!invoice.success`: alih-alih cancel + kirim error, panggil `sendManualQRISPayment()` dengan context `prem` dan `premReq.id`
-- Update `payment_method` menjadi `QRIS_MANUAL`
-
-**`processSakurupiahTopupPayment()`** (baris ~1116-1119):
-- Saat `!invoice.success`: panggil `sendManualQRISPayment()` dengan context `topup` dan `topupReq.id`
-- Update `payment_method` menjadi `QRIS_MANUAL`
-
-**`processSakurupiahFinePayment()`** (baris ~1243-1246):
-- Saat `!invoice.success`: panggil `sendManualQRISPayment()` dengan context `fine` dan `fineReq.id`
-- Update `payment_method` menjadi `QRIS_MANUAL`
-
-#### 5. Tambah State Baru
-Tambahkan `awaiting_payment_proof` ke enum `user_state` di database via migration, agar user dalam state ini bisa dikenali saat mengirim foto bukti. Simpan juga context transaksi aktif (type + id) di kolom baru atau di `bot_settings` per user untuk mapping bukti ke transaksi yang benar.
-
-**Alternatif tanpa state baru** (lebih hemat): Simpan info transaksi pending di memory/session sementara, atau cukup query `pending` transaction terbaru milik user saat foto diterima.
-
-### Detail Teknis
-
-#### Alur QRIS Manual:
-```text
-User pilih metode → Sakurupiah gagal → Fallback QRIS Manual
-  → Kirim gambar QRIS + total + kode unik
-  → User bayar & kirim foto bukti
-  → Bot forward ke CS dengan tombol Approve/Reject
-  → CS klik Approve → Bot proses (aktifkan premium/tambah koin/unblock)
-  → CS klik Reject → Bot kirim notif ke user
+Logika RPC saat ini:
+```sql
+(SELECT COUNT(*) FROM telegram_users
+  WHERE (last_active AT TIME ZONE 'Asia/Jakarta')::DATE = db.day_wib) AS aktif
 ```
 
-#### Database Migration:
-- Tidak perlu tabel baru. Gunakan kolom yang sudah ada (`payment_proof`, `status`, `unique_code`, `payment_method`)
-- Kolom `payment_method` di-update ke `QRIS_MANUAL` untuk membedakan dari Sakurupiah QRIS otomatis
-- Generate `unique_code` via existing `generate_unique_payment_code()` RPC
+`last_active` adalah **kolom yang di-overwrite** setiap kali user beraktivitas (lihat `update_last_active_daily` & `comprehensive_search_action`). Akibatnya:
 
-#### File yang Diubah:
-- `supabase/functions/telegram-webhook/index.ts` (tambah helper + modifikasi 3 fungsi payment + handler bukti + handler CS)
+- Angka "Aktif Senin" hari ini = jumlah user yang `last_active`-nya **masih** jatuh di hari Senin.
+- Begitu salah satu user yang aktif Senin kembali aktif Selasa/Rabu, `last_active`-nya pindah → user itu **hilang dari count Senin**.
+- Setiap detik berlalu, count "aktif Senin" hanya bisa **turun**, tidak pernah naik. Inilah yang user lihat sebagai "data berubah".
+
+Hal yang sama berlaku untuk:
+- `churn` (pakai `last_active` dengan offset 30 hari) → ikut turun seiring waktu.
+- Tidak berlaku untuk `baru` & `baru30hariLalu` karena pakai `created_at` yang immutable.
+
+### 2. User yang dihapus akan menghilang juga dari history
+
+Function `cleanup_inactive_users()` menghapus user `state = 'idle'` yang `last_active < NOW() - 24 jam`. Setiap user yang dihapus akan **mengurangi count historis** untuk semua tanggal di mana mereka pernah `created_at` atau `last_active`. Jadi `baru` & `baru30hariLalu` pun bisa turun jika user lama dibersihkan.
+
+### 3. Tidak ada snapshot harian
+
+Sistem tidak menyimpan snapshot agregat per hari. Setiap kali dashboard dibuka, RPC menghitung ulang dari data live. Jadi "history" sebenarnya bukan history, melainkan **proyeksi data sekarang ke tanggal lampau** berdasarkan kolom yang mutable.
+
+## Rekomendasi Solusi (pilih satu)
+
+**Opsi A — Snapshot harian (paling akurat, sesuai prinsip "history harus tetap")**
+- Buat tabel `daily_user_stats` (date PK, baru, aktif, churn, baru30hariLalu, inactive30, snapshotted_at).
+- Buat RPC `snapshot_daily_stats()` yang dijalankan **sekali per hari setelah jam 00:00 WIB** via pg_cron — menulis baris untuk **kemarin** (hari yang sudah selesai).
+- Ubah `get_admin_dashboard_stats` agar:
+  - Untuk 6 hari sebelumnya → ambil dari `daily_user_stats` (immutable).
+  - Untuk hari ini (yang masih berjalan) → tetap hitung live dari `telegram_users`.
+- Hasil: angka 6 hari kemarin **tidak akan berubah lagi**. Hanya titik "hari ini" yang terus update sampai jam 00:00 WIB lalu di-snapshot.
+- Hemat biaya cloud: cron 1x/hari + 6 row read vs 6×4 COUNT subquery setiap kali dashboard dibuka.
+
+**Opsi B — Tambah kolom event-log (lebih berat)**
+- Catat tiap `last_active` baru di tabel `user_activity_log (user_id, active_date)` dengan UNIQUE per (user_id, active_date).
+- Hitung `aktif` per hari dari log ini → tidak terpengaruh `last_active` yang berubah.
+- Lebih berat & memakan storage karena setiap user × setiap hari aktif = 1 row.
+- Tidak direkomendasikan untuk bot dengan volume tinggi.
+
+**Opsi C — Klarifikasi label saja, tanpa ubah logika**
+- Tambahkan tooltip/footer kecil di chart: "Data hari lampau dihitung dari last_active terkini, dapat berubah".
+- Murah & cepat tapi tidak menyelesaikan masalah inti.
+
+### Rekomendasi: **Opsi A**
+
+Sesuai prinsip user (history harus tetap) dan custom instruction (hemat cloud, gunakan RPC). Implementasi:
+
+1. **Migration baru**: 
+   - `CREATE TABLE public.daily_user_stats` dengan PK `date`.
+   - `CREATE FUNCTION public.snapshot_daily_stats()` — `INSERT ... ON CONFLICT (date) DO NOTHING` agar idempotent dan tidak menimpa snapshot yang sudah ada.
+   - Backfill: isi `daily_user_stats` untuk 7 hari terakhir dengan angka **saat ini** (admit: 6 hari sebelumnya tetap pakai data live awal, tapi dari sekarang akan di-freeze).
+   - Schedule pg_cron: jalan setiap hari jam 00:05 WIB → snapshot tanggal kemarin.
+   - `CREATE OR REPLACE FUNCTION get_admin_dashboard_stats()` — gabungkan snapshot (hari -6 s/d -1) + live (hari ini).
+
+2. **Tidak ada perubahan di edge function `admin-stats`** (sudah tipis).
+3. **Tidak ada perubahan di `Dashboard.tsx`** (shape data sama).
+
+### File yang Diubah
+
+- `supabase/migrations/<new>.sql` — tabel snapshot, function snapshot, cron job, modifikasi RPC dashboard.
 
 ### Yang TIDAK Berubah
-- Alur Sakurupiah tetap dicoba terlebih dahulu (fallback hanya jika gagal)
-- Telegram Stars payment tidak terpengaruh
-- UI/UX tombol pemilihan metode pembayaran tetap sama
-- Semua fitur lain tidak terpengaruh
+
+- KPI cards (tetap live untuk "hari ini").
+- Edge function & frontend.
+- Logika WIB.
 
