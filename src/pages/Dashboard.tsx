@@ -149,7 +149,7 @@ const Dashboard = () => {
 
         <Card className="border-border/50 bg-card/60 backdrop-blur">
           <CardHeader>
-            <CardTitle>Statistik Aktivitas (7 Hari Terakhir)</CardTitle>
+            <CardTitle>Statistik Aktivitas (30 Hari Terakhir)</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
