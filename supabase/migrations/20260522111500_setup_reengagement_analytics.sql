@@ -51,10 +51,10 @@ BEGIN
   SELECT COUNT(*) INTO v_today_baru30 FROM telegram_users
     WHERE (created_at AT TIME ZONE 'Asia/Jakarta')::DATE = v_today_30_ago;
 
-  -- B. Ambil KPI Re-engagement Baru (Klik dalam 7 hari terakhir)
+  -- B. Ambil KPI Re-engagement Baru (Klik dalam 30 hari terakhir)
   SELECT COUNT(*) INTO v_reengage_returns 
     FROM reengagement_clicks 
-    WHERE clicked_at >= NOW() - INTERVAL '7 days';
+    WHERE clicked_at >= NOW() - INTERVAL '30 days';
 
   -- C. Agregasi Aktivitas Bawaan (30 Hari Terakhir)
   WITH all_days AS (
@@ -90,10 +90,10 @@ BEGIN
   INTO v_activity
   FROM all_days;
 
-  -- D. Agregasi Aktivitas Re-engagement Baru (7 Hari Terakhir untuk Stacked BarChart)
+  -- D. FIX: Agregasi Aktivitas Re-engagement Baru (30 Hari Terakhir untuk Stacked BarChart)
   WITH date_series AS (
     SELECT (v_today_wib - i)::DATE AS day_wib
-    FROM generate_series(0, 6) i
+    FROM generate_series(0, 29) i
   ),
   daily_clicks AS (
     SELECT

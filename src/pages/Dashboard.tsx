@@ -158,7 +158,7 @@ const Dashboard = () => {
             accent="bg-destructive"
           />
           <KPICard
-            title="User Kembali (7 Hari)"
+            title="User Kembali (30 Hari)"
             value={kpis?.reengageReturns ?? 0}
             Icon={Smile}
             loading={isLoading}
@@ -243,7 +243,7 @@ const Dashboard = () => {
 
         <Card className="border-border/50 bg-card/60 backdrop-blur">
           <CardHeader>
-            <CardTitle>Analisis Konversi Re-engagement (7 Hari Terakhir)</CardTitle>
+            <CardTitle>Analisis Konversi Re-engagement (30 Hari Terakhir)</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
