@@ -46,8 +46,16 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
+    const msg = (e as Error).message;
     console.error("[admin-stats] error:", e);
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
+    try {
+      const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      sb.rpc("log_bot_event", {
+        p_level: "error", p_source: "admin-stats", p_event: "exception",
+        p_user_id: null, p_message: msg, p_context: { stack: (e as Error).stack ?? null },
+      }).then(() => {}, () => {});
+    } catch (_) { /* ignore */ }
+    return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
