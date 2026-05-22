@@ -2442,7 +2442,7 @@ function isButtonOnCooldown(userId: number, action: string): boolean {
 
 // Helper: Get action type dari callback data
 function getActionTypeFromCallback(callbackData: string): string {
-  if (callbackData === 'search_partner') return 'search_partner';
+  if (callbackData === 'search_partner' || callbackData.startsWith('search_partner:')) return 'search_partner';
   if (callbackData === 'chat_next') return 'chat_next';
   if (callbackData === 'chat_stop') return 'chat_stop';
   if (callbackData.startsWith('send_gift_')) return 'send_gift';
@@ -4371,7 +4371,21 @@ Deno.serve(async (req) => {
       }
 
       // --- LOGIKA SEARCH PARTNER (INLINE BUTTON) - SATU PANGGILAN RPC ---
-      if (callbackData === 'search_partner') {
+      if (callbackData === 'search_partner' || callbackData.startsWith('search_partner:')) {
+        // Intersepsi klik promo untuk pencatatan konversi
+        if (callbackData.startsWith('search_partner:promo_')) {
+          const templateKey = callbackData.replace('search_partner:promo_', '');
+          // Catat konversi secara asinkron ke database
+          supabase.from('reengagement_clicks').insert({
+            user_id: userId,
+            template_key: templateKey,
+            clicked_at: new Date().toISOString()
+          }).then(
+            () => console.log(`[Webhook] Logged reengagement click for user ${userId}, template ${templateKey}`),
+            (err) => console.error('[Webhook] Failed to log click:', err)
+          );
+        }
+
         await answerCallbackQuery(botToken, query.id, '🔍 Mencari partner...');
         
         // SATU PANGGILAN RPC: handles upsert, blocked check, state check, gender check, reputation, search

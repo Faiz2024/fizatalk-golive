@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Moon,
   Sun,
+  Smile,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -17,6 +18,8 @@ import { useTheme } from "next-themes";
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -31,8 +34,16 @@ const fetchStats = async () => {
   if (error) throw error;
   if ((data as any)?.error) throw new Error((data as any).error);
   return data as {
-    kpis: { newToday: number; activeToday: number; inactive30: number; churn: number };
-    activity: { label: string; baru: number; aktif: number }[];
+    kpis: { newToday: number; activeToday: number; inactive30: number; churn: number; reengageReturns: number };
+    activity: { label: string; baru: number; aktif: number; churn: number; baru30hariLalu: number }[];
+    reengageActivity: {
+      label: string;
+      cute_pleading_cat: number;
+      mysterious_gift_box: number;
+      grumpy_cute_cat: number;
+      social_match_hearts: number;
+      total: number;
+    }[];
   };
 };
 
@@ -72,6 +83,7 @@ const Dashboard = () => {
   const statsQ = useQuery({ queryKey: ["admin-stats"], queryFn: fetchStats });
   const kpis = statsQ.data?.kpis;
   const activity = statsQ.data?.activity ?? [];
+  const reengageActivity = statsQ.data?.reengageActivity ?? [];
 
   useEffect(() => {
     if (statsQ.error) {
@@ -116,7 +128,7 @@ const Dashboard = () => {
           <p className="text-sm text-muted-foreground">Memuat data...</p>
         )}
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <KPICard
             title="Pengguna Baru (Hari Ini)"
             value={kpis?.newToday ?? 0}
@@ -144,6 +156,13 @@ const Dashboard = () => {
             Icon={AlertTriangle}
             loading={isLoading}
             accent="bg-destructive"
+          />
+          <KPICard
+            title="User Kembali (7 Hari)"
+            value={kpis?.reengageReturns ?? 0}
+            Icon={Smile}
+            loading={isLoading}
+            accent="bg-emerald-500"
           />
         </section>
 
@@ -216,6 +235,67 @@ const Dashboard = () => {
                       activeDot={{ r: 6 }}
                     />
                   </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 bg-card/60 backdrop-blur">
+          <CardHeader>
+            <CardTitle>Analisis Konversi Re-engagement (7 Hari Terakhir)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-[320px] w-full" />
+            ) : (
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={reengageActivity} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                      allowDecimals={false}
+                      domain={['auto', 'auto']}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "0.5rem",
+                        color: "hsl(var(--popover-foreground))",
+                      }}
+                      labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                      formatter={(value: number, name: string) => [value.toLocaleString("id-ID"), name]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 13 }} />
+                    <Bar
+                      dataKey="cute_pleading_cat"
+                      name="Manja/Romantis (Cute Cat)"
+                      stackId="a"
+                      fill="#ec4899"
+                    />
+                    <Bar
+                      dataKey="mysterious_gift_box"
+                      name="Misterius/Kado (Gift Box)"
+                      stackId="a"
+                      fill="#8b5cf6"
+                    />
+                    <Bar
+                      dataKey="grumpy_cute_cat"
+                      name="Ngambek/Perhatian (Grumpy Cat)"
+                      stackId="a"
+                      fill="#f59e0b"
+                    />
+                    <Bar
+                      dataKey="social_match_hearts"
+                      name="Sosial/Match (Hearts)"
+                      stackId="a"
+                      fill="#10b981"
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             )}

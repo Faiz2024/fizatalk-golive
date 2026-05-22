@@ -19,8 +19,16 @@ Deno.serve(async (req) => {
     if (error) throw error;
 
     const raw = data as {
-      kpis: { newToday: number; activeToday: number; inactive30: number; churn: number };
+      kpis: { newToday: number; activeToday: number; inactive30: number; churn: number; reengageReturns: number };
       activity: { date: string; baru: number; aktif: number; churn: number; baru30hariLalu: number }[];
+      reengage_activity: {
+        date: string;
+        cute_pleading_cat: number;
+        mysterious_gift_box: number;
+        grumpy_cute_cat: number;
+        social_match_hearts: number;
+        total: number;
+      }[];
     };
 
     // Format label tanggal Indonesia (di edge agar client tetap ringan)
@@ -41,8 +49,26 @@ Deno.serve(async (req) => {
       };
     });
 
+    // Format label tanggal Indonesia untuk aktivitas re-engagement
+    const reengageActivity = (raw.reengage_activity ?? []).map((row) => {
+      const d = new Date(`${row.date}T00:00:00+07:00`);
+      const label = d.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        timeZone: "Asia/Jakarta",
+      });
+      return {
+        label,
+        cute_pleading_cat: row.cute_pleading_cat ?? 0,
+        mysterious_gift_box: row.mysterious_gift_box ?? 0,
+        grumpy_cute_cat: row.grumpy_cute_cat ?? 0,
+        social_match_hearts: row.social_match_hearts ?? 0,
+        total: row.total ?? 0,
+      };
+    });
+
     return new Response(
-      JSON.stringify({ kpis: raw.kpis, activity }),
+      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
