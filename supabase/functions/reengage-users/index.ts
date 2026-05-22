@@ -113,21 +113,42 @@ Deno.serve(async (req) => {
     });
 
     // 3. Query pengguna tidak aktif:
-    // - state = 'idle'
-    // - last_active < 7 hari yang lalu
-    // - (last_promo_sent_at IS NULL ATAU last_promo_sent_at < 7 hari yang lalu)
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    let users: any[] = [];
     
-    const { data: users, error: usersError } = await supabase
-      .from("telegram_users")
-      .select("id, first_name, last_promo_message_id, username")
-      .eq("state", "idle")
-      .lt("last_active", sevenDaysAgo)
-      .or(`last_promo_sent_at.is.null,last_promo_sent_at.lt.${sevenDaysAgo}`)
-      .order("last_active", { ascending: true })
-      .limit(100);
+    // Coba baca body untuk testing specific user
+    try {
+      const body = await req.json();
+      if (body?.test_user_id) {
+        const { data: testUsers, error: testError } = await supabase
+          .from("telegram_users")
+          .select("id, first_name, last_promo_message_id, username")
+          .eq("id", Number(body.test_user_id));
+        if (testError) throw testError;
+        users = testUsers ?? [];
+        console.log(`[Reengage] Testing specific user_id: ${body.test_user_id}. Found: ${users.length}`);
+      }
+    } catch (_) {
+      // Jika body kosong atau bukan JSON, abaikan dan jalankan alur normal
+    }
 
-    if (usersError) throw usersError;
+    if (users.length === 0) {
+      // - state = 'idle'
+      // - last_active < 7 hari yang lalu
+      // - (last_promo_sent_at IS NULL ATAU last_promo_sent_at < 7 hari yang lalu)
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      
+      const { data: normalUsers, error: usersError } = await supabase
+        .from("telegram_users")
+        .select("id, first_name, last_promo_message_id, username")
+        .eq("state", "idle")
+        .lt("last_active", sevenDaysAgo)
+        .or(`last_promo_sent_at.is.null,last_promo_sent_at.lt.${sevenDaysAgo}`)
+        .order("last_active", { ascending: true })
+        .limit(100);
+
+      if (usersError) throw usersError;
+      users = normalUsers ?? [];
+    }
 
     if (!users || users.length === 0) {
       return new Response(JSON.stringify({ message: "No inactive users found for re-engagement" }), {
