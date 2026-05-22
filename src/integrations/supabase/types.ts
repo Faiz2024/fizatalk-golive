@@ -53,6 +53,39 @@ export type Database = {
         }
         Relationships: []
       }
+      bot_logs: {
+        Row: {
+          context: Json | null
+          created_at: string
+          event: string
+          id: string
+          level: string
+          message: string | null
+          source: string
+          user_id: number | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          event: string
+          id?: string
+          level: string
+          message?: string | null
+          source: string
+          user_id?: number | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          event?: string
+          id?: string
+          level?: string
+          message?: string | null
+          source?: string
+          user_id?: number | null
+        }
+        Relationships: []
+      }
       bot_settings: {
         Row: {
           key: string
@@ -558,6 +591,10 @@ export type Database = {
     }
     Functions: {
       apply_daily_penalty_decay: { Args: never; Returns: number }
+      bridge_exec_sql: {
+        Args: { p_params?: Json; p_sql: string }
+        Returns: Json
+      }
       cancel_fine_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_premium_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_topup_transaction: { Args: { p_user_id: number }; Returns: Json }
@@ -590,6 +627,17 @@ export type Database = {
         }
         Returns: Json
       }
+      log_bot_event: {
+        Args: {
+          p_context?: Json
+          p_event: string
+          p_level: string
+          p_message?: string
+          p_source: string
+          p_user_id?: number
+        }
+        Returns: undefined
+      }
       process_gift_transaction: {
         Args: {
           p_gift_id: string
@@ -599,6 +647,7 @@ export type Database = {
         }
         Returns: Json
       }
+      prune_bot_logs: { Args: never; Returns: Json }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
       resolve_reconnect: {
         Args: { p_action: string; p_request_id: string }
