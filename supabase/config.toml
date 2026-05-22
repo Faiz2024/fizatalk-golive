@@ -1,1 +1,4 @@
 project_id = "chwopnsmykwzqflqozvf"
+
+[functions.db-bridge]
+verify_jwt = false
