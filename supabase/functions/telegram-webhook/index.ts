@@ -151,6 +151,34 @@ function formatTimeWIB(date: Date): string {
   }) + ' WIB';
 }
 
+function formatRemainingTime(blockedUntilStr?: string): string {
+  if (!blockedUntilStr) return '3 hari';
+  const blockedUntil = new Date(blockedUntilStr);
+  const now = new Date();
+  const diffMs = blockedUntil.getTime() - now.getTime();
+  if (diffMs <= 0) return '0 menit';
+  
+  const diffMinutes = Math.ceil(diffMs / 60000);
+  if (diffMinutes < 60) {
+    return `${diffMinutes} menit`;
+  }
+  
+  const diffHours = Math.floor(diffMinutes / 60);
+  const remainingMinutes = diffMinutes % 60;
+  if (diffHours < 24) {
+    return remainingMinutes > 0 
+      ? `${diffHours} jam ${remainingMinutes} menit` 
+      : `${diffHours} jam`;
+  }
+  
+  const diffDays = Math.floor(diffHours / 24);
+  const remainingHours = diffHours % 24;
+  if (remainingHours > 0) {
+    return `${diffDays} hari ${remainingHours} jam`;
+  }
+  return `${diffDays} hari`;
+}
+
 // === SAKURUPIAH PAYMENT GATEWAY ===
 const SAKURUPIAH_API_URL = 'https://sakurupiah.id/api/create.php';
 const SAKURUPIAH_CALLBACK_URL = 'https://chwopnsmykwzqflqozvf.supabase.co/functions/v1/sakurupiah-callback';
@@ -2714,9 +2742,12 @@ async function comprehensiveSearchAction(
       ]
     };
 
+    const remainingTimeStr = formatRemainingTime(result.blocked_until);
     const blockedMessage = `🚫 <b>AKUN ANDA DIBLOKIR</b>
 
-  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan sampai batas waktu yang tidak ditentukan.</b>
+  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan selama 3 hari.</b>
+
+  ⏳ <b>Sisa Waktu Pemblokiran:</b> <b>${remainingTimeStr}</b>
 
   🔓 <b>CARA MEMBUKA BLOKIR:</b>
 
@@ -2764,9 +2795,12 @@ async function comprehensiveSearchAction(
       ]
     };
 
+    const remainingTimeStr = formatRemainingTime(result.blocked_until);
     const blockedMessage = `🚫 <b>AKUN ANDA DIBLOKIR</b>
 
-  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan sampai batas waktu yang tidak ditentukan.</b>
+  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan selama 3 hari.</b>
+
+  ⏳ <b>Sisa Waktu Pemblokiran:</b> <b>${remainingTimeStr}</b>
 
   🔓 <b>CARA MEMBUKA BLOKIR:</b>
 
