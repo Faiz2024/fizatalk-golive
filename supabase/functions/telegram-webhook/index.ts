@@ -2036,16 +2036,18 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
     if (warnings >= 4) {
         // ----- LOGIKA MENCAPAI 4 PERINGATAN (BLOKIR) -----
         if (isPremium) {
-            const blockedUntil = new Date();
-            blockedUntil.setDate(blockedUntil.getDate() + 1); // Blokir 1 hari (temp)
+            // PREMIUM: Tidak diblokir, hanya update peringatan & penalty_points (tidak di-set blocked_until)
             await supabase.from('telegram_users').update({ 
                 spam_warnings: warnings, 
                 spam_warning_until: newWarningDate.toISOString(),
-                penalty_points: 100, 
-                blocked_until: blockedUntil.toISOString()
+                penalty_points: 99
             }).eq('id', targetId);
             
-            await sendTelegramMessage(botToken, targetId, `⏳ <b>AKUN DIBATASI SEMENTARA</b>\n\nAnda mencapai batas peringatan (4/4). Akun diistirahatkan sementara.`);
+            await sendTelegramMessage(
+                botToken, 
+                targetId, 
+                `⚠️ <b>PERINGATAN KERAS</b>\n\nAnda telah mencapai batas peringatan SPAM maksimum (4/4). Sebagai pengguna <b>Premium</b>, akun Anda tidak diblokir, namun harap patuhi aturan komunitas.`
+            );
         } else {
             await supabase.from('telegram_users').update({ 
                 spam_warnings: warnings, 
