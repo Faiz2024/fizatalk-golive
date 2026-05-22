@@ -1,79 +1,91 @@
+# Plan: Antigravity Bridge — Full DB Access + Bot Logs
 
+Antigravity dapat mengelola database sepenuhnya (CRUD + DDL) dan membaca log error bot via tabel `bot_logs` yang kita instrumentasi sendiri. **Tidak butuh SUPABASE_ACCESS_TOKEN.**
 
-User menanyakan: kenapa angka di chart untuk hari-hari yang lalu (history) kadang berubah, padahal data historis seharusnya tetap.
+## Arsitektur
 
-## Analisis Penyebab
-
-Saya sudah review RPC `get_admin_dashboard_stats` dan struktur tabel `telegram_users`. Ada **3 alasan teknis** kenapa angka chart untuk hari kemarin/lusa terus berubah setiap kali user refresh:
-
-### 1. `aktif` per hari dihitung dari kolom `last_active` yang TERUS DI-UPDATE
-
-Logika RPC saat ini:
-```sql
-(SELECT COUNT(*) FROM telegram_users
-  WHERE (last_active AT TIME ZONE 'Asia/Jakarta')::DATE = db.day_wib) AS aktif
+```text
+Antigravity (MCP client)
+   ↓ stdio
+~/.antigravity/lovable-mcp-bridge.mjs
+   ↓ HTTPS + X-API-Key
+db-bridge edge function (verify_jwt=false)
+   ↓ service_role
+bridge_exec_sql RPC → Postgres (public schema, bypass RLS)
+                       └─ termasuk tabel bot_logs
 ```
 
-`last_active` adalah **kolom yang di-overwrite** setiap kali user beraktivitas (lihat `update_last_active_daily` & `comprehensive_search_action`). Akibatnya:
+## Yang akan dibuat
 
-- Angka "Aktif Senin" hari ini = jumlah user yang `last_active`-nya **masih** jatuh di hari Senin.
-- Begitu salah satu user yang aktif Senin kembali aktif Selasa/Rabu, `last_active`-nya pindah → user itu **hilang dari count Senin**.
-- Setiap detik berlalu, count "aktif Senin" hanya bisa **turun**, tidak pernah naik. Inilah yang user lihat sebagai "data berubah".
+### 1. Migration (1x approve)
+- **Tabel `public.bot_logs`** — kolom: `id`, `created_at` (default WIB), `level` (debug/info/warn/error/fatal), `source`, `event`, `user_id`, `message`, `context jsonb`. Index `created_at desc`, `level`, `source`, `user_id`. RLS service_role only.
+- **RPC `log_bot_event(...)`** — SECURITY DEFINER, fire-and-forget friendly
+- **RPC `prune_bot_logs()`** — hapus error/fatal >30 hari, level lain >7 hari
+- **RPC `bridge_exec_sql(p_sql, p_params)`** — SECURITY DEFINER, return jsonb `{kind, data, row_count}`, guard regex untuk block schema `auth/storage/vault/realtime`, REVOKE ALL FROM public/anon/authenticated, GRANT EXECUTE TO service_role
 
-Hal yang sama berlaku untuk:
-- `churn` (pakai `last_active` dengan offset 30 hari) → ikut turun seiring waktu.
-- Tidak berlaku untuk `baru` & `baru30hariLalu` karena pakai `created_at` yang immutable.
+### 2. Secret baru (1)
+- `DB_BRIDGE_API_KEY` — token random hex 64 char (Anda generate sendiri)
 
-### 2. User yang dihapus akan menghilang juga dari history
+### 3. Edge Function `supabase/functions/db-bridge/index.ts`
+- `verify_jwt = false`, auth via X-API-Key (timing-safe compare)
+- Rate limit 120 req/menit per IP
+- Validasi Zod
+- Actions: `sql_query` (SELECT/WITH only), `sql_execute` (full CRUD+DDL), `list_tables`, `describe_table`, `list_policies`, `recent_logs`, `log_summary`
 
-Function `cleanup_inactive_users()` menghapus user `state = 'idle'` yang `last_active < NOW() - 24 jam`. Setiap user yang dihapus akan **mengurangi count historis** untuk semua tanggal di mana mereka pernah `created_at` atau `last_active`. Jadi `baru` & `baru30hariLalu` pun bisa turun jika user lama dibersihkan.
+### 4. Instrumentasi log (perubahan minimal)
+Helper `logEvent()` fire-and-forget di 3 edge function:
+- **`telegram-webhook`** — error sendMessage/editMessageText, exception top-level
+- **`sakurupiah-callback`** — invalid signature, transaction not found
+- **`admin-stats`** — exception catch
 
-### 3. Tidak ada snapshot harian
+Hanya error/warning bermakna (bukan setiap event) → hemat biaya & storage.
 
-Sistem tidak menyimpan snapshot agregat per hari. Setiap kali dashboard dibuka, RPC menghitung ulang dari data live. Jadi "history" sebenarnya bukan history, melainkan **proyeksi data sekarang ke tanggal lampau** berdasarkan kolom yang mutable.
+### 5. MCP Wrapper `lovable-mcp-bridge.mjs` (~150 baris Node)
+8 tools untuk Antigravity:
 
-## Rekomendasi Solusi (pilih satu)
+| Tool | Tipe |
+|---|---|
+| `sql_query` | read (SELECT) |
+| `sql_execute` | write (CRUD/DDL) |
+| `list_tables`, `describe_table`, `list_policies` | read helper |
+| `bot_recent_logs`, `bot_user_logs`, `bot_log_summary` | read log |
 
-**Opsi A — Snapshot harian (paling akurat, sesuai prinsip "history harus tetap")**
-- Buat tabel `daily_user_stats` (date PK, baru, aktif, churn, baru30hariLalu, inactive30, snapshotted_at).
-- Buat RPC `snapshot_daily_stats()` yang dijalankan **sekali per hari setelah jam 00:00 WIB** via pg_cron — menulis baris untuk **kemarin** (hari yang sudah selesai).
-- Ubah `get_admin_dashboard_stats` agar:
-  - Untuk 6 hari sebelumnya → ambil dari `daily_user_stats` (immutable).
-  - Untuk hari ini (yang masih berjalan) → tetap hitung live dari `telegram_users`.
-- Hasil: angka 6 hari kemarin **tidak akan berubah lagi**. Hanya titik "hari ini" yang terus update sampai jam 00:00 WIB lalu di-snapshot.
-- Hemat biaya cloud: cron 1x/hari + 6 row read vs 6×4 COUNT subquery setiap kali dashboard dibuka.
+### 6. Config Antigravity (snippet JSON)
+```json
+{
+  "mcpServers": {
+    "lovable-cloud": {
+      "command": "node",
+      "args": ["~/.antigravity/lovable-mcp-bridge.mjs"],
+      "env": {
+        "BRIDGE_URL": "https://chwopnsmykwzqflqozvf.functions.supabase.co/db-bridge",
+        "BRIDGE_API_KEY": "<token Anda>"
+      }
+    }
+  }
+}
+```
 
-**Opsi B — Tambah kolom event-log (lebih berat)**
-- Catat tiap `last_active` baru di tabel `user_activity_log (user_id, active_date)` dengan UNIQUE per (user_id, active_date).
-- Hitung `aktif` per hari dari log ini → tidak terpengaruh `last_active` yang berubah.
-- Lebih berat & memakan storage karena setiap user × setiap hari aktif = 1 row.
-- Tidak direkomendasikan untuk bot dengan volume tinggi.
+## Urutan Eksekusi
 
-**Opsi C — Klarifikasi label saja, tanpa ubah logika**
-- Tambahkan tooltip/footer kecil di chart: "Data hari lampau dihitung dari last_active terkini, dapat berubah".
-- Murah & cepat tapi tidak menyelesaikan masalah inti.
+1. **Minta secret** `DB_BRIDGE_API_KEY` — Anda generate token random (mis. dari https://generate-secret.vercel.app/32 atau `openssl rand -hex 32`) dan paste di form aman
+2. **Migration** — saya tulis, Anda approve
+3. **Tulis & deploy** edge function `db-bridge`
+4. **Instrumentasi** 3 edge function dengan helper `logEvent()`
+5. **Test** dari sandbox via `curl_edge_functions`: list_tables, sql_query SELECT, sql_execute create+drop temp, recent_logs, 401 tanpa API key
+6. **Kirim file** `lovable-mcp-bridge.mjs` + config Antigravity ke Anda
 
-### Rekomendasi: **Opsi A**
+## Keamanan
 
-Sesuai prinsip user (history harus tetap) dan custom instruction (hemat cloud, gunakan RPC). Implementasi:
+- `DB_BRIDGE_API_KEY` = akses root DB → simpan di password manager, jangan commit, jangan share
+- Bocor → `update_secret` rotasi instan
+- Tidak menyentuh schema `auth/storage/vault/realtime`
+- Tidak ada perubahan UI website atau business logic bot
 
-1. **Migration baru**: 
-   - `CREATE TABLE public.daily_user_stats` dengan PK `date`.
-   - `CREATE FUNCTION public.snapshot_daily_stats()` — `INSERT ... ON CONFLICT (date) DO NOTHING` agar idempotent dan tidak menimpa snapshot yang sudah ada.
-   - Backfill: isi `daily_user_stats` untuk 7 hari terakhir dengan angka **saat ini** (admit: 6 hari sebelumnya tetap pakai data live awal, tapi dari sekarang akan di-freeze).
-   - Schedule pg_cron: jalan setiap hari jam 00:05 WIB → snapshot tanggal kemarin.
-   - `CREATE OR REPLACE FUNCTION get_admin_dashboard_stats()` — gabungkan snapshot (hari -6 s/d -1) + live (hari ini).
+## Yang TIDAK termasuk
 
-2. **Tidak ada perubahan di edge function `admin-stats`** (sudah tipis).
-3. **Tidak ada perubahan di `Dashboard.tsx`** (shape data sama).
+- ❌ Deploy edge function dari Antigravity
+- ❌ Log native Supabase (boot/shutdown)
+- ❌ Realtime log streaming
 
-### File yang Diubah
-
-- `supabase/migrations/<new>.sql` — tabel snapshot, function snapshot, cron job, modifikasi RPC dashboard.
-
-### Yang TIDAK Berubah
-
-- KPI cards (tetap live untuk "hari ini").
-- Edge function & frontend.
-- Logika WIB.
-
+Setujui plan ini → saya mulai dari minta `DB_BRIDGE_API_KEY`.
