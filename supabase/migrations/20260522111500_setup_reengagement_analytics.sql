@@ -94,23 +94,33 @@ BEGIN
   WITH date_series AS (
     SELECT (v_today_wib - i)::DATE AS day_wib
     FROM generate_series(0, 6) i
+  ),
+  daily_clicks AS (
+    SELECT
+      d.day_wib,
+      COALESCE(SUM(CASE WHEN c.template_key = 'cute_pleading_cat' THEN 1 ELSE 0 END), 0) AS cute_pleading_cat,
+      COALESCE(SUM(CASE WHEN c.template_key = 'mysterious_gift_box' THEN 1 ELSE 0 END), 0) AS mysterious_gift_box,
+      COALESCE(SUM(CASE WHEN c.template_key = 'grumpy_cute_cat' THEN 1 ELSE 0 END), 0) AS grumpy_cute_cat,
+      COALESCE(SUM(CASE WHEN c.template_key = 'social_match_hearts' THEN 1 ELSE 0 END), 0) AS social_match_hearts,
+      COUNT(c.id) AS total
+    FROM date_series d
+    LEFT JOIN reengagement_clicks c 
+      ON (c.clicked_at AT TIME ZONE 'Asia/Jakarta')::DATE = d.day_wib
+    GROUP BY d.day_wib
   )
   SELECT json_agg(
     json_build_object(
-      'date', to_char(d.day_wib, 'YYYY-MM-DD'),
-      'label', to_char(d.day_wib, 'DD MMM'),
-      'cute_pleading_cat', COALESCE(SUM(CASE WHEN c.template_key = 'cute_pleading_cat' THEN 1 ELSE 0 END), 0),
-      'mysterious_gift_box', COALESCE(SUM(CASE WHEN c.template_key = 'mysterious_gift_box' THEN 1 ELSE 0 END), 0),
-      'grumpy_cute_cat', COALESCE(SUM(CASE WHEN c.template_key = 'grumpy_cute_cat' THEN 1 ELSE 0 END), 0),
-      'social_match_hearts', COALESCE(SUM(CASE WHEN c.template_key = 'social_match_hearts' THEN 1 ELSE 0 END), 0),
-      'total', COUNT(c.id)
-    ) ORDER BY d.day_wib ASC
+      'date', to_char(day_wib, 'YYYY-MM-DD'),
+      'label', to_char(day_wib, 'DD MMM'),
+      'cute_pleading_cat', cute_pleading_cat,
+      'mysterious_gift_box', mysterious_gift_box,
+      'grumpy_cute_cat', grumpy_cute_cat,
+      'social_match_hearts', social_match_hearts,
+      'total', total
+    ) ORDER BY day_wib ASC
   )
   INTO v_reengage_activity
-  FROM date_series d
-  LEFT JOIN reengagement_clicks c 
-    ON (c.clicked_at AT TIME ZONE 'Asia/Jakarta')::DATE = d.day_wib
-  GROUP BY d.day_wib;
+  FROM daily_clicks;
 
   -- E. Gabungkan & Kembalikan Respons JSON Lengkap
   RETURN json_build_object(
