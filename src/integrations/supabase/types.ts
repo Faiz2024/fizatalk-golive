@@ -478,8 +478,9 @@ export type Database = {
           is_tiktok_mode: boolean | null
           last_active: string
           last_partners: number[] | null
-          last_promo_message_id: number | null
           last_promo_sent_at: string | null
+          last_reengagement_message_id: number | null
+          last_reengagement_sent_at: string | null
           location: string | null
           partner_id: number | null
           penalty_points: number | null
@@ -505,8 +506,9 @@ export type Database = {
           is_tiktok_mode?: boolean | null
           last_active?: string
           last_partners?: number[] | null
-          last_promo_message_id?: number | null
           last_promo_sent_at?: string | null
+          last_reengagement_message_id?: number | null
+          last_reengagement_sent_at?: string | null
           location?: string | null
           partner_id?: number | null
           penalty_points?: number | null
@@ -532,8 +534,9 @@ export type Database = {
           is_tiktok_mode?: boolean | null
           last_active?: string
           last_partners?: number[] | null
-          last_promo_message_id?: number | null
           last_promo_sent_at?: string | null
+          last_reengagement_message_id?: number | null
+          last_reengagement_sent_at?: string | null
           location?: string | null
           partner_id?: number | null
           penalty_points?: number | null

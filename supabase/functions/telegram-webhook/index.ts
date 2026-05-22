@@ -5846,6 +5846,74 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
             await sendTelegramMessage(botToken, userId, '⚠️ Reply ke foto Promo dengan command /set_promo');
           }
         }
+        // COMMAND /SET_REENGAGE_CAT - ADMIN ONLY (Reply to photo to set Cute Cat image)
+        if (text === '/set_reengage_cat') {
+          const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+          if (userId.toString() !== csChatId) {
+            await sendTelegramMessage(botToken, userId, '❌ Command ini hanya untuk admin.');
+            return new Response('OK', { status: 200 });
+          }
+          
+          if (message.reply_to_message?.photo) {
+            const photo = message.reply_to_message.photo;
+            const fileId = photo[photo.length - 1].file_id;
+            await setBotSetting(supabase, 'reengage_file_id_cute_pleading_cat', fileId, userId);
+            await sendTelegramMessage(botToken, userId, `✅ <b>Foto Re-engage Cat berhasil diperbarui!</b>\n\nFile ID: <code>${fileId.substring(0, 30)}...</code>`);
+          } else {
+            await sendTelegramMessage(botToken, userId, '⚠️ Reply ke foto Cat dengan command /set_reengage_cat');
+          }
+        }
+        // COMMAND /SET_REENGAGE_GIFT - ADMIN ONLY (Reply to photo to set Gift Box image)
+        if (text === '/set_reengage_gift') {
+          const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+          if (userId.toString() !== csChatId) {
+            await sendTelegramMessage(botToken, userId, '❌ Command ini hanya untuk admin.');
+            return new Response('OK', { status: 200 });
+          }
+          
+          if (message.reply_to_message?.photo) {
+            const photo = message.reply_to_message.photo;
+            const fileId = photo[photo.length - 1].file_id;
+            await setBotSetting(supabase, 'reengage_file_id_mysterious_gift_box', fileId, userId);
+            await sendTelegramMessage(botToken, userId, `✅ <b>Foto Re-engage Gift Box berhasil diperbarui!</b>\n\nFile ID: <code>${fileId.substring(0, 30)}...</code>`);
+          } else {
+            await sendTelegramMessage(botToken, userId, '⚠️ Reply ke foto Gift dengan command /set_reengage_gift');
+          }
+        }
+        // COMMAND /SET_REENGAGE_GRUMPY - ADMIN ONLY (Reply to photo to set Grumpy Cat image)
+        if (text === '/set_reengage_grumpy') {
+          const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+          if (userId.toString() !== csChatId) {
+            await sendTelegramMessage(botToken, userId, '❌ Command ini hanya untuk admin.');
+            return new Response('OK', { status: 200 });
+          }
+          
+          if (message.reply_to_message?.photo) {
+            const photo = message.reply_to_message.photo;
+            const fileId = photo[photo.length - 1].file_id;
+            await setBotSetting(supabase, 'reengage_file_id_grumpy_cute_cat', fileId, userId);
+            await sendTelegramMessage(botToken, userId, `✅ <b>Foto Re-engage Grumpy Cat berhasil diperbarui!</b>\n\nFile ID: <code>${fileId.substring(0, 30)}...</code>`);
+          } else {
+            await sendTelegramMessage(botToken, userId, '⚠️ Reply ke foto Grumpy Cat dengan command /set_reengage_grumpy');
+          }
+        }
+        // COMMAND /SET_REENGAGE_HEARTS - ADMIN ONLY (Reply to photo to set Match Hearts image)
+        if (text === '/set_reengage_hearts') {
+          const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+          if (userId.toString() !== csChatId) {
+            await sendTelegramMessage(botToken, userId, '❌ Command ini hanya untuk admin.');
+            return new Response('OK', { status: 200 });
+          }
+          
+          if (message.reply_to_message?.photo) {
+            const photo = message.reply_to_message.photo;
+            const fileId = photo[photo.length - 1].file_id;
+            await setBotSetting(supabase, 'reengage_file_id_social_match_hearts', fileId, userId);
+            await sendTelegramMessage(botToken, userId, `✅ <b>Foto Re-engage Hearts berhasil diperbarui!</b>\n\nFile ID: <code>${fileId.substring(0, 30)}...</code>`);
+          } else {
+            await sendTelegramMessage(botToken, userId, '⚠️ Reply ke foto Hearts dengan command /set_reengage_hearts');
+          }
+        }
         // COMMAND /STATS - ADMIN ONLY (Melihat statistik user)
         if (text === '/stats') {
           const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');

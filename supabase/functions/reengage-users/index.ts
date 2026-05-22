@@ -69,34 +69,32 @@ Deno.serve(async (req) => {
       return acc;
     }, {} as Record<string, string>);
 
-    const baseAssetUrl = settings["reengage_base_asset_url"] || "https://fizatalk.lovable.app/assets/reengage";
-
-    // 2. Siapkan template promosi
+    // 2. Siapkan template promosi dengan fallback URL publik yang dijamin 200 OK
     const templates = [
       {
         imageKey: "cute_pleading_cat",
-        imageUrl: `${baseAssetUrl}/cute_pleading_cat.png`,
+        imageUrl: settings["reengage_url_cute_pleading_cat"] || "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=800",
         text: "Sayang!!! 🥺\n\nKangen deh, udah lama kita gak chatan bareng... Kamu kemana aja sih? 🥺👉👈\n\nYuk cari teman ngobrol atau partner seru baru sekarang! Banyak yang nyariin kamu lho...",
         buttonText: "Temui Dia Kembali 🥺",
         buttonCallback: "search_partner:promo_cute_pleading_cat"
       },
       {
         imageKey: "mysterious_gift_box",
-        imageUrl: `${baseAssetUrl}/mysterious_gift_box.png`,
+        imageUrl: settings["reengage_url_mysterious_gift_box"] || "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800",
         text: "Ada yang mau ngirimin hadiah spesial ke kamu! 🎁✨\n\nPenasaran siapa dan apa hadiahnya? Jangan sampai terlewat lho, langsung cari tahu partner kamu sekarang juga!",
         buttonText: "Cari Hadiahnya 🎁",
         buttonCallback: "search_partner:promo_mysterious_gift_box"
       },
       {
         imageKey: "grumpy_cute_cat",
-        imageUrl: `${baseAssetUrl}/grumpy_cute_cat.png`,
+        imageUrl: settings["reengage_url_grumpy_cute_cat"] || "https://images.unsplash.com/photo-1513360309081-36f5e878fc9e?w=800",
         text: "Kamu darimana aja sih? 😤\n\nKok tega ninggalin aku sendirian di sini... Cepat kembali dan jawab aku sekarang! Aku udah siapin partner yang cocok banget buat kamu.",
         buttonText: "Jawab Sekarang 😤",
         buttonCallback: "search_partner:promo_grumpy_cute_cat"
       },
       {
         imageKey: "social_match_hearts",
-        imageUrl: `${baseAssetUrl}/social_match_hearts.png`,
+        imageUrl: settings["reengage_url_social_match_hearts"] || "https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=800",
         text: "Banyak partner baru yang lagi nungguin kamu nih! ⚡🔥\n\nAda yang cocok banget sama kriteria kamu. Yuk, mulai cari partner baru dan langsung ngobrol seru!",
         buttonText: "Mulai Cari Partner ⚡",
         buttonCallback: "search_partner:promo_social_match_hearts"
@@ -121,7 +119,7 @@ Deno.serve(async (req) => {
       if (body?.test_user_id) {
         const { data: testUsers, error: testError } = await supabase
           .from("telegram_users")
-          .select("id, first_name, last_promo_message_id, username")
+          .select("id, first_name, last_reengagement_message_id, username")
           .eq("id", Number(body.test_user_id));
         if (testError) throw testError;
         users = testUsers ?? [];
@@ -139,10 +137,10 @@ Deno.serve(async (req) => {
       
       const { data: normalUsers, error: usersError } = await supabase
         .from("telegram_users")
-        .select("id, first_name, last_promo_message_id, username")
+        .select("id, first_name, last_reengagement_message_id, username")
         .eq("state", "idle")
         .lt("last_active", sevenDaysAgo)
-        .or(`last_promo_sent_at.is.null,last_promo_sent_at.lt.${sevenDaysAgo}`)
+        .or(`last_reengagement_sent_at.is.null,last_reengagement_sent_at.lt.${sevenDaysAgo}`)
         .order("last_active", { ascending: true })
         .limit(100);
 
@@ -164,14 +162,14 @@ Deno.serve(async (req) => {
     // 4. Proses pengiriman batch (loop dengan delay 100ms)
     for (const user of users) {
       // a. Hapus pesan lama jika ada
-      if (user.last_promo_message_id) {
+      if (user.last_reengagement_message_id) {
         try {
           const delResp = await fetch(`https://api.telegram.org/bot${botToken}/deleteMessage`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               chat_id: user.id,
-              message_id: Number(user.last_promo_message_id)
+              message_id: Number(user.last_reengagement_message_id)
             })
           });
           const delRes = await delResp.json();
@@ -240,8 +238,8 @@ Deno.serve(async (req) => {
           await supabase
             .from("telegram_users")
             .update({
-              last_promo_sent_at: new Date().toISOString(),
-              last_promo_message_id: newMessageId
+              last_reengagement_sent_at: new Date().toISOString(),
+              last_reengagement_message_id: newMessageId
             })
             .eq("id", user.id);
 
@@ -259,18 +257,18 @@ Deno.serve(async (req) => {
             await supabase
               .from("telegram_users")
               .update({
-                last_promo_sent_at: "2099-12-31T00:00:00+00:00"
+                last_reengagement_sent_at: "2099-12-31T00:00:00+00:00"
               })
               .eq("id", user.id);
             console.log(`[Reengage] User ${user.id} has blocked the bot. Marked as inactive permanently (2099).`);
           } else {
             errorCount++;
             console.error(`[Reengage] Telegram sendPhoto failed for user ${user.id}: ${desc}`);
-            // Tetap update last_promo_sent_at agar tidak dicoba terus-menerus di batch berikutnya
+            // Tetap update last_reengagement_sent_at agar tidak dicoba terus-menerus di batch berikutnya
             await supabase
               .from("telegram_users")
               .update({
-                last_promo_sent_at: new Date().toISOString()
+                last_reengagement_sent_at: new Date().toISOString()
               })
               .eq("id", user.id);
           }
