@@ -404,6 +404,35 @@ export type Database = {
           },
         ]
       }
+      reengagement_clicks: {
+        Row: {
+          clicked_at: string
+          id: number
+          template_key: string
+          user_id: number | null
+        }
+        Insert: {
+          clicked_at?: string
+          id?: number
+          template_key: string
+          user_id?: number | null
+        }
+        Update: {
+          clicked_at?: string
+          id?: number
+          template_key?: string
+          user_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reengagement_clicks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sticker_packs: {
         Row: {
           added_at: string | null
@@ -448,6 +477,7 @@ export type Database = {
           is_tiktok_mode: boolean | null
           last_active: string
           last_partners: number[] | null
+          last_promo_message_id: number | null
           last_promo_sent_at: string | null
           location: string | null
           partner_id: number | null
@@ -473,6 +503,7 @@ export type Database = {
           is_tiktok_mode?: boolean | null
           last_active?: string
           last_partners?: number[] | null
+          last_promo_message_id?: number | null
           last_promo_sent_at?: string | null
           location?: string | null
           partner_id?: number | null
@@ -498,6 +529,7 @@ export type Database = {
           is_tiktok_mode?: boolean | null
           last_active?: string
           last_partners?: number[] | null
+          last_promo_message_id?: number | null
           last_promo_sent_at?: string | null
           location?: string | null
           partner_id?: number | null
