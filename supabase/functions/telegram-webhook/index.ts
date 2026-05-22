@@ -5893,6 +5893,14 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
   } catch (error) {
     console.error('Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    try {
+      const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      sb.rpc('log_bot_event', {
+        p_level: 'error', p_source: 'telegram-webhook', p_event: 'top_level_exception',
+        p_user_id: null, p_message: errorMessage,
+        p_context: { stack: error instanceof Error ? error.stack : null },
+      }).then(() => {}, () => {});
+    } catch (_) { /* ignore */ }
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

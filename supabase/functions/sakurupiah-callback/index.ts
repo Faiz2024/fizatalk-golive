@@ -41,6 +41,14 @@ Deno.serve(async (req) => {
 
   if (callbackSignature !== expectedSignature) {
     console.error('[CALLBACK] Invalid signature');
+    try {
+      const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      sb.rpc('log_bot_event', {
+        p_level: 'warn', p_source: 'sakurupiah-callback', p_event: 'invalid_signature',
+        p_user_id: null, p_message: 'Invalid X-Callback-Signature',
+        p_context: { provided_len: callbackSignature.length, body_preview: rawBody.slice(0, 200) },
+      }).then(() => {}, () => {});
+    } catch (_) { /* ignore */ }
     return new Response(JSON.stringify({ success: false, message: 'Invalid signature' }), { status: 403 });
   }
 
