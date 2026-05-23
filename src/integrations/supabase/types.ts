@@ -433,6 +433,33 @@ export type Database = {
           },
         ]
       }
+      reengagement_daily_stats: {
+        Row: {
+          blocked_count: number
+          date: string
+          eligible_count: number
+          error_count: number
+          sent_count: number
+          updated_at: string
+        }
+        Insert: {
+          blocked_count?: number
+          date: string
+          eligible_count?: number
+          error_count?: number
+          sent_count?: number
+          updated_at?: string
+        }
+        Update: {
+          blocked_count?: number
+          date?: string
+          eligible_count?: number
+          error_count?: number
+          sent_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sticker_packs: {
         Row: {
           added_at: string | null
