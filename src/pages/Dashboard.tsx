@@ -20,6 +20,7 @@ import {
   Line,
   BarChart,
   Bar,
+  Area,
   ComposedChart,
   XAxis,
   YAxis,
@@ -44,6 +45,11 @@ const fetchStats = async () => {
       grumpy_cute_cat: number;
       social_match_hearts: number;
       total: number;
+    }[];
+    reengageDailyStats: {
+      label: string;
+      eligible: number;
+      sent: number;
     }[];
   };
 };
@@ -85,6 +91,7 @@ const Dashboard = () => {
   const kpis = statsQ.data?.kpis;
   const activity = statsQ.data?.activity ?? [];
   const reengageActivity = statsQ.data?.reengageActivity ?? [];
+  const reengageDailyStats = statsQ.data?.reengageDailyStats ?? [];
 
   useEffect(() => {
     if (statsQ.error) {
@@ -308,6 +315,70 @@ const Dashboard = () => {
                       strokeWidth={3}
                       dot={{ r: 4, fill: "#06b6d4", stroke: "#fff", strokeWidth: 2 }}
                       activeDot={{ r: 7, fill: "#06b6d4", stroke: "#fff", strokeWidth: 2 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 bg-card/60 backdrop-blur">
+          <CardHeader>
+            <CardTitle>Antrian Re-engagement: Eligible vs Terkirim per Hari (30 Hari Terakhir)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-[360px] w-full" />
+            ) : (
+              <div className="h-[360px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={reengageDailyStats} margin={{ top: 20, right: 16, left: -10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="eligibleGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="sentGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#d946ef" stopOpacity={0.9} />
+                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.7} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                      allowDecimals={false}
+                      tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "0.5rem",
+                        color: "hsl(var(--popover-foreground))",
+                      }}
+                      labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                      formatter={(value: number, name: string) => [value.toLocaleString("id-ID"), name]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 13 }} />
+                    <Area
+                      type="monotone"
+                      dataKey="eligible"
+                      name="User Eligible"
+                      stroke="#06b6d4"
+                      strokeWidth={2.5}
+                      fill="url(#eligibleGradient)"
+                      dot={{ r: 3, fill: "#06b6d4", stroke: "#fff", strokeWidth: 1.5 }}
+                      activeDot={{ r: 6, fill: "#06b6d4", stroke: "#fff", strokeWidth: 2 }}
+                    />
+                    <Bar
+                      dataKey="sent"
+                      name="Notifikasi Terkirim"
+                      fill="url(#sentGradient)"
+                      radius={[4, 4, 0, 0]}
+                      barSize={14}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>

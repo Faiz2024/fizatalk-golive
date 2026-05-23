@@ -29,6 +29,11 @@ Deno.serve(async (req) => {
         social_match_hearts: number;
         total: number;
       }[];
+      reengage_daily_stats: {
+        date: string;
+        eligible: number;
+        sent: number;
+      }[];
     };
 
     // Format label tanggal Indonesia (di edge agar client tetap ringan)
@@ -67,8 +72,23 @@ Deno.serve(async (req) => {
       };
     });
 
+    // Format label tanggal Indonesia untuk statistik harian eligible vs sent
+    const reengageDailyStats = (raw.reengage_daily_stats ?? []).map((row) => {
+      const d = new Date(`${row.date}T00:00:00+07:00`);
+      const label = d.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        timeZone: "Asia/Jakarta",
+      });
+      return {
+        label,
+        eligible: row.eligible ?? 0,
+        sent: row.sent ?? 0,
+      };
+    });
+
     return new Response(
-      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity }),
+      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {

@@ -309,6 +309,46 @@ Deno.serve(async (req) => {
       p_context: { successCount, blockedCount, errorCount }
     }).then(() => {}, () => {});
 
+    // 6. Catat statistik harian ke reengagement_daily_stats untuk grafik dashboard
+    try {
+      const todayWIB = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      
+      // Hitung eligible count saat ini
+      const sevenDaysAgoNow = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { count: eligibleCount } = await supabase
+        .from("telegram_users")
+        .select("id", { count: "exact", head: true })
+        .eq("state", "idle")
+        .lt("last_active", sevenDaysAgoNow)
+        .or(`last_reengagement_sent_at.is.null,last_reengagement_sent_at.lt.${sevenDaysAgoNow}`);
+
+      // Upsert daily stats: eligible di-overwrite (snapshot terbaru), sent/blocked/error di-akumulasi
+      const { data: existingStats } = await supabase
+        .from("reengagement_daily_stats")
+        .select("sent_count, blocked_count, error_count")
+        .eq("date", todayWIB)
+        .maybeSingle();
+
+      const newSent = (existingStats?.sent_count ?? 0) + successCount;
+      const newBlocked = (existingStats?.blocked_count ?? 0) + blockedCount;
+      const newError = (existingStats?.error_count ?? 0) + errorCount;
+
+      await supabase
+        .from("reengagement_daily_stats")
+        .upsert({
+          date: todayWIB,
+          eligible_count: eligibleCount ?? 0,
+          sent_count: newSent,
+          blocked_count: newBlocked,
+          error_count: newError,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "date" });
+
+      console.log(`[Reengage] Daily stats recorded for ${todayWIB}: eligible=${eligibleCount}, sent=${newSent}, blocked=${newBlocked}, error=${newError}`);
+    } catch (statsErr) {
+      console.error("[Reengage] Failed to record daily stats:", statsErr);
+    }
+
     return new Response(JSON.stringify({ 
       success: true, 
       processed: users.length, 
