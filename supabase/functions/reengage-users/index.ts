@@ -141,8 +141,8 @@ Deno.serve(async (req) => {
         .eq("state", "idle")
         .lt("last_active", sevenDaysAgo)
         .or(`last_reengagement_sent_at.is.null,last_reengagement_sent_at.lt.${sevenDaysAgo}`)
-        .order("last_active", { ascending: true })
-        .limit(100);
+        .order("last_active", { ascending: false }) // prioritize recently inactive users (descending)
+        .limit(300); // increased batch limit from 100 to 300 to process queue faster
 
       if (usersError) throw usersError;
       users = normalUsers ?? [];
