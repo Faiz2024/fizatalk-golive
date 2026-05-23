@@ -59,10 +59,11 @@ Deno.serve(async (req) => {
   });
 
   try {
-    // 1. Ambil cached file_ids dan base asset URL dari bot_settings
+    // 1. Ambil cached file_ids dan base asset URL dari bot_settings (hanya key reengage_*)
     const { data: settingsData } = await supabase
       .from("bot_settings")
-      .select("key, value");
+      .select("key, value")
+      .like("key", "reengage_%");
 
     const settings = (settingsData ?? []).reduce((acc, curr) => {
       acc[curr.key] = curr.value;
@@ -159,6 +160,9 @@ Deno.serve(async (req) => {
     let blockedCount = 0;
     let errorCount = 0;
 
+    // Kumpulkan semua update DB di memori, eksekusi bulk di akhir loop
+    const bulkUpdates: { id: number; last_reengagement_sent_at: string; last_reengagement_message_id: number | null }[] = [];
+
     // 4. Proses pengiriman batch (loop dengan delay 100ms)
     for (const user of users) {
       // a. Hapus pesan lama jika ada
@@ -234,14 +238,12 @@ Deno.serve(async (req) => {
             }
           }
 
-          // e. Update database pengguna
-          await supabase
-            .from("telegram_users")
-            .update({
-              last_reengagement_sent_at: new Date().toISOString(),
-              last_reengagement_message_id: newMessageId
-            })
-            .eq("id", user.id);
+          // e. Kumpulkan update (akan di-bulk upsert di akhir loop)
+          bulkUpdates.push({
+            id: user.id,
+            last_reengagement_sent_at: new Date().toISOString(),
+            last_reengagement_message_id: newMessageId
+          });
 
         } else {
           // Tangani pemblokiran bot oleh user
@@ -254,23 +256,21 @@ Deno.serve(async (req) => {
           ) {
             blockedCount++;
             // Tandai dengan tanggal 2099 agar tidak di-query lagi selamanya
-            await supabase
-              .from("telegram_users")
-              .update({
-                last_reengagement_sent_at: "2099-12-31T00:00:00+00:00"
-              })
-              .eq("id", user.id);
+            bulkUpdates.push({
+              id: user.id,
+              last_reengagement_sent_at: "2099-12-31T00:00:00+00:00",
+              last_reengagement_message_id: null
+            });
             console.log(`[Reengage] User ${user.id} has blocked the bot. Marked as inactive permanently (2099).`);
           } else {
             errorCount++;
             console.error(`[Reengage] Telegram sendPhoto failed for user ${user.id}: ${desc}`);
             // Tetap update last_reengagement_sent_at agar tidak dicoba terus-menerus di batch berikutnya
-            await supabase
-              .from("telegram_users")
-              .update({
-                last_reengagement_sent_at: new Date().toISOString()
-              })
-              .eq("id", user.id);
+            bulkUpdates.push({
+              id: user.id,
+              last_reengagement_sent_at: new Date().toISOString(),
+              last_reengagement_message_id: null
+            });
           }
         }
       } catch (err) {
@@ -278,8 +278,22 @@ Deno.serve(async (req) => {
         console.error(`[Reengage] Exception when sending to user ${user.id}:`, err);
       }
 
-      // Berikan jeda 100ms antar pengiriman untuk menghindari rate limit Telegram (maks 30 msg/s)
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Berikan jeda acak (jitter) antar pengiriman untuk menghindari rate limit dan deteksi bot Telegram
+      const delay = Math.floor(Math.random() * 100) + 80; // 80-180ms
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    // 5. Eksekusi bulk upsert ke database (1 panggilan menggantikan ratusan individual update)
+    if (bulkUpdates.length > 0) {
+      console.log(`[Reengage] Executing bulk upsert for ${bulkUpdates.length} users...`);
+      const { error: bulkError } = await supabase
+        .from("telegram_users")
+        .upsert(bulkUpdates, { onConflict: "id", ignoreDuplicates: false });
+      if (bulkError) {
+        console.error("[Reengage] Bulk upsert failed:", bulkError.message);
+      } else {
+        console.log(`[Reengage] Bulk upsert completed successfully for ${bulkUpdates.length} users.`);
+      }
     }
 
     // Log ringkasan eksekusi ke bot_logs
