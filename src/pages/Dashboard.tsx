@@ -20,6 +20,7 @@ import {
   Line,
   BarChart,
   Bar,
+  ComposedChart,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -243,15 +244,15 @@ const Dashboard = () => {
 
         <Card className="border-border/50 bg-card/60 backdrop-blur">
           <CardHeader>
-            <CardTitle>Analisis Konversi Re-engagement (30 Hari Terakhir)</CardTitle>
+            <CardTitle>Total User Kembali per Hari &amp; Breakdown Konversi (30 Hari Terakhir)</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <Skeleton className="h-[320px] w-full" />
+              <Skeleton className="h-[360px] w-full" />
             ) : (
-              <div className="h-[320px] w-full">
+              <div className="h-[360px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={reengageActivity} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+                  <ComposedChart data={reengageActivity} margin={{ top: 20, right: 16, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                     <YAxis
@@ -276,26 +277,39 @@ const Dashboard = () => {
                       name="Manja/Romantis (Cute Cat)"
                       stackId="a"
                       fill="#ec4899"
+                      radius={[0, 0, 0, 0]}
                     />
                     <Bar
                       dataKey="mysterious_gift_box"
                       name="Misterius/Kado (Gift Box)"
                       stackId="a"
                       fill="#8b5cf6"
+                      radius={[0, 0, 0, 0]}
                     />
                     <Bar
                       dataKey="grumpy_cute_cat"
                       name="Ngambek/Perhatian (Grumpy Cat)"
                       stackId="a"
                       fill="#f59e0b"
+                      radius={[0, 0, 0, 0]}
                     />
                     <Bar
                       dataKey="social_match_hearts"
                       name="Sosial/Match (Hearts)"
                       stackId="a"
                       fill="#10b981"
+                      radius={[4, 4, 0, 0]}
                     />
-                  </BarChart>
+                    <Line
+                      type="monotone"
+                      dataKey="total"
+                      name="Total User Kembali"
+                      stroke="#06b6d4"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "#06b6d4", stroke: "#fff", strokeWidth: 2 }}
+                      activeDot={{ r: 7, fill: "#06b6d4", stroke: "#fff", strokeWidth: 2 }}
+                    />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             )}
