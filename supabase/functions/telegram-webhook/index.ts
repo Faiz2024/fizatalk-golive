@@ -173,10 +173,12 @@ function formatRemainingTime(blockedUntilStr?: string): string {
   
   const diffDays = Math.floor(diffHours / 24);
   const remainingHours = diffHours % 24;
-  if (remainingHours > 0) {
-    return `${diffDays} hari ${remainingHours} jam`;
-  }
-  return `${diffDays} hari`;
+  
+  let result = `${diffDays} hari`;
+  if (remainingHours > 0) result += ` ${remainingHours} jam`;
+  if (remainingMinutes > 0) result += ` ${remainingMinutes} menit`;
+  
+  return result;
 }
 
 // === SAKURUPIAH PAYMENT GATEWAY ===
@@ -2859,6 +2861,13 @@ async function handleComprehensiveSearchResult(
   isNext: boolean = false
 ): Promise<void> {
   const penaltyPoints = result.reputation?.penalty_points || 0;
+  const warningsCount = (result.reputation as any)?.report_warnings_to_show || 0;
+
+  // Tampilkan peringatan jika ada laporan yang belum diakui
+  if (warningsCount > 0) {
+    const warningText = "⚠️ <b>PERINGATAN</b>\n\nKamu telah dilaporkan oleh user lain. Kami akan meninjau laporan tersebut. Harap berinteraksi dengan sopan dan patuhi aturan sebelum akun kamu diblokir.";
+    await sendTelegramMessage(botToken, userId, warningText);
+  }
 
   // Ambil filter info user untuk pesan "Mencari..." (hanya premium)
   const { data: filterUserData } = await supabase
@@ -3485,7 +3494,10 @@ Deno.serve(async (req) => {
         'buy_premium_1'
       ];
 
-      if (LIMITED_TIME_PROMOS.includes(callbackData)) {
+      const isLimitedPromoCallback = LIMITED_TIME_PROMOS.includes(callbackData) || 
+        (callbackData.startsWith('prem_pay_') && ['30', '35', '7', '3', '1'].includes(callbackData.split('_')[2]));
+
+      if (isLimitedPromoCallback) {
         let promoExpired = false;
 
         // CHECK 1: Telegram message.date (read-only, 100% akurat)
@@ -3516,7 +3528,13 @@ Deno.serve(async (req) => {
               // Pesan ini seharusnya tidak ada jika belum pernah dapat promo -> kedaluwarsa
               promoExpired = true;
             } else {
-              const promoSentTime = new Date(lastPromoSent).getTime();
+              // FIX TIMEZONE: Supabase mengembalikan format timestamp without timezone
+              // yang sebenarnya adalah waktu Jakarta. Kita perlu memaksanya dibaca sebagai UTC+7.
+              let dateStr = lastPromoSent;
+              if (dateStr.endsWith('Z')) dateStr = dateStr.slice(0, -1);
+              if (!dateStr.includes('+')) dateStr += '+07:00';
+              
+              const promoSentTime = new Date(dateStr).getTime();
               const nowMs = Date.now();
               const diffMs = nowMs - promoSentTime;
               const ONE_HOUR_MS = 3600 * 1000 + 60 * 1000; // 1 jam + 60 detik buffer

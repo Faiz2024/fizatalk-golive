@@ -45,6 +45,25 @@ BEGIN
   -- ============================================
   -- ATURAN BARU: COOLDOWN 24 JAM
   -- ============================================
+  
+  -- Cek apakah masa premium baru saja berakhir (kurang dari 24 jam yang lalu)
+  IF v_user.premium_until IS NOT NULL THEN
+    IF (NOW() AT TIME ZONE 'Asia/Jakarta') > v_user.premium_until AND 
+       EXTRACT(EPOCH FROM ((NOW() AT TIME ZONE 'Asia/Jakarta') - v_user.premium_until)) / 3600 < 24 THEN
+      
+      -- Reset chat_end_count ke 0 jika belum 0
+      IF COALESCE(v_user.chat_end_count, 0) != 0 THEN
+        UPDATE telegram_users SET chat_end_count = 0 WHERE id = p_user_id;
+      END IF;
+      
+      RETURN json_build_object(
+        'should_send', false, 
+        'reason', 'premium_recently_expired_cooldown_24h',
+        'chat_end_count', 0
+      );
+    END IF;
+  END IF;
+
   -- Jika masih dalam cooldown 24 jam sejak promo terakhir:
   -- - chat_end_count dipaksa tetap 0 (tidak diakumulasikan)
   -- - Langsung return should_send = false
