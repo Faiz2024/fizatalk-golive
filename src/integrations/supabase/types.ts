@@ -514,6 +514,7 @@ export type Database = {
           state: Database["public"]["Enums"]["user_state"]
           target_gender: string | null
           target_location: string | null
+          unacknowledged_reports_count: number | null
           username: string | null
         }
         Insert: {
@@ -539,6 +540,7 @@ export type Database = {
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
           target_location?: string | null
+          unacknowledged_reports_count?: number | null
           username?: string | null
         }
         Update: {
@@ -564,6 +566,7 @@ export type Database = {
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
           target_location?: string | null
+          unacknowledged_reports_count?: number | null
           username?: string | null
         }
         Relationships: []
