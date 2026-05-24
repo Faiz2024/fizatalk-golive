@@ -2551,7 +2551,7 @@ async function cloneStickerPack(botToken: string, originalPackName: string, botU
     // Generate nama pack unik (Syarat Telegram: wajib diakhiri _by_botusername)
     const randomStr = Math.random().toString(36).substring(2, 8);
     const newPackName = `fz_${randomStr}_by_${botUsername}`;
-    const newPackTitle = "@FizaTalkBot - Random Chat Bot";
+    const newPackTitle = "@FizaTalkBot - Cari Kenalan Disini";
 
     // 🚀 OPTIMASI PERFORMA & BIAYA CLOUD: Ambil 50 stiker teratas untuk di bulk-create. 
     // Mencegah Timeout dan Error 429 Too Many Requests dari Telegram.
