@@ -19,6 +19,7 @@ interface TelegramMessage {
   chat: {
     id: number;
   };
+  date?: number; // Waktu pesan dikirim dalam Unix time (seconds)
   text?: string;
   photo?: Array<{
     file_id: string;
@@ -4461,6 +4462,22 @@ Deno.serve(async (req) => {
       if (callbackData === 'search_partner' || callbackData.startsWith('search_partner:')) {
         // Intersepsi klik promo untuk pencatatan konversi
         if (callbackData.startsWith('search_partner:promo_')) {
+          // Cek umur pesan promo (maksimal 1 jam = 3600 detik)
+          if (message && message.date) {
+            const messageTimeMs = message.date * 1000;
+            const currentTimeMs = Date.now();
+            const ageHours = (currentTimeMs - messageTimeMs) / (1000 * 60 * 60);
+
+            if (ageHours > 1) {
+              await answerCallbackQuery(botToken, query.id, '❌ Promo sudah kadaluarsa (lebih dari 1 jam).', true);
+              await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+              return new Response('OK', { status: 200 });
+            }
+            
+            // Hapus pesan promo secara langsung agar tidak menumpuk di riwayat chat
+            await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+          }
+
           const templateKey = callbackData.replace('search_partner:promo_', '');
           // Catat konversi secara asinkron ke database
           supabase.from('reengagement_clicks').insert({
