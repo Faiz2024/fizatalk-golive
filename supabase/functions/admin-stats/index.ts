@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     if (error) throw error;
 
     const raw = data as {
-      kpis: { newToday: number; activeToday: number; inactive30: number; churn: number; reengageReturns: number };
+      kpis: { newToday: number; activeToday: number; inactive30: number; churn: number; reengageReturns: number; revenueToday: number };
       activity: { date: string; baru: number; aktif: number; churn: number; baru30hariLalu: number }[];
       reengage_activity: {
         date: string;
@@ -33,6 +33,14 @@ Deno.serve(async (req) => {
         date: string;
         eligible: number;
         sent: number;
+      }[];
+      transactions: {
+        date: string;
+        label: string;
+        premium: number;
+        topup: number;
+        fine: number;
+        total: number;
       }[];
     };
 
@@ -87,8 +95,24 @@ Deno.serve(async (req) => {
       };
     });
 
+    const transactions = (raw.transactions ?? []).map((row) => {
+      const d = new Date(`${row.date}T00:00:00+07:00`);
+      const label = d.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        timeZone: "Asia/Jakarta",
+      });
+      return {
+        label,
+        premium: row.premium ?? 0,
+        topup: row.topup ?? 0,
+        fine: row.fine ?? 0,
+        total: row.total ?? 0,
+      };
+    });
+
     return new Response(
-      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats }),
+      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats, transactions }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {

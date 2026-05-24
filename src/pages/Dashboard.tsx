@@ -11,6 +11,7 @@ import {
   Moon,
   Sun,
   Smile,
+  DollarSign,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -36,7 +37,7 @@ const fetchStats = async () => {
   if (error) throw error;
   if ((data as any)?.error) throw new Error((data as any).error);
   return data as {
-    kpis: { newToday: number; activeToday: number; inactive30: number; churn: number; reengageReturns: number };
+    kpis: { newToday: number; activeToday: number; inactive30: number; churn: number; reengageReturns: number; revenueToday: number };
     activity: { label: string; baru: number; aktif: number; churn: number; baru30hariLalu: number }[];
     reengageActivity: {
       label: string;
@@ -50,6 +51,13 @@ const fetchStats = async () => {
       label: string;
       eligible: number;
       sent: number;
+    }[];
+    transactions: {
+      label: string;
+      premium: number;
+      topup: number;
+      fine: number;
+      total: number;
     }[];
   };
 };
@@ -78,7 +86,9 @@ const KPICard = ({
       {loading ? (
         <Skeleton className="h-9 w-20" />
       ) : (
-        <div className="text-3xl font-bold tracking-tight">{value.toLocaleString("id-ID")}</div>
+        <div className="text-3xl font-bold tracking-tight">
+          {title.includes("Pendapatan") ? `Rp ${value.toLocaleString("id-ID")}` : value.toLocaleString("id-ID")}
+        </div>
       )}
     </CardContent>
   </Card>
@@ -92,6 +102,7 @@ const Dashboard = () => {
   const activity = statsQ.data?.activity ?? [];
   const reengageActivity = statsQ.data?.reengageActivity ?? [];
   const reengageDailyStats = statsQ.data?.reengageDailyStats ?? [];
+  const transactions = statsQ.data?.transactions ?? [];
 
   useEffect(() => {
     if (statsQ.error) {
@@ -136,7 +147,14 @@ const Dashboard = () => {
           <p className="text-sm text-muted-foreground">Memuat data...</p>
         )}
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <KPICard
+            title="Pendapatan Hari Ini"
+            value={kpis?.revenueToday ?? 0}
+            Icon={DollarSign}
+            loading={isLoading}
+            accent="bg-emerald-500"
+          />
           <KPICard
             title="Pengguna Baru (Hari Ini)"
             value={kpis?.newToday ?? 0}
@@ -379,6 +397,72 @@ const Dashboard = () => {
                       fill="url(#sentGradient)"
                       radius={[4, 4, 0, 0]}
                       barSize={14}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 bg-card/60 backdrop-blur">
+          <CardHeader>
+            <CardTitle>Statistik Pendapatan &amp; Transaksi (30 Hari Terakhir)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-[360px] w-full" />
+            ) : (
+              <div className="h-[360px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={transactions} margin={{ top: 20, right: 16, left: 16, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                      tickFormatter={(v: number) => v >= 1000000 ? `Rp ${(v / 1000000).toFixed(1)}jt` : v >= 1000 ? `Rp ${(v / 1000).toFixed(0)}rb` : `Rp ${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "0.5rem",
+                        color: "hsl(var(--popover-foreground))",
+                      }}
+                      labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                      formatter={(value: number, name: string) => [`Rp ${value.toLocaleString("id-ID")}`, name]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 13 }} />
+                    <Bar
+                      dataKey="premium"
+                      name="Pembelian Premium"
+                      stackId="a"
+                      fill="#8b5cf6"
+                      radius={[0, 0, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="topup"
+                      name="Top-up Koin"
+                      stackId="a"
+                      fill="#06b6d4"
+                      radius={[0, 0, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="fine"
+                      name="Denda Buka Blokir"
+                      stackId="a"
+                      fill="#f59e0b"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="total"
+                      name="Total Pendapatan"
+                      stroke="#10b981"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
+                      activeDot={{ r: 7, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
