@@ -3472,22 +3472,24 @@ Deno.serve(async (req) => {
       }
 
       // ============================================
-      // STEP 1.5: PROMO EXPIRATION CHECK (Zero Cost)
+      // STEP 1.5: PROMO EXPIRATION CHECK (Dual Validation)
       // ============================================
-      // Cek apakah tombol promo diklik setelah > 1 jam
-      // List callback yang terikat waktu promo 1 jam
+      // Validasi ganda: Telegram message.date + Database last_promo_sent_at
+      // Tombol promo tetap aktif selama 1 jam (fleksibel berganti pilihan paket)
+      // Tombol yang tertinggal (>1 jam) otomatis kedaluwarsa & dihapus
       const LIMITED_TIME_PROMOS = [
-        'buy_premium_30', // Rp 10.000
-        'buy_premium_35', // Rp 20.000
-        'buy_premium_7',  // Rp 5.000
-        'buy_premium_3',  // Rp 2.000                                                                                                        
-        'buy_premium_1'   // Rp 1.000
+        'buy_premium_30',
+        'buy_premium_35',
+        'buy_premium_7',
+        'buy_premium_3',
+        'buy_premium_1'
       ];
 
       if (LIMITED_TIME_PROMOS.includes(callbackData)) {
-        // Telegram message.date adalah Unix timestamp dalam detik (seconds)
+        let promoExpired = false;
+
+        // CHECK 1: Telegram message.date (read-only, 100% akurat)
         const messageDate = (message as any)?.date; 
-        
         if (messageDate) {
           const nowSeconds = Math.floor(Date.now() / 1000);
           const diffSeconds = nowSeconds - messageDate;
@@ -3495,23 +3497,54 @@ Deno.serve(async (req) => {
 
           // Jika umur pesan lebih dari 1 jam (tambah buffer 60 detik untuk toleransi delay jaringan)
           if (diffSeconds > (ONE_HOUR + 60)) {
-            
-            // 1. Beritahu user via Alert (Pop-up)
-            await answerCallbackQuery(
-              botToken, 
-              query.id, 
-              '⏳ Yah, telat!\n\nMasa promo 1 JAM sudah berakhir. Tunggu penawaran spesial berikutnya ya! 👋', 
-              true // true = Tampilkan sebagai alert window, bukan toast
-            );
-
-            // 2. Hapus pesan promo yang sudah kadaluarsa (Cleanup UI)
-            if (message) {
-              await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-            }
-
-            // 3. Stop proses, jangan lanjutkan ke logic database/pembayaran
-            return new Response('OK', { status: 200 });
+            promoExpired = true;
           }
+        }
+
+        // CHECK 2: Database last_promo_sent_at (anti abuse pesan tertinggal)
+        if (!promoExpired) {
+          const { data: promoUserData } = await supabase
+            .from('telegram_users')
+            .select('last_promo_sent_at')
+            .eq('id', userId)
+            .single();
+          
+          if (promoUserData) {
+            const lastPromoSent = promoUserData.last_promo_sent_at;
+            if (!lastPromoSent) {
+              // last_promo_sent_at NULL = belum pernah dapat promo, atau data tidak konsisten
+              // Pesan ini seharusnya tidak ada jika belum pernah dapat promo -> kedaluwarsa
+              promoExpired = true;
+            } else {
+              const promoSentTime = new Date(lastPromoSent).getTime();
+              const nowMs = Date.now();
+              const diffMs = nowMs - promoSentTime;
+              const ONE_HOUR_MS = 3600 * 1000 + 60 * 1000; // 1 jam + 60 detik buffer
+              
+              if (diffMs > ONE_HOUR_MS) {
+                promoExpired = true;
+              }
+            }
+          }
+        }
+
+        // TINDAKAN: Jika promo kedaluwarsa dari salah satu pemeriksaan
+        if (promoExpired) {
+          // 1. Beritahu user via Alert (Pop-up)
+          await answerCallbackQuery(
+            botToken, 
+            query.id, 
+            '⏳ Yah, telat!\n\nMasa promo 1 JAM sudah berakhir. Tunggu penawaran spesial berikutnya ya! 👋', 
+            true // true = Tampilkan sebagai alert window, bukan toast
+          );
+
+          // 2. Hapus pesan promo yang sudah kadaluarsa (Cleanup UI)
+          if (message) {
+            await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+          }
+
+          // 3. Stop proses, jangan lanjutkan ke logic database/pembayaran
+          return new Response('OK', { status: 200 });
         }
       }
 
