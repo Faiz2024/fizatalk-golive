@@ -5032,14 +5032,39 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         
         // Cek umur pesan khusus untuk paket promo (maksimal 1 jam)
         // Paket dengan awalan 'n' (normal) tidak akan kadaluarsa
-        if (!configKey.startsWith('n') && message && message.date) {
-          const messageTimeMs = message.date * 1000;
-          const currentTimeMs = Date.now();
-          const ageHours = (currentTimeMs - messageTimeMs) / (1000 * 60 * 60);
+        if (!configKey.startsWith('n')) {
+          const { data: promoData } = await supabase
+            .from('telegram_users')
+            .select('last_promo_sent_at')
+            .eq('id', userId)
+            .single();
 
-          if (ageHours > 1) {
-            await answerCallbackQuery(botToken, query.id, '❌ Penawaran promo ini sudah kadaluarsa.', true);
-            await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+          if (promoData && promoData.last_promo_sent_at) {
+            // Waktu di DB disimpan sebagai WIB namun direkam Postgres sebagai UTC.
+            // Contoh: 17:00 WIB disimpan sebagai 17:00 UTC (2026-05-24T17:00:00+00:00).
+            // Kita harus menukarnya ke +07:00 agar terbaca benar oleh Date() di JavaScript.
+            let dbTimeStr = promoData.last_promo_sent_at;
+            if (dbTimeStr.endsWith('Z')) {
+              dbTimeStr = dbTimeStr.slice(0, -1) + '+07:00';
+            } else if (dbTimeStr.includes('+00:00')) {
+              dbTimeStr = dbTimeStr.replace('+00:00', '+07:00');
+            } else if (!dbTimeStr.includes('+')) {
+              dbTimeStr = dbTimeStr + '+07:00';
+            }
+
+            const lastPromoTimeMs = new Date(dbTimeStr).getTime();
+            const currentTimeMs = Date.now();
+            const ageHours = (currentTimeMs - lastPromoTimeMs) / (1000 * 60 * 60);
+
+            if (ageHours > 1) {
+              await answerCallbackQuery(botToken, query.id, '❌ Penawaran promo ini sudah kadaluarsa (lebih dari 1 jam).', true);
+              if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+              return new Response('OK', { status: 200 });
+            }
+          } else {
+            // Jika tidak ada catatan promo terkirim
+            await answerCallbackQuery(botToken, query.id, '❌ Promo tidak ditemukan.', true);
+            if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
             return new Response('OK', { status: 200 });
           }
         }
