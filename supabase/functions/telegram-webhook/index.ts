@@ -5029,6 +5029,21 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
       // === UNIFIED PREMIUM PURCHASE HANDLER (semua buy_premium_* callbacks) ===
       if (BUY_PREMIUM_MAP[callbackData]) {
         const configKey = BUY_PREMIUM_MAP[callbackData];
+        
+        // Cek umur pesan khusus untuk paket promo (maksimal 1 jam)
+        // Paket dengan awalan 'n' (normal) tidak akan kadaluarsa
+        if (!configKey.startsWith('n') && message && message.date) {
+          const messageTimeMs = message.date * 1000;
+          const currentTimeMs = Date.now();
+          const ageHours = (currentTimeMs - messageTimeMs) / (1000 * 60 * 60);
+
+          if (ageHours > 1) {
+            await answerCallbackQuery(botToken, query.id, '❌ Penawaran promo ini sudah kadaluarsa.', true);
+            await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+            return new Response('OK', { status: 200 });
+          }
+        }
+
         const config = PREMIUM_PAY_CONFIG[configKey];
         if (!config) {
           await answerCallbackQuery(botToken, query.id, '❌ Paket tidak valid');
