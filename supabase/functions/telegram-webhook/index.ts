@@ -3215,7 +3215,35 @@ async function sendPromoToUser(
   }
 }
 
-// Helper Global untuk mengirim promo agar sinkron di semua fitur
+// Helper Global untuk memvalidasi kadaluarsa promo (maks 1 jam, khusus paket promo diskon)
+async function validatePromoExpiration(supabase: any, userId: number, configKey: string): Promise<boolean> {
+  // Paket normal tidak akan kadaluarsa
+  if (configKey.startsWith('n')) return true;
+
+  const { data: promoData } = await supabase
+    .from('telegram_users')
+    .select('last_promo_sent_at')
+    .eq('id', userId)
+    .single();
+
+  if (!promoData || !promoData.last_promo_sent_at) return false;
+
+  let dbTimeStr = promoData.last_promo_sent_at;
+  if (dbTimeStr.endsWith('Z')) {
+    dbTimeStr = dbTimeStr.slice(0, -1) + '+07:00';
+  } else if (dbTimeStr.includes('+00:00')) {
+    dbTimeStr = dbTimeStr.replace('+00:00', '+07:00');
+  } else if (!dbTimeStr.includes('+')) {
+    dbTimeStr = dbTimeStr + '+07:00';
+  }
+
+  const lastPromoTimeMs = new Date(dbTimeStr).getTime();
+  const currentTimeMs = Date.now();
+  const ageHours = (currentTimeMs - lastPromoTimeMs) / (1000 * 60 * 60);
+
+  return ageHours <= 1;
+}
+
 // Helper Global untuk mengirim promo agar sinkron di semua fitur
 async function executePromoAction(supabase: any, botToken: string, userId: number) {
   
@@ -5031,42 +5059,11 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         const configKey = BUY_PREMIUM_MAP[callbackData];
         
         // Cek umur pesan khusus untuk paket promo (maksimal 1 jam)
-        // Paket dengan awalan 'n' (normal) tidak akan kadaluarsa
-        if (!configKey.startsWith('n')) {
-          const { data: promoData } = await supabase
-            .from('telegram_users')
-            .select('last_promo_sent_at')
-            .eq('id', userId)
-            .single();
-
-          if (promoData && promoData.last_promo_sent_at) {
-            // Waktu di DB disimpan sebagai WIB namun direkam Postgres sebagai UTC.
-            // Contoh: 17:00 WIB disimpan sebagai 17:00 UTC (2026-05-24T17:00:00+00:00).
-            // Kita harus menukarnya ke +07:00 agar terbaca benar oleh Date() di JavaScript.
-            let dbTimeStr = promoData.last_promo_sent_at;
-            if (dbTimeStr.endsWith('Z')) {
-              dbTimeStr = dbTimeStr.slice(0, -1) + '+07:00';
-            } else if (dbTimeStr.includes('+00:00')) {
-              dbTimeStr = dbTimeStr.replace('+00:00', '+07:00');
-            } else if (!dbTimeStr.includes('+')) {
-              dbTimeStr = dbTimeStr + '+07:00';
-            }
-
-            const lastPromoTimeMs = new Date(dbTimeStr).getTime();
-            const currentTimeMs = Date.now();
-            const ageHours = (currentTimeMs - lastPromoTimeMs) / (1000 * 60 * 60);
-
-            if (ageHours > 1) {
-              await answerCallbackQuery(botToken, query.id, '❌ Penawaran promo ini sudah kadaluarsa (lebih dari 1 jam).', true);
-              if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-              return new Response('OK', { status: 200 });
-            }
-          } else {
-            // Jika tidak ada catatan promo terkirim
-            await answerCallbackQuery(botToken, query.id, '❌ Promo tidak ditemukan.', true);
-            if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-            return new Response('OK', { status: 200 });
-          }
+        const isPromoValid = await validatePromoExpiration(supabase, userId, configKey);
+        if (!isPromoValid && !configKey.startsWith('n')) {
+          await answerCallbackQuery(botToken, query.id, '❌ Penawaran promo ini sudah kadaluarsa atau tidak valid.', true);
+          if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+          return new Response('OK', { status: 200 });
         }
 
         const config = PREMIUM_PAY_CONFIG[configKey];
@@ -5105,6 +5102,14 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
         // UBAH BARIS INI:
         const method = payload.substring(lastUnderscore + 1) as 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO' | 'STARS';
         
+        // Cek kembali kadaluarsa promo saat metode pembayaran ditekan
+        const isPromoValid = await validatePromoExpiration(supabase, userId, configKey);
+        if (!isPromoValid && !configKey.startsWith('n')) {
+          await answerCallbackQuery(botToken, query.id, '❌ Penawaran promo ini sudah kadaluarsa.', true);
+          if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+          return new Response('OK', { status: 200 });
+        }
+
         if (method === 'STARS') {
           await processStarsPremiumPayment(botToken, userId, configKey, query.id, message);
         } else {
