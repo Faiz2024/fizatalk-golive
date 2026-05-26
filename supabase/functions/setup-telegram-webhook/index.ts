@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: webhookUrl,
-        allowed_updates: ['message', 'callback_query', 'message_reaction', 'edited_message', 'chat_member', 'pre_checkout_query'],
+        allowed_updates: ['message', 'callback_query', 'edited_message', 'my_chat_member', 'pre_checkout_query'],
         drop_pending_updates: true,
       })
     })
