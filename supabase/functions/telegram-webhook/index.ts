@@ -153,7 +153,7 @@ function formatTimeWIB(date: Date): string {
 }
 
 function formatRemainingTime(blockedUntilStr?: string): string {
-  if (!blockedUntilStr) return '3 hari';
+  if (!blockedUntilStr) return '15 hari';
   const blockedUntil = new Date(blockedUntilStr);
   const now = new Date();
   const diffMs = blockedUntil.getTime() - now.getTime();
@@ -1283,207 +1283,210 @@ const PROMO_FILEID_LIST = [
 
 // 1. Teks untuk COWOK (100 Pesan - Sopan, elegan, tapi menyindir tajam)
 const MALE_WARNINGS = [
-  "Selamat mengobrol, Mas. Ingat, sopan santun itu gratis, tapi efeknya mahal. Jangan sampai ketikan lebih cepat dari pikiran. ☕",
-  "Halo, Kak. Ngobrol santai aja. Perempuan itu dihargai, bukan dikasih janji manis sekelas politisi mau pemilu. 🏛️",
-  "Selamat mencari teman! Buktikan kalau kamu memang pria berkelas, bukan yang hobinya minta pap tapi beralasan memori HP penuh. 📷",
-  "Halo, Abang. Mari buktikan kalau cowok baik-baik itu masih ada, walau belakangan ini keberadaannya agak langka. 🧐",
-  "Selamat ngobrol! Kata-kata dijaga ya, fitur 'Report' di sini bekerja jauh lebih cepat daripada respon keluhan jalan rusak. 🛣️",
-  "Halo, Mas. Tunjukkan pesona aslimu, tapi tolong tinggalkan sifat 'red flag' kamu di luar aplikasi. 🚩",
-  "Selamat bersosialisasi. Mengobrollah dengan asyik, luangkan waktu untuk mengetik, bukan cuma spam 'P P P' kayak nagih utang. 📱",
-  "Halo! Jadilah pria elegan. Pamer isi kepala jauh lebih menarik daripada flexing barang yang cicilannya belum lunas. 🧠",
-  "Selamat mengobrol! Tolong otak dan jempolnya disinkronisasi dulu sebelum menekan tombol kirim. ⚙️",
-  "Halo, Kak. Jangan gampang baper dan gampang tantrum, kita di sini cari teman ngobrol, bukan cari pasien rawat jalan. 🏥",
-  "Halo, Mas. Usahakan mencari topik yang berbobot. Bertanya 'lagi apa' tiap 5 menit itu tugas satpam komplek, bukan teman chat. 🔦",
-  "Selamat ngobrol! Kalau ditolak, mundur teratur ya. Maksa itu tidak membuatmu terlihat gigih, tapi terlihat butuh bantuan profesional. 🚶‍♂️",
-  "Halo, Kak. Silakan mengobrol dengan sopan. Perempuan suka cowok misterius, tapi bukan misterius yang asik ngobrol lalu tiba-tiba ghosting. 🥷",
-  "Selamat mencari partner! Aura wibawamu akan lebih terasa kalau kamu tidak membahas hal yang membuat orang lain ingin mandi wajib. 🚿",
-  "Halo, Abang. Ketikanmu mencerminkan isi kepalamu. Jadi mari kita pura-pura isi kepalamu itu perpustakaan, bukan tong sampah. 📚",
-  "Selamat mengobrol. Kasih dia perhatian lewat obrolan asyik, jangan cuma datang pas lagi butuh pelampiasan sepi di malam hari. 🌙",
-  "Halo, Mas. Kalau dia membalas singkat, mungkin bukan karena sibuk, tapi karena obrolanmu seindah koran bekas. Coba lebih kreatif. 📰",
-  "Selamat bersosialisasi! Pria idaman itu yang bikin nyaman, bukan yang bikin ilfeel di 5 menit pertama percakapan. Semangat! ✨",
-  "Halo! Obrolan yang sopan adalah kunci. Jangan sampai kamu terkenal di sini, tapi terkenal karena kelakuan yang masuk laporan admin. 📋",
-  "Selamat ngobrol, Kak. Jadilah pria yang kalau pamit bikin kangen, bukan pria yang kalau pamit bikin partnernya gelar syukuran. 🎉",
-  "Mari mengobrol dengan santai. Jangan memaksa minta kontak pribadi di lima menit pertama, kamu ini mau ngobrol atau mau sensus penduduk? 📝",
-  "Halo! Cewek itu butuh didengar. Jangan menguasai percakapan seperti sedang presentasi MLM. 📈",
-  "Selamat mencari teman. Kalau obrolan mulai garing, coba cari topik baru, jangan malah membahas hal yang berbau 18+. Berkelas sedikit, ya. 🍷",
-  "Halo, Kak. Mengaku 'bad boy' di chat itu nggak bikin kamu keren, yang ada malah kelihatan seperti belum lulus bimbingan konseling. 🏫",
-  "Selamat ngobrol! Kalau kamu diblokir, jangan marah. Coba evaluasi, mungkin ketikanmu memang setara dengan polusi udara. 🌫️",
-  "Halo, Abang. Pujian itu bagus, tapi kalau diulang setiap dua kalimat, itu namanya gombalan murah dari era 2010-an. 📉",
-  "Selamat bersosialisasi. Menjadi humoris itu nilai plus, tapi tolong pastikan jokes-mu tidak mendiskriminasi ras atau agama orang lain. ⚖️",
-  "Halo! Mengobrollah dengan elegan. Tidak perlu bawa-bawa nama pejabat atau harta keluarga untuk membuktikan kamu layak diajak bicara. 💼",
-  "Selamat ngobrol. Kalau dia lama membalas, bersabarlah. Dia mungkin punya kehidupan nyata, tidak sepertimu yang stand-by 24 jam. ⌚",
-  "Halo, Mas. Jadilah pria yang menenangkan, bukan pria yang setiap ketikannya mengundang emosi dan keinginan untuk lapor polisi. 🚓",
-  "Selamat mencari partner! Pria sejati itu jujur. Kalau cuma cari pelampiasan sesaat, lebih baik kamu download aplikasi game offline saja. 🎮",
-  "Halo, Kak. Jangan mudah meremehkan perempuan di sini. Siapa tahu gajinya jauh lebih besar dari limit pinjaman online-mu. 💳",
-  "Selamat mengobrol. Tata bahasa yang baik menunjukkan intelektualitas. Jangan menyingkat kata sampai butuh penerjemah sandi morse. 📠",
-  "Halo! Coba untuk tidak terlalu mendominasi. Ini ruang obrolan dua arah, bukan sesi monolog curhat colongan. 🎙️",
-  "Selamat bersosialisasi. Kalau baru kenal jangan langsung minta video call. Kamu kira kamu ini tim HRD yang mau interview kerja? 👔",
-  "Halo, Abang. Kalau dia menolak memberikan fotonya, hargai itu. Privasi adalah hak asasi, bukan sesuatu yang bisa kamu paksa dengan mode memelas. 🛑",
-  "Selamat ngobrol. Pamer kemewahan di bot anonim itu ibarat pakai jas hujan di musim kemarau. Sangat tidak perlu dan agak mencurigakan. 🧥",
-  "Halo! Tunjukkan bahwa kamu punya *attitude*. Kesopananmu di sini adalah cerminan didikan orang tuamu di rumah. 🏡",
-  "Selamat mencari teman! Tidak perlu menceritakan mantanmu di chat pertama. Dia datang untuk ngobrol denganmu, bukan untuk ziarah masa lalu. 🪦",
-  "Halo, Kak. Menjadi asyik itu tanpa paksaan. Kalau obrolannya sudah tidak nyambung, pamitlah dengan baik, jangan menghilang seperti buronan. 🏃‍♂️",
-  "Selamat mengobrol. Pria yang menarik adalah yang tahu kapan harus bercanda dan kapan harus serius. Jangan jadikan semuanya bahan tertawaan. 🤡",
-  "Halo, Mas. Gunakan kata 'maaf' dan 'terima kasih' pada tempatnya. Dua kata itu tidak akan membuat harga dirimu anjlok. 📉",
-  "Selamat bersosialisasi! Berhenti bertanya 'lagi apa' jika kamu tidak punya rencana melanjutkan topik. Itu basi. 🍞",
-  "Halo! Tunjukkan apresiasi jika dia mau merespon panjang lebar. Balasan 'oh iya' setelah dia cerita panjang itu setara dengan kejahatan sosial. 🚨",
-  "Selamat ngobrol. Jadilah pria yang stabil secara emosi. Disuruh menunggu lima menit saja sudah marah-marah, bagaimana mau memimpin keluarga? 😤",
-  "Halo, Kak. Jangan jadikan bot ini tempat mencari validasi. Kalau kamu merasa tidak dihargai di dunia nyata, memaki orang anonim bukan solusinya. 🧘‍♂️",
-  "Selamat mencari partner. Kalau kamu memang berkelas, kamu tidak akan pernah membahas fisik di pertemuan pertama. 👁️",
-  "Halo, Abang. Mengobrollah layaknya seorang *gentleman*. Buka percakapan dengan topik menarik, bukan dengan rayuan receh ala tukang parkir. 🛵",
-  "Selamat mengobrol! Jika kamu mencari kenyamanan, berikan juga kenyamanan yang sama. Hubungan timbal balik itu adil. ⚖️",
-  "Halo! Jangan terlalu cepat merasa akrab. Panggilan 'Sayang' di sepuluh menit pertama itu bukan romantis, tapi mengkhawatirkan. 🚩",
-  "Selamat bersosialisasi. Kalau kamu sedang pusing banyak cicilan, jangan lampiaskan ke partner chatmu. Dia bukan *customer service* pinjol. 🎧",
-  "Halo, Mas. Pria yang keren itu yang bisa menghargai perbedaan opini. Kalau dia beda selera musik denganmu, ya sudah, tidak usah ngajak debat kusir. 🎸",
-  "Selamat ngobrol. Jangan gampang 'playing victim' kalau dia berhenti membalas chatmu. Coba baca ulang, mungkin ketikanmu memang membosankan. 📖",
-  "Halo, Kak. Mulailah obrolan dengan percaya diri. Mengetik 'maaf ya aku jelek' di awal chat itu strategi mencari belas kasihan yang sangat kuno. 🐢",
-  "Selamat mencari teman! Menjadi pendengar yang baik lebih memikat daripada pria yang hobi *mansplaining* segala hal layaknya pakar. 🎓",
-  "Halo! Tolong kurangi penggunaan kata kasar. Kamu sedang berbicara dengan manusia, bukan sedang nongkrong di pinggir jalan tol. 🛣️",
-  "Selamat mengobrol. Kalau dia minta berhenti, ya berhenti. Pria sejati tahu arti kata 'TIDAK' tanpa perlu dijelaskan pakai kamus. 🛑",
-  "Halo, Abang. Kalau niatmu cuma mau main-main, mending main catur saja. Hati anak orang terlalu berharga untuk dijadikan bahan gabutmu. ♟️",
-  "Selamat bersosialisasi. Jangan merasa sok paling menderita sedunia. Semua orang punya masalah, tidak perlu lomba nasib paling sial di sini. 🌧️",
-  "Halo! Mengetik rapi itu salah satu bentuk *self-respect*. Kalau ketikanmu saja berantakan, bagaimana dengan hidupmu? 🧹",
-  "Selamat ngobrol, Mas. Tidak perlu membandingkan dia dengan perempuan lain. Itu tindakan paling tidak elegan yang bisa dilakukan seorang pria. 📉",
-  "Halo, Kak. Kalau kamu memang sultan sungguhan, buktikan dengan *attitude*, bukan dengan pamer saldo bodong hasil comot dari Google. 💳",
-  "Selamat mencari teman! Ingat, pujian yang elegan itu fokus pada karakter atau pikiran, bukan cuma fokus pada bentuk tubuh. 🧠",
-  "Halo. Jangan terlalu agresif mengejar balasan. Kamu sedang *chatting*, bukan sedang dikejar *deadline* laporan akhir bulan. ⏳",
-  "Selamat mengobrol. Jadilah pria yang punya pendirian. Jangan mengiyakan semua kata-katanya cuma demi terlihat manis. Manis buatan itu tidak sehat. 🍬",
-  "Halo, Abang. Membahas masa depan di hari pertama kenalan itu menyeramkan. Santai sedikit, kamu sedang cari teman, bukan calon istri instan. 💒",
-  "Selamat bersosialisasi! Tolong tinggalkan kebiasaan *ghosting*. Mengucapkan selamat tinggal itu gratis dan membuatmu terlihat lebih dewasa. 🚪",
-  "Halo! Mengobrollah dengan pikiran terbuka. Kalau kamu tidak setuju, balas dengan elegan, bukan dengan hinaan yang mencerminkan isi kepalamu. 🧠",
-  "Selamat ngobrol. Pria yang menarik itu yang bisa membuat perempuan tertawa, bukan yang membuat perempuan mengelus dada melihat ketikannya. 😮‍💨",
-  "Halo, Kak. Jangan mudah marah kalau dia merespons lama. Kamu bukan prioritasnya, dan itu fakta yang harus diterima dengan lapang dada. 🍂",
-  "Selamat mencari partner. Kalau kamu memang pandai berbicara, buktikan di sini. Jangan cuma pandai merayu tapi nol aksi. 🎬",
-  "Halo, Mas. Menjadi asyik itu bukan berarti kehilangan batasan. Tetap hargai ruang personalnya meskipun kalian sudah mengobrol berjam-jam. 📏",
-  "Selamat mengobrol. Kalau tidak punya topik, jujur saja. Bertanya 'lagi nafas ya?' untuk memecah keheningan itu sangat tidak menolong. 🌬️",
-  "Halo! Pria berkelas tidak akan pernah meminta sesuatu yang tidak senonoh. Tolong jaga martabatmu sebagai laki-laki. 👑",
-  "Selamat bersosialisasi. Kalau kamu sedang mencari pelarian, pastikan kamu tidak meninggalkan luka baru pada orang yang menemani pelarianmu. 🩹",
-  "Halo, Abang. Jangan sok misterius dengan membalas pesan ala kadarnya. Kamu bukan tokoh utama di novel detektif, kamu cuma kurang komunikasi. 🕵️‍♂️",
-  "Selamat ngobrol. Jadilah pendengar yang proaktif. Jangan cuma membalas 'hmmm' saat dia sedang bercerita penuh semangat. 🥱",
-  "Halo! Kalau kamu merasa paling pintar, simpan kesombonganmu. Obrolan yang menyenangkan itu setara, bukan seperti dosen dan mahasiswanya. 👨‍🏫",
-  "Selamat mencari teman. Menjadi sopan bukan berarti lemah, itu artinya kamu tahu bagaimana cara memperlakukan orang lain dengan layak. 🤝",
-  "Halo, Kak. Tolong pastikan kamu dalam keadaan sadar saat *chatting*. Ketikan orang mabuk atau mengantuk itu sangat menguji kesabaran. 🍺",
-  "Selamat mengobrol. Jangan terlalu sering mengeluh. Mengobrol dengan orang yang auranya negatif itu lebih melelahkan daripada naik tangga 10 lantai. 🧗‍♂️",
-  "Halo, Mas. Kalau kamu memang baik, kamu tidak perlu mengumumkan 'aku ini cowok baik-baik lho'. Biar dia yang menilai dari sikapmu. 😇",
-  "Selamat bersosialisasi! Ingat, memaksa meminta nomor WhatsApp padahal dia belum nyaman itu namanya pemaksaan, bukan usaha. 📵",
-  "Halo! Pria dengan selera humor yang bagus selalu mendapat tempat. Tapi ingat bedanya humoris dengan orang yang *cringe*. 🎭",
-  "Selamat ngobrol. Jangan langsung bersikap protektif di hari pertama. Kamu pacarnya bukan, bapaknya juga bukan. Jangan aneh-aneh. 🛡️",
-  "Halo, Abang. Jadilah versi terbaik dari dirimu. Kalau aslimu memang membosankan, ya... setidaknya berusahalah sedikit lebih keras. 🧗‍♂️",
-  "Selamat mencari partner. Menghargai lawan bicara adalah kewajiban. Kalau kamu cuma mau egois, lebih baik kamu ngobrol di depan cermin. 🪞",
-  "Halo. Kalau dia tidak tertarik, jangan memaksa dengan *spamming*. Harga dirimu tolong dipungut dulu, jangan dibiarkan berserakan di ruang obrolan. 🧹",
-  "Selamat mengobrol. Jadilah pria yang menepati kata-kata. Kalau bilang mau cerita yang lucu, pastikan itu benar-benar lucu, bukan garing. 🌵",
-  "Halo, Kak. Tidak perlu berlagak paling menderita karena cinta. Kalau kamu belum selesai dengan masa lalumu, selesaikan dulu sebelum mencari yang baru. 🔙",
-  "Selamat bersosialisasi! Mengobrollah dengan tulus. Kepalsuan itu bisa tercium lho, bahkan dari seberang layar. 🤥",
-  "Halo, Mas. Kalau dia membalas dengan antusias, pertahankan ritmenya. Jangan malah kamu yang tiba-tiba sok sibuk seperti menteri negara. 🏛️",
-  "Selamat ngobrol. Pria yang elegan akan pamit jika obrolan sudah selesai, bukan membiarkan pesannya menggantung seperti jemuran di musim hujan. 🌧️",
-  "Halo! Coba untuk tidak terlalu mendikte percakapan. Santai saja, biarkan obrolan mengalir senatural mungkin bak air pegunungan. ⛰️",
-  "Selamat mencari teman. Jangan sok asyik mengirim *voice note* bernyanyi kalau suaramu malah mengundang hujan. Kasihan gendang telinganya. 🎤",
-  "Halo, Abang. Ingat, *respect* itu didapatkan, bukan diminta. Tunjukkan kamu layak dihormati melalui setiap ketikanmu. 🏆",
-  "Selamat mengobrol. Kalau kamu tidak tahu harus membalas apa, pakai saja stiker yang lucu. Itu lebih elegan daripada membalas 'Y'. 🖼️",
-  "Halo! Menjadi pria yang santun akan membuat auramu bersinar terang. Kalau kamu kasar, siap-siap saja akunmu masuk daftar hitam. ⬛",
-  "Selamat bersosialisasi. Jadilah pria yang berkesan. Berkesan karena kecerdasanmu, bukan karena tingkat ke-sange-an mu yang melampaui batas wajar. 🧠",
-  "Halo, Mas. Tunjukkan pesona terbaikmu di sini. Obrolan yang hangat dan berkelas selalu menang melawan godaan murahan. Semoga beruntung! ✨"
+  "Bicaralah, asal isinya lebih berbobot dari angin. 💨",
+  "Ini ruang obrolan, bukan ruang interogasi. 🕵️‍♂️",
+  "Gunakan otakmu sebelum jari jemarimu. 🧠",
+  "Tolong bedakan antara percaya diri dan kesombongan. 🦚",
+  "Punya sopan santun itu gratis, pakailah. 🎩",
+  "Kalau cuma mau basa-basi garing, mending tidur. 🛌",
+  "Tunjukkan pesonamu, itu pun kalau memang ada. ✨",
+  "Jangan pamer barang yang cicilannya belum lunas. 💳",
+  "Lebih baik diam daripada mengetik omong kosong. 🤐",
+  "Kalau tak sanggup berkelas, setidaknya jadilah sopan. 👔",
+  "Ini bot obrolan, bukan biro jodoh instan. 💒",
+  "Kesan pertama itu penting, jangan sengaja dirusak. 🖼️",
+  "Bicaralah dengan kehormatan, bukan nafsu. 👑",
+  "Hargai waktunya, atau siap-siap ditinggalkan. ⌚",
+  "Menjadi pria sejati tidak sesulit hitungan kalkulus. 🧮",
+  "Jadilah misteri yang elegan, bukan pengangguran yang sok sibuk. 🕴️",
+  "Kalau balasnya tahun depan, mending kirim merpati saja. 🕊️",
+  "Pamer harta tak akan menutupi miskinnya etikamu. 💸",
+  "Cerdaslah sedikit, wanita suka obrolan berbobot. 📚",
+  "Jadilah gentleman, bukan pengemis perhatian. 🤝",
+  "Sedikit bicara, perbanyak makna. 🎯",
+  "Logikamu jalan kan? Gunakan saat ngobrol. ⚙️",
+  "Memuji itu boleh, merayu murahan itu memalukan. 📉",
+  "Hargai privasinya seakan menghargai nyawamu. 🛡️",
+  "Kalau dia menolak, mundurlah dengan sisa harga dirimu. 🚶‍♂️",
+  "Wibawa itu dibentuk, bukan hasil download. 📉",
+  "Jadilah pria yang menenangkan, bukan memusingkan. ☕",
+  "Kesopananmu mencerminkan kualitas keluargamu. 🏡",
+  "Coba ketik pesan yang isinya bukan cuma huruf 'P'. 📱",
+  "Jangan sok galak kalau kuota saja masih minta. 📶",
+  "Pria berkelas tak akan meminta hal rendahan. 🍷",
+  "Mengetik rapi adalah bentuk penghormatan paling dasar. 📝",
+  "Kalau obrolan garing, coba cek lagi isi kepalamu. 🌵",
+  "Jangan memuji berlebihan, kesannya seperti ada maunya. 🎣",
+  "Hormati dia, atau tombol 'Next' akan menghakimi. ⏭️",
+  "Tunjukkan intelektualitasmu, jangan cuma modal foto pinjaman. 🎓",
+  "Pesona sejati lahir dari kata-kata yang bermartabat. 🌟",
+  "Kalau otakmu sedang libur, jangan paksakan untuk ngobrol. 🏖️",
+  "Pria sejati tahu kapan harus diam dan menyimak. 👂",
+  "Jangan agresif, kamu bukan sales asuransi akhir bulan. 📈",
+  "Kualitasmu terbaca dari tanda bacamu. 🔤",
+  "Tinggalkan sifat kekanak-kanakanmu di luar obrolan ini. 🍼",
+  "Buka percakapan dengan elegan, bukan pertanyaan basi. 🚪",
+  "Kalau tidak nyambung, pamitlah layaknya pria terhormat. 🤝",
+  "Jangan menyalahkan keadaan kalau ketikanmu memang membosankan. 🥱",
+  "Jadilah pendengar, wanita bukan butuh dosen. 👨‍🏫",
+  "Kata-katamu adalah cermin dari jiwamu. 🪞",
+  "Waktu akan menyaring mana pria sejati dan mana pecundang. ⏳",
+  "Ego yang besar tak akan menutupi nyali yang kecil. 🤏",
+  "Menjadi asyik bukan berarti harus kehilangan batasan norma. 📏",
+  "Hormati penolakannya, itu tanda kedewasaanmu. 🏆",
+  "Pria elegan tak pernah mengemis cinta di chat anonim. 🎭",
+  "Coba lebih kreatif dari sekadar tanya 'lagi apa'. 🔍",
+  "Gunakan bahasa manusia, bukan singkatan tak bermakna. 🦍",
+  "Kalau niatnya main-main, mending main game saja. 🎮",
+  "Pria mapan secara emosi jauh lebih menarik. 🧘‍♂️",
+  "Jangan bersikap posesif padahal baru saling menyapa. ⛓️",
+  "Menghargai wanita adalah standar minimal pria waras. 🧠",
+  "Kesabaran adalah perhiasan pria berkelas. 💎",
+  "Jangan mudah marah kalau balasan dia lambat. 🐢",
+  "Kalau mencari kenyamanan, ciptakan dulu suasana yang aman. 🏕️",
+  "Humor itu penting, tapi cringe itu penyakit. 🦠",
+  "Berdebat dengan wanita tak akan membuatmu menang. ⚖️",
+  "Bangun rasa nyaman, bukan malah memberikan tekanan. 🎢",
+  "Temukan frekuensi yang sama, jangan paksakan logikamu. 📻",
+  "Keheningan kadang lebih bermakna dari paksaan chat. 🤫",
+  "Tunjukkan, jangan sekadar banyak bicara. 🎬",
+  "Jadilah misteri yang memang layak untuk dipecahkan. 🧩",
+  "Jangan menceritakan masa lalu jika tak ditanya. 🔙",
+  "Kalau kamu memang baik, tak perlu repot membuktikannya. 😇",
+  "Mengobrollah dengan tulus, kepalsuan mudah tercium. 🤥",
+  "Jaga jarimu, etika adalah segalanya. ⌨️",
+  "Buktikan kamu layak untuk menghabiskan waktunya. ⏳",
+  "Jangan terlalu puitis kalau ujungnya cuma minta pap. 📸",
+  "Jangan jadi pria yang membosankan di menit pertama. 💤",
+  "Berikan dia kenyamanan lewat kata yang sopan. 🛋️",
+  "Membaca suasana hati itu keahlian pria tangguh. 🧭",
+  "Jadikan obrolan ini investasi yang bermakna. 📈",
+  "Jangan sok akrab kalau kenal saja belum ada 5 menit. 🤝",
+  "Kalau kamu cerdas, dia pasti akan tinggal. 🧠",
+  "Menjadi santun tidak akan menurunkan derajatmu. 📉",
+  "Jangan membandingkannya dengan siapapun. 📊",
+  "Hargai perbedaan selera, tak perlu jadi kritikus. 🎤",
+  "Pria berkelas tahu cara mengakhiri percakapan dengan baik. 🚪",
+  "Jangan menjadi beban emosi bagi orang yang baru kenal. 🏋️‍♂️",
+  "Kesopanan adalah mata uang yang berlaku di mana saja. 💵",
+  "Obrolan berkualitas tak butuh effort yang dipaksakan. ✨",
+  "Punya empati sedikit, jangan mendikte hidupnya. 📝",
+  "Jadilah teman ngobrol yang bikin dia lupa waktu. 🕰️",
+  "Pria sejati menghargai ruang privat pasangannya. 🔒",
+  "Jangan jadikan chat sebagai pelampiasan amarah. 🌋",
+  "Bersikaplah dewasa, dunia tidak berputar di sekelilingmu. 🌍",
+  "Kalau jokes-mu garing, segeralah meminta maaf. 🥶",
+  "Ciptakan koneksi, bukan malah membangun tembok. 🧱",
+  "Pria terhormat tak pernah merendahkan wanita. 📉",
+  "Biarkan dia menilai wibawamu dari bahasamu. 🗣️",
+  "Jangan sok penting kalau sibukmu cuma rebahan. 🛌",
+  "Kalau dia tidak tertarik, belajarlah menerima kenyataan. 🍂",
+  "Mengobrollah layaknya bangsawan, bukan preman jalanan. 🤴",
+  "Kualitas seorang pria terlihat saat dia menghargai wanita. 🏆"
 ];
 
 // 2. Teks untuk CEWEK (100 Pesan - Sopan, elegan, tapi menyindir tajam)
 const FEMALE_WARNINGS = [
-  "Halo, Sis! Selamat mengobrol. Tetap elegan ya, cowok 'red flag' gak layak bikin skincare mahalmu luntur karena menangis. 💅",
-  "Selamat mencari teman. Baper boleh, tapi tolong pastikan dia punya masa depan, minimal nggak ngilang kalau ditanya kepastian. 👻",
-  "Halo! Kalau cowoknya mulai aneh-aneh, ingat kalau tombol 'Next' diciptakan untuk mempermudah hidupmu. ⏭️",
-  "Selamat ngobrol cantik! Jual mahal sedikit itu wajib. Kamu kan mahakarya, bukan barang flash sale jam 12 malam. 💎",
-  "Halo, Sis. Tolong kalau balas chat pakai kata yang utuh ya, dia manusia, bukan soal pilihan ganda yang jawabannya cuma 'Y' atau 'G'. 📝",
-  "Selamat bersosialisasi! Pesona itu penting, tapi logika tetap harus jalan supaya nggak gampang digombalin pakai template Google. 🔍",
-  "Halo! Jadilah pendengar yang baik, kecuali kalau obrolannya sudah mulai mengarah ke 'boleh pinjam seratus dulu?'. 💸",
-  "Selamat mencari partner chat! Tetap waspada, di dunia maya ini banyak yang dompetnya lebih tipis dari janjinya. 🤡",
-  "Halo, cantik. Kalau cowoknya toxic, langsung hempas saja. Kamu bukan dinas kebersihan yang harus mengurus sampah masyarakat. 🗑️",
-  "Selamat mengobrol! Jangan terlalu mudah luluh dengan puisi senja, biasanya kalau pagi dia juga yang bikin sakit kepala. 🌅",
-  "Halo, Sis! Jangan terlalu open book ya, nanti privasi kamu malah dikliping buat bahan gibahan. Jaga misterinya sedikit. 📖",
-  "Selamat ngobrol. Punya cowok 'skena' memang terlihat keren, tapi kalau dia cuma modal ngopi dan kamu yang bayar, lebih baik skip. ☕",
-  "Halo, Kak. Kalau dia sok paling tersakiti oleh mantan, jangan buru-buru jadi pahlawan. Biasanya dia yang jadi sumber masalahnya. 🎭",
-  "Selamat mencari teman! Ingat, kamu cari partner chat yang menyenangkan, bukan cari anak asuh yang tantrumnya harus ditenangkan. 🍼",
-  "Halo, cantik. Balaslah chat dengan antusias kalau dia memang asyik. Jangan sok 'cool', nanti malah kelihatan kayak robot kaku. 🤖",
-  "Selamat mengobrol! Kalau cowoknya mulai mengatur-ngatur hidupmu, sadarlah, dia cuma partner chat, bukan pemegang saham kehidupanmu. 📉",
-  "Halo, Sis. Cerdaslah dalam memilah omongan manis. Biasanya yang janjinya setinggi langit, jatuhnya paling bikin sakit. 🪂",
-  "Selamat bersosialisasi. Kalau dia mengajak bertemu di tempat sepi, tolak dengan sopan dan tekan tombol 'Next'. Keamanan nomor satu. 🚨",
-  "Halo! Kalau dia selalu menghilang di akhir pekan, ya sudahlah. Anggap saja dia sedang sibuk dengan 'kehidupan utama'-nya. 🎭",
-  "Selamat ngobrol! Mandiri itu bagus, tapi kalau kamu terus yang memaklumi kelakuannya, itu namanya kamu sedang diperbudak cinta. 💔",
-  "Halo, Sis. Tidak perlu pura-pura jadi orang lain agar disukai. Kalau dia tidak suka aslimu, berarti dia bukan target pasarmu. Semangat! ✨",
-  "Selamat mencari teman. Jangan gampang kagum dengan gaya bicaranya yang tinggi, pastikan isi dompet dan akalnya juga setinggi itu. 💸",
-  "Halo! Jadilah perempuan berkelas. Tidak perlu caper berlebihan. Pesona aslimu sudah cukup terang tanpa perlu lampu sorot tambahan. 💡",
-  "Selamat ngobrol cantik. Kalau kamu balas chat lima jam sekali, jangan marah kalau dia kabur. Cowok juga butuh kepastian, bukan cuma menunggu. ⏳",
-  "Halo, Kak. Kalau obrolan mulai jorok, jangan ragu untuk blokir. Kesehatan mentalmu lebih berharga dari sekadar balasan chatnya. 🛑",
-  "Selamat bersosialisasi! Jangan terobsesi dengan 'bad boy' kalau ujung-ujungnya kamu mengeluh capek disakiti. Pilihan ada di tanganmu. 🛠️",
-  "Halo, Sis. Kalau dia bilang 'kamu beda dari cewek lain', tertawalah dalam hati. Itu kalimat *copy-paste* yang dia kirim ke 10 cewek lainnya. 📑",
-  "Selamat mencari partner chat! Tetaplah anggun. Jangan gunakan umpatan kasar meskipun kamu sedang kesal. Anggun itu bukan hanya soal penampilan. 🦢",
-  "Halo! Jangan membandingkan dia dengan tokoh fiksi di novelmu. Sadarlah, ekspektasi yang terlalu tinggi hanya akan membunuh realita. 📚",
-  "Selamat ngobrol. Kalau dia pelit *effort*, jangan buang energimu. Hubungan itu investasi, bukan donasi sepihak. 🏦",
-  "Halo, cantik. Menjadi independent woman itu luar biasa. Tunjukkan kalau kamu bahagia sendiri, dan keberadaannya itu pelengkap, bukan penyelamat. 🦸‍♀️",
-  "Selamat bersosialisasi. Tolong kurangi drama *'playing victim'*. Kalau kamu yang salah ketik atau salah paham, minta maaf dengan elegan. 🤝",
-  "Halo, Kak. Jangan mudah termakan rayuan janji menikahi di hari pertama chat. Itu namanya modus halu tingkat kecamatan. 💍",
-  "Selamat ngobrol! Jangan mau digantungin. Jemuran saja kalau kelamaan digantung bisa bau apek, apalagi perasaanmu. 👕",
-  "Halo, Sis. Cerdaslah berinvestasi emosi. Kalau dia tidak memberikan sinyal positif, segera alihkan portofolio emosimu ke orang lain. 📈",
-  "Selamat mencari teman. Kalau dia hobi mengkritik fisikmu padahal baru kenal, suruh dia periksa matanya dulu, lalu tinggalkan. 👁️",
-  "Halo! Jangan sok paling tersakiti di dunia maya. Hidup memang keras, tapi mengeluh ke cowok random tidak akan mengubah tagihan kosanmu. 🏠",
-  "Selamat ngobrol cantik. Kalau kamu mencari *sugar daddy* di sini, sepertinya kamu salah alamat. Di sini banyakan cowok yang butuh *sugar mommy*. 🍬",
-  "Halo, Sis. Berhentilah mencoba menjadi pahlawan bagi cowok yang belum selesai dengan traumanya. Kamu itu perempuan, bukan pusat rehabilitasi. 🏥",
-  "Selamat bersosialisasi! Jangan buang waktu dengan cowok yang selalu menghindar kalau diajak bicara serius. Waktumu terlalu berharga untuk itu. ⌚",
-  "Halo, Kak. Hargai dirimu sendiri sebelum minta dihargai. Kalau kamu merendahkan standarmu, jangan kaget kalau yang datang adalah orang di bawah standar. 📉",
-  "Selamat mencari partner. Kalau kamu memang punya *value*, obrolanmu akan berbobot. Berhentilah hanya mengandalkan paras tanpa isi kepala. 🧠",
-  "Halo! Jangan mudah memaafkan kalau dia sudah terbukti berbohong di awal obrolan. Kebohongan kecil adalah tiket menuju kebohongan besar. 🎟️",
-  "Selamat ngobrol. Jadilah perempuan yang tegas. Kalau tidak nyaman, bilang tidak. Jangan memendamnya lalu marah-marah tanpa sebab. 🌋",
-  "Halo, cantik. Berhentilah mencari validasi dari pujian cowok anonim. Kamu sudah cantik sejak lahir, tidak butuh pengakuan dari layar kaca. 🪞",
-  "Selamat bersosialisasi! Kalau dia mulai mengatur caramu berpakaian, *skip* saja. Kamu ini manusia merdeka, bukan boneka pajangan tokonya. 👗",
-  "Halo, Sis. Pintar-pintarlah membaca *red flag*. Cowok yang selalu menyalahkan mantannya itu bendera merah sebesar baliho caleg. 🚩",
-  "Selamat ngobrol! Jangan buang waktu untuk mengorek masa lalunya di menit pertama. Fokus saja pada obrolan saat ini, hidup ini bukan ajang wawancara masa lalu. 🎤",
-  "Halo! Kalau kamu merasa obrolannya *cringe*, jangan dipaksa tersenyum. Akhiri saja. Menyiksa diri sendiri demi menyenangkan cowok *random* itu tidak elit. 🙅‍♀️",
-  "Selamat mencari teman. Jadilah perempuan misterius yang elegan, bukan misterius yang balas chatnya tahun depan. 🗓️",
-  "Halo, Kak. Tolong pastikan kamu membalas dengan ritme yang wajar. Jual mahal boleh, tapi kalau terlalu mahal nanti malah tidak laku. 🏷️",
-  "Selamat ngobrol cantik. Ingat, *effort* itu terlihat dari cara dia menjaga obrolan, bukan dari berapa banyak *emoticon* hati yang dia kirim. ❤️",
-  "Halo, Sis. Kalau dia bilang 'aku orangnya emang gini', itu bukan pembelaan. Itu tanda kalau dia pemalas yang tidak mau memperbaiki diri. 🛑",
-  "Selamat bersosialisasi! Jangan pernah mau jadi cadangan. Kamu itu piala emas, bukan medali perunggu partisipasi. 🏆",
-  "Halo! Kalau dia terus-terusan mengeluh soal mantannya ke kamu, berikan dia nomor telepon terapis, lalu tinggalkan obrolan itu. 🛋️",
-  "Selamat mencari partner chat. Kalau pesonamu hanya bekerja kalau difilter efek IG, coba perbaiki *inner beauty*-mu. Obrolan tulisan butuh otak, bukan *filter*. 📸",
-  "Halo, Kak. Jadilah perempuan yang tahu apa yang dimau. Kalau kamu jawab 'terserah' terus, jangan salahkan dia kalau obrolannya jadi membosankan. 🧭",
-  "Selamat ngobrol. Jangan buang kesabaranmu untuk pria yang tidak menghargai waktumu. *Time is money*, Sis. Waktumu mahal. 💸",
-  "Halo, cantik. Kalau dia cuma ingat kamu pas tengah malam, fiks kamu cuma pelampiasan sepinya. Mending kamu tidur, *skincare* butuh waktu untuk meresap. 😴",
-  "Selamat bersosialisasi! Tunjukkan kecerdasanmu. Pria berkualitas akan tertantang dengan perempuan pintar, pria lemah akan merasa terintimidasi. 🦅",
-  "Halo, Sis. Kalau dia hobi *gaslighting*, putuskan koneksinya. Manipulasi pikiran itu racun, dan kamu bukan wadah limbah B3. ☣️",
-  "Selamat mencari teman. Jangan sok asyik mengirim *voice note* kalau suara sekitarmu bising seperti pasar malam. Hargai telinga pendengarnya. 🎧",
-  "Halo! Tidak perlu berlebihan membuktikan kamu 'bisa segalanya'. Terkadang menunjukkan sedikit kerentanan itu menarik, asalkan tidak *caper*. 🎭",
-  "Selamat ngobrol cantik. Kalau kamu disuruh menjauh dari teman-temanmu demi dia, itu bukan tanda cinta. Itu awal mula isolasi toksik. Lari! 🏃‍♀️",
-  "Halo, Kak. Jadilah perempuan mandiri. Jangan gampang terpancing emosi cuma karena balasan lambat. Sibukkan dirimu dengan hal lain yang lebih berguna. 📚",
-  "Selamat bersosialisasi! Jangan mau jadi 'Ibu Peri' untuk cowok yang kelakuannya mirip iblis. Keajaibanmu terlalu berharga untuk disia-siakan. 🧚‍♀️",
-  "Halo, Sis. Kalau dia terus-menerus menanyakan *password* medsosmu, sadarlah. Kepercayaan itu fondasi, kalau di awal sudah minta *password*, tinggalkan. 🔐",
-  "Selamat mencari partner chat. Menjadi *savage* itu tidak harus dengan berkata kasar. Balasan menohok namun sopan itu jauh lebih mematikan. 🗡️",
-  "Halo! Jangan memaksakan diri nyambung dengan *jokes*-nya yang *cringe* kalau kamu memang tidak paham. Kejujuran itu elegan. 🥶",
-  "Selamat ngobrol. Jangan mau diajak *backstreet* tanpa alasan jelas. Kamu ini manusia yang pantas dibanggakan, bukan rahasia negara. 🇮🇩",
-  "Halo, cantik. Jangan langsung merasa 'insecure' kalau dia menceritakan teman perempuannya. Ketidakamananmu adalah musuh terbesarmu sendiri. 🛡️",
-  "Selamat bersosialisasi! Pria yang suka merendahkan pekerjaan atau mimpimu itu fiks punya *inferiority complex*. Buang jauh-jauh! 🗑️",
-  "Halo, Sis. Kalau dia bilang 'kamu terlalu baik buat aku', percayalah padanya dan langsung pergi. Jangan membantah. 🚶‍♀️",
-  "Selamat mencari teman. Jangan terlalu puitis kalau ujung-ujungnya obrolan kalian cuma berkutat pada pertanyaan 'udah makan belum'. Basi. 🍜",
-  "Halo, Kak. Tunjukkan bahwa kamu punya prinsip. Perempuan yang mudah disetir itu membosankan. Jadilah pengemudi dalam hidupmu sendiri. 🚗",
-  "Selamat ngobrol. Jangan gampang meminjamkan uang, meskipun dia beralasan ATM-nya tertelan. Ini bot *chat*, bukan koperasi simpan pinjam. 🏦",
-  "Halo! Berikan dia *space* saat mengobrol. Tidak perlu *spam* chat berturut-turut kalau pesannya belum dibaca. Kamu bukan asisten pribadinya. 📱",
-  "Selamat bersosialisasi cantik. Kalau obrolan mulai menyinggung 'pap *full body*', pastikan kamu membalasnya dengan menekan tombol lapor admin. 🚨",
-  "Halo, Sis. Menjadi perempuan 'high maintenance' itu boleh, asalkan kamu bisa membiayainya sendiri. Jangan menuntut pria anonim untuk memanjakanmu. 💄",
-  "Selamat mencari partner. Kalau dia tidak menaruh ketertarikan pada opinimu, fiks dia cuma cari pendengar, bukan teman *chat*. *Next!* ⏭️",
-  "Halo! Jangan bersikap terlalu posesif padahal belum jadian. Siapa dia membalas *chat* siapa, itu bukan urusanmu. Sadar posisi, ya. 📍",
-  "Selamat ngobrol. Jadilah perempuan yang hangat namun tetap punya batasan yang tegas. Keramahanmu jangan sampai disalahartikan sebagai kelemahan. 🔥",
-  "Halo, Kak. Kalau dia selalu menggunakan nada memerintah, tinggalkan. Kamu sedang *chatting* cari teman, bukan sedang ikut wajib militer. 🪖",
-  "Selamat bersosialisasi! Jangan pernah mau jadi pihak ketiga. Kebahagiaan yang dibangun di atas penderitaan orang lain tidak akan pernah bertahan lama. 🏛️",
-  "Halo, cantik. Kalau *mood*-mu sedang berantakan, jangan lampiaskan ke *partner* chat. Selesaikan dulu urusanmu, baru kembali *chatting* dengan senyuman. 😊",
-  "Selamat mencari teman. Jangan sok misterius dengan *bio* kosong dan tidak pernah membagikan cerita apapun. Kamu itu manusia, bukan agen rahasia. 🕵️‍♀️",
-  "Halo, Sis. Kalau dia meminta VCS di lima menit pertama, tertawakan saja kelakuannya yang menyedihkan itu lalu putuskan koneksi. 📵",
-  "Selamat ngobrol. Percayalah pada instingmu. Kalau di awal saja obrolannya sudah terasa tidak nyaman, jangan paksakan. Insting perempuan jarang meleset. 🔮",
-  "Halo! Jadilah perempuan berkelas yang tahu kapan harus *online* dan kapan harus fokus pada dunia nyata. Jangan hidup cuma dari notifikasi HP. 🌍",
-  "Selamat bersosialisasi cantik. Kalau kamu mendapati dirimu selalu yang memulai topik, berhenti. Hargai *effort*-mu sendiri. 🛑",
-  "Halo, Kak. Ingat, dia hanya orang dari layar *handphone*. Jangan serahkan seluruh hatimu sebelum dia membuktikan nilainya di dunia nyata. 📱",
-  "Selamat mencari partner. Kalau sikapnya maju-mundur tidak jelas, anggap saja dia sedang latihan senam, bukan berniat serius denganmu. 🤸‍♀️",
-  "Halo! Tolong kurangi *overthinking*. Balasan singkatnya mungkin murni karena dia sibuk, bukan karena dia sedang merencanakan konspirasi untuk menyakitimu. 🤯",
-  "Selamat ngobrol. Jadilah pemaaf tapi jangan pelupa. Kalau dia mengulangi kesalahan yang sama, berikan dia jalan keluar menuju tombol *Next*. 🚪",
-  "Halo, cantik. Perempuan hebat itu bisa menertawakan masalahnya sendiri. Tunjukkan selera humormu yang elegan, pasti banyak pria yang terpikat. 🥂",
-  "Selamat bersosialisasi! Jangan biarkan obrolan soal fisik merendahkan kepercayaan dirimu. Standar kecantikan itu fana, tapi karakter berkelas itu abadi. 💎",
-  "Halo, Sis. Tunjukkan keanggunanmu di setiap ketikan. Obrolan yang berkelas selalu menjadi filter terbaik untuk menyaring cowok murahan. Menyala cantik! ✨"
+  "Turunkan ekspektasimu, ini bukan negeri dongeng. 🏰",
+  "Kalau cari pembantu, kamu salah aplikasi. 🧹",
+  "Jangan buang waktu untuk obrolan murahan. 🗑️",
+  "Keanggunan adalah filter terbaik untuk menyingkirkan pria receh. 💅",
+  "Balaslah dengan cerdas, atau abaikan dengan elegan. 👑",
+  "Jaga prinsipmu, jangan luluh hanya karena rayuan obral. 🏷️",
+  "Biarkan dia menebak, misteri selalu lebih memikat. 🎭",
+  "Tidak semua pesan receh layak mendapat ketikan balasanmu. 📵",
+  "Bunga tidak akan pernah mengejar lebah. 🌸",
+  "Emas tetaplah berharga walau dibalut lumpur. ✨",
+  "Biarkan waktu yang mengungkap kualitas aslinya. ⏳",
+  "Kecerdasanmu memancarkan pesona yang tak bisa dipalsukan. 🧠",
+  "Bicara dengan martabat, jangan mengemis perhatian. 💎",
+  "Kalau dia lambat, anggap saja dia tidak prioritas. 🐢",
+  "Kemandirianmu adalah tameng dari rayuan palsu. 🛡️",
+  "Jadilah teka-teki yang terlalu rumit untuk pria biasa. 🧩",
+  "Cinta yang baik tak lahir dari paksaan chat anonim. 🎭",
+  "Buka pikiranmu, tapi biarkan hatimu tetap terkunci rapat. 🔒",
+  "Kecocokan itu langka, jangan paksakan yang sudah berbeda. 🧩",
+  "Percayalah pada instingmu, kalau aneh langsung tinggalkan. 🔮",
+  "Keamananmu lebih penting daripada menjaga perasaan orang asing. 🚨",
+  "Jual mahal itu wajib, kamu bukan barang diskonan. 🏷️",
+  "Pria 'red flag' tak pantas menghiasi layar ponselmu. 🚩",
+  "Kalau obrolannya garing, tombol 'Next' selalu tersedia. ⏭️",
+  "Kamu itu mahakarya, jangan mau dihargai dengan tarif rendah. 🖼️",
+  "Jangan buang kesabaran untuk mengasuh pria tantrum. 🍼",
+  "Kalau dia sok mengatur, ingatlah dia bukan donatur hidupmu. 💸",
+  "Menyendiri jauh lebih elegan daripada bersama pria beban. 🥂",
+  "Standar tinggi itu mutlak, bukan soal pilihan ganda. 📈",
+  "Jangan memaklumi keburukannya hanya karena kamu kesepian. 🌧️",
+  "Pria bermodal janji biasanya miskin pembuktian. 📉",
+  "Kalau dia mengajak ke tempat sepi, logikamu harus bunyi. 🔔",
+  "Jangan terlalu 'open book', privasimu mahal harganya. 📖",
+  "Pria sejati tak butuh validasi berlebihan dari layar kaca. 🪞",
+  "Obrolan soal fisik di awal perkenalan adalah tanda kelemahan otak. 🧠",
+  "Kalau dia hobi mengkritik, pastikan dia punya cermin di rumah. 👁️",
+  "Jangan mau digantungin, jemuran saja bisa bau apek. 👕",
+  "Investasikan emosimu pada yang jelas, bukan pada bayangan. 📈",
+  "Hidupmu terlalu berharga untuk menjadi tempat rehabilitasi pria toxic. 🏥",
+  "Kamu perempuan cerdas, berhentilah mencari pembenaran untuk kesalahannya. 🛑",
+  "Kalau dia merendahkan mimpimu, buang dia ke tempat sampah. 🗑️",
+  "Jangan membandingkan fiksi dengan realita yang menyedihkan ini. 📚",
+  "Jadilah pengemudi dalam hidupmu, jangan disetir pria anonim. 🚗",
+  "Berikan ruang, kamu bukan customer service 24 jam. 🎧",
+  "Kalau mood-nya berantakan, jangan mau jadi samsak emosinya. 🥊",
+  "Jadilah wanita yang tahu apa yang dia mau. 🎯",
+  "Pesona aslimu tak butuh filter, hanya butuh otak yang bersinar. ✨",
+  "Jangan buang waktumu untuk mengorek masa lalunya yang suram. 🔙",
+  "Cerdaslah berinvestasi waktu, pilih obrolan yang menghasilkan tawa. 😂",
+  "Menjadi anggun bukan berarti tidak bisa bersikap tegas. 👠",
+  "Kalau obrolannya mulai cringe, jangan korbankan matamu untuk membacanya. 🙈",
+  "Jangan selalu menjadi pihak yang memulai, hargai effort-mu. 🛑",
+  "Kalau dia selalu menghilang, lupakan saja keberadaannya. 👻",
+  "Tunjukkan selera humormu yang berkelas. 🥂",
+  "Jangan mudah kagum dengan gaya bicara tinggi tanpa bukti. 🗣️",
+  "Tidak perlu pura-pura bodoh untuk disukai pria lemah. 🧠",
+  "Jadilah wanita hangat namun punya batasan baja. 🛡️",
+  "Kalau dia suka gaslighting, sadarlah kamu sedang diracuni. ☣️",
+  "Menjadi savage itu sopan tapi menohok tepat di jantung. 🗡️",
+  "Jangan memaksakan diri tertawa untuk jokes yang garing. 🥶",
+  "Hindari pria yang meminta akses privat di hari pertama. 📵",
+  "Kalau dia pelit effort, jangan buang energimu. 🔋",
+  "Kamu ini piala emas, bukan medali partisipasi kelurahan. 🏆",
+  "Cerdaslah membedakan mana keseriusan dan mana modus operandi. 🕵️‍♀️",
+  "Kamu tidak butuh pujian palsu untuk merasa cantik. 💄",
+  "Keajaibanmu terlalu berharga untuk pria berjiwa parasit. 🦠",
+  "Perempuan berprinsip selalu terlihat lebih seksi di mata pria cerdas. 💋",
+  "Tolak dengan sopan, abaikan dengan mutlak. 🛑",
+  "Jangan biarkan layar ponsel mengatur kebahagiaan nyatamu. 📱",
+  "Kalau dia suka membahas mantan, berikan dia kontak terapis. 🛋️",
+  "Obrolan murahan hanya untuk mereka yang tidak punya nilai. 📉",
+  "Banggalah pada kemandirianmu, itu menakutkan bagi pria pengecut. 🦅",
+  "Jangan gampang memaafkan kebohongan kecil di awal perkenalan. 🤥",
+  "Hidup sudah rumit, jangan ditambah drama pria tak jelas. 🎭",
+  "Pria yang merendahkan perempuan fiks punya inferiority complex. 🤏",
+  "Berani berkata 'TIDAK' adalah tanda kemerdekaan mentalmu. 🗽",
+  "Tunjukkan bahwa kecerdasanmu lebih menarik daripada riasanmu. 💄",
+  "Kamu wanita berkelas, bertindaklah layaknya ratu. 👑",
+  "Jangan pusingkan balasan lambat, anggap saja dia sedang sibuk. ⌚",
+  "Memblokir orang toxic adalah rutinitas self-care yang baik. 🛀",
+  "Hargai dirimu sendiri sebelum berharap pria asing menghargaimu. 🤝",
+  "Jangan korbankan kedamaian mentalmu demi memuaskan egonya. 🧘‍♀️",
+  "Tetaplah rasional walau obrolannya mulai terdengar manis. 🍭",
+  "Pria berkelas akan segan jika kamu menunjukkan integritas. 🛡️",
+  "Jangan menjadi pihak ketiga, karma itu sangat tepat waktu. ⏰",
+  "Mengetik dengan rapi adalah bentuk keanggunan digital-mu. ⌨️",
+  "Kalau dia suka mendominasi, tinggalkan dia mengobrol sendiri. 🚶‍♀️",
+  "Kamu tidak sedang mengemis teman, bersikaplah selektif. 🧐",
+  "Pria yang memintamu berubah sejak awal adalah bendera merah berjalan. 🚩",
+  "Pertahankan kedamaian batinmu, biarkan pria toxic berteriak di luar sana. 🕊️",
+  "Kalau dia tidak menghargai waktumu, tinggalkan saja tanpa pamit. 🚪",
+  "Kamu bukan rahasia negara yang harus disembunyikan dalam obrolan gelap. 🕵️‍♀️",
+  "Tunjukkan kecerdasan emosionalmu dalam membalas sapaan. 🧠",
+  "Biarkan dia menilai dirimu dari opini cerdas yang kamu berikan. 💡",
+  "Jangan jadikan mencari pasangan sebagai perlombaan hidup mati. 🏁",
+  "Pria mapan emosi tidak akan pernah membuatmu overthinking. 🧘‍♂️",
+  "Wanita tegas selalu tahu kapan obrolan harus segera diakhiri. 🛑",
+  "Kalau dia tidak merespons, alam semesta sedang menyelamatkanmu. 🌌",
+  "Kecantikan sejati terlihat dari cara pandangmu yang elegan. 👁️",
+  "Kamu adalah mahkota yang tak sembarang kepala pantas memakainya. 👑"
 ];
 // Helper: Ambil pesan acak berdasarkan gender (Safe & Fast)
 function getMessageByGender(gender: string | null) {
@@ -2750,7 +2753,7 @@ async function comprehensiveSearchAction(
     const remainingTimeStr = formatRemainingTime(result.blocked_until);
     const blockedMessage = `🚫 <b>AKUN ANDA DIBLOKIR</b>
 
-  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan selama 3 hari.</b>
+  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan selama 15 hari.</b>
 
   ⏳ <b>Sisa Waktu Pemblokiran:</b> <b>${remainingTimeStr}</b>
 
@@ -2803,7 +2806,7 @@ async function comprehensiveSearchAction(
     const remainingTimeStr = formatRemainingTime(result.blocked_until);
     const blockedMessage = `🚫 <b>AKUN ANDA DIBLOKIR</b>
 
-  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan selama 3 hari.</b>
+  ⚠️ <b>Alasan:</b> Kami menerima terlalu banyak laporan negatif terkait aktivitas chat Anda. Demi kenyamanan komunitas, akses chat Anda <b>dinonaktifkan selama 15 hari.</b>
 
   ⏳ <b>Sisa Waktu Pemblokiran:</b> <b>${remainingTimeStr}</b>
 
@@ -2854,12 +2857,14 @@ async function comprehensiveSearchAction(
 
 // HELPER: Proses hasil RPC dan kirim notifikasi
 // isNext: true jika dari tombol Next, false jika dari tombol Cari Partner
+// searchMessageAlreadySent: true jika pesan "Mengakhiri chat..." sudah dikirim oleh caller (untuk menghindari race condition)
 async function handleComprehensiveSearchResult(
   supabase: any,
   botToken: string,
   userId: number,
   result: ComprehensiveSearchResult,
-  isNext: boolean = false
+  isNext: boolean = false,
+  searchMessageAlreadySent: boolean = false
 ): Promise<void> {
   const penaltyPoints = result.reputation?.penalty_points || 0;
   const warningsCount = (result.reputation as any)?.report_warnings_to_show || 0;
@@ -2920,20 +2925,26 @@ async function handleComprehensiveSearchResult(
   if (!result.matched) {
     // Tidak ada partner yang cocok, user sudah dimasukkan ke antrian oleh RPC
     
-    // Untuk tombol Next: selalu tampilkan pesan "Mengakhiri chat..." (dengan peringatan jika >= 40)
-    // Untuk tombol Cari Partner: tampilkan pesan mencari (dengan peringatan jika >= 40)
-    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard, filterInfo);
+    // Jika pesan sudah dikirim sebelum RPC (fix race condition), skip
+    if (!searchMessageAlreadySent) {
+      // Untuk tombol Next: selalu tampilkan pesan "Mengakhiri chat..." (dengan peringatan jika >= 40)
+      // Untuk tombol Cari Partner: tampilkan pesan mencari (dengan peringatan jika >= 40)
+      await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard, filterInfo);
+    }
     return;
   }
   
   // Partner ditemukan!
   const partnerId = result.partner_id!;
   
-  // Jika penalty >= 40: TETAP tampilkan pesan pencarian + peringatan walaupun langsung dapat partner
-  // skipIfLowPenalty = true: jika penalty < 40 dan matched, lewati pesan pencarian
-  if (isNext || penaltyPoints >= 40) {
-    await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard, filterInfo);
-    await new Promise(resolve => setTimeout(resolve, 600));
+  // Jika pesan sudah dikirim sebelum RPC (fix race condition), skip
+  if (!searchMessageAlreadySent) {
+    // Jika penalty >= 40: TETAP tampilkan pesan pencarian + peringatan walaupun langsung dapat partner
+    // skipIfLowPenalty = true: jika penalty < 40 dan matched, lewati pesan pencarian
+    if (isNext || penaltyPoints >= 40) {
+      await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard, filterInfo);
+      await new Promise(resolve => setTimeout(resolve, 600));
+    }
   }
   // Jika penalty < 40 dan matched: langsung ke notifikasi pairing (lewati pesan pencarian)
   
@@ -3065,14 +3076,14 @@ async function sendPairingNotifications(
       botToken, 
       user1Id, 
       // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n<b><i>${warningUser1}</i></b>`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
       buildChatKeyboard(user1IsPremium)
     ),
     sendTelegramMessage(
       botToken, 
       user2Id, 
       // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n<b><i>${warningUser2}</i></b>`,
+      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
       buildChatKeyboard(user2IsPremium)
     )
   ]);
@@ -4698,7 +4709,49 @@ Deno.serve(async (req) => {
       if (callbackData === 'chat_next') {
         await answerCallbackQuery(botToken, query.id, '⏭️ Mencari partner baru...');
         
-        // SATU PANGGILAN RPC: handles upsert, blocked check, end chat, reputation, search
+        // === FIX RACE CONDITION ===
+        // Pre-fetch data user SEBELUM RPC agar bisa mengirim pesan "Mengakhiri chat..."
+        // SEBELUM user dimasukkan ke waiting_queue oleh RPC.
+        // Ini mencegah user lain mendapatkan match dan mengirim "Partner ditemukan!"
+        // sebelum pesan "Mengakhiri chat..." sempat terkirim.
+        const { data: preNextData } = await supabase
+          .from('telegram_users')
+          .select('partner_id, penalty_points, target_gender, target_location, premium_until')
+          .eq('id', userId)
+          .single();
+        
+        const preNextPenalty = preNextData?.penalty_points || 0;
+        const preNextIsPremium = preNextData?.premium_until && new Date(preNextData.premium_until) > new Date();
+        const preNextFilterInfo = preNextIsPremium ? {
+          target_gender: preNextData?.target_gender,
+          target_location: preNextData?.target_location
+        } : undefined;
+        
+        // Bangun keyboard Laporkan/Asik/Baik untuk partner lama
+        const preNextInlineKeyboard: any[][] = [];
+        if (preNextData?.partner_id && preNextPenalty < 40) {
+          preNextInlineKeyboard.push([
+            { text: '🚩 Laporkan', callback_data: `report_user_${preNextData.partner_id}` },
+            { text: '😎 Asik', callback_data: `rate_asik_${preNextData.partner_id}` },
+            { text: '👍 Baik', callback_data: `rate_baik_${preNextData.partner_id}` }
+          ]);
+        }
+        if (preNextPenalty >= 40 && !preNextIsPremium) {
+          preNextInlineKeyboard.push([
+            { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
+          ]);
+        }
+        const preNextKeyboard = preNextInlineKeyboard.length > 0 ? { inline_keyboard: preNextInlineKeyboard } : undefined;
+        
+        // Kirim pesan "Mengakhiri chat dan mencari partner baru..." SEBELUM RPC
+        const preNextReputation = preNextPenalty >= 40 ? {
+          status: preNextPenalty >= 70 ? 'critical' : 'warning',
+          message: null,
+          penalty_points: preNextPenalty
+        } : undefined;
+        await sendSearchingMessage(botToken, userId, preNextReputation, true, false, preNextKeyboard, preNextFilterInfo);
+        
+        // SEKARANG baru panggil RPC (user aman masuk queue setelah pesan terkirim)
         const { success, handled, result: searchResult } = await comprehensiveSearchAction(
           supabase, botToken, userId,
           query.from.username, query.from.first_name,
@@ -4734,7 +4787,8 @@ Deno.serve(async (req) => {
           }
           
           // 3. JIKA BUKAN PROMO & SUDAH JOIN CHANNEL -> NORMAL MATCHING
-          await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true);
+          // searchMessageAlreadySent = true: pesan sudah dikirim di atas sebelum RPC
+          await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true, true);
         }
 
         return new Response('OK', { status: 200 });

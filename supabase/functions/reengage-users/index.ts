@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       
       const { data: normalUsers, error: usersError } = await supabase
-        .from("telegram_users")
+        .from("v_eligible_reengagement_users")
         .select("id, first_name, last_reengagement_message_id, username")
         .eq("state", "idle")
         .lt("last_active", sevenDaysAgo)
@@ -316,7 +316,7 @@ Deno.serve(async (req) => {
       // Hitung eligible count saat ini
       const sevenDaysAgoNow = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { count: eligibleCount } = await supabase
-        .from("telegram_users")
+        .from("v_eligible_reengagement_users")
         .select("id", { count: "exact", head: true })
         .eq("state", "idle")
         .lt("last_active", sevenDaysAgoNow)
