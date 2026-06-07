@@ -291,6 +291,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pending_transactions_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "v_eligible_reengagement_users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pending_transactions_payment_method_id_fkey"
             columns: ["payment_method_id"]
             isOneToOne: false
@@ -302,6 +309,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "telegram_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "v_eligible_reengagement_users"
             referencedColumns: ["id"]
           },
         ]
@@ -357,6 +371,13 @@ export type Database = {
             referencedRelation: "telegram_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "premium_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "v_eligible_reengagement_users"
+            referencedColumns: ["id"]
+          },
         ]
       }
       reconnect_requests: {
@@ -396,10 +417,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "reconnect_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "v_eligible_reengagement_users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "reconnect_requests_target_id_fkey"
             columns: ["target_id"]
             isOneToOne: false
             referencedRelation: "telegram_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconnect_requests_target_id_fkey"
+            columns: ["target_id"]
+            isOneToOne: false
+            referencedRelation: "v_eligible_reengagement_users"
             referencedColumns: ["id"]
           },
         ]
@@ -429,6 +464,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "telegram_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reengagement_clicks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "v_eligible_reengagement_users"
             referencedColumns: ["id"]
           },
         ]
@@ -619,6 +661,13 @@ export type Database = {
             referencedRelation: "telegram_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "topup_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "v_eligible_reengagement_users"
+            referencedColumns: ["id"]
+          },
         ]
       }
       waiting_queue: {
@@ -642,11 +691,98 @@ export type Database = {
             referencedRelation: "telegram_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "waiting_queue_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "v_eligible_reengagement_users"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      v_eligible_reengagement_users: {
+        Row: {
+          chat_end_count: number | null
+          coins: number | null
+          created_at: string | null
+          first_name: string | null
+          gender: string | null
+          id: number | null
+          is_channel_member: boolean | null
+          is_tiktok_mode: boolean | null
+          last_active: string | null
+          last_partners: number[] | null
+          last_promo_sent_at: string | null
+          last_reengagement_message_id: number | null
+          last_reengagement_sent_at: string | null
+          location: string | null
+          partner_id: number | null
+          penalty_points: number | null
+          premium_until: string | null
+          spam_warning_until: string | null
+          spam_warnings: number | null
+          state: Database["public"]["Enums"]["user_state"] | null
+          target_gender: string | null
+          target_location: string | null
+          unacknowledged_reports_count: number | null
+          username: string | null
+        }
+        Insert: {
+          chat_end_count?: number | null
+          coins?: number | null
+          created_at?: string | null
+          first_name?: string | null
+          gender?: string | null
+          id?: number | null
+          is_channel_member?: boolean | null
+          is_tiktok_mode?: boolean | null
+          last_active?: string | null
+          last_partners?: number[] | null
+          last_promo_sent_at?: string | null
+          last_reengagement_message_id?: number | null
+          last_reengagement_sent_at?: string | null
+          location?: string | null
+          partner_id?: number | null
+          penalty_points?: number | null
+          premium_until?: string | null
+          spam_warning_until?: string | null
+          spam_warnings?: number | null
+          state?: Database["public"]["Enums"]["user_state"] | null
+          target_gender?: string | null
+          target_location?: string | null
+          unacknowledged_reports_count?: number | null
+          username?: string | null
+        }
+        Update: {
+          chat_end_count?: number | null
+          coins?: number | null
+          created_at?: string | null
+          first_name?: string | null
+          gender?: string | null
+          id?: number | null
+          is_channel_member?: boolean | null
+          is_tiktok_mode?: boolean | null
+          last_active?: string | null
+          last_partners?: number[] | null
+          last_promo_sent_at?: string | null
+          last_reengagement_message_id?: number | null
+          last_reengagement_sent_at?: string | null
+          location?: string | null
+          partner_id?: number | null
+          penalty_points?: number | null
+          premium_until?: string | null
+          spam_warning_until?: string | null
+          spam_warnings?: number | null
+          state?: Database["public"]["Enums"]["user_state"] | null
+          target_gender?: string | null
+          target_location?: string | null
+          unacknowledged_reports_count?: number | null
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       apply_daily_penalty_decay: { Args: never; Returns: number }
