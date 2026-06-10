@@ -4070,52 +4070,43 @@ Deno.serve(async (req) => {
         
         if (data?.error === 'user_is_premium') {
             const premMsg = `✅ User ${senderId} adalah pengguna Premium dan kebal dari aksi.`;
-            if (mediaField !== 'video_note') {
-                await fetch(`${TELEGRAM_API}${botToken}/editMessageCaption`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: query.message.chat.id,
-                        message_id: query.message.message_id,
-                        caption: premMsg,
-                        reply_markup: { inline_keyboard: [] }
-                    })
-                });
-            } else {
-                await sendTelegramMessage(botToken, query.message.chat.id, premMsg);
-            }
+            await deleteTelegramMessage(botToken, query.message.chat.id, query.message.message_id);
+            await sendTelegramMessage(botToken, query.message.chat.id, premMsg);
             await answerCallbackQuery(botToken, query.id, 'User Premium kebal dari blokir.', false);
             return new Response('OK', { status: 200 });
         }
         
+        const actualAction = data?.action || action;
+        const warnings = data?.warnings || 1;
+
         if (fileId) {
             const payload: any = {
                 chat_id: senderId,
                 [mediaField]: fileId
             };
             
-            if (action === 'warn') {
+            if (actualAction === 'warned' || actualAction === 'warn') {
                 payload.reply_markup = {
                     inline_keyboard: [[{ text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'buy_premium_normal_7' }]]
                 };
                 if (mediaField !== 'video_note') {
-                    payload.caption = `⚠️ <b>PERINGATAN DARI ADMIN</b>\n\nMedia yang Anda kirim telah dilaporkan dan melanggar aturan komunitas. Harap patuhi aturan atau akun Anda akan diblokir.`;
+                    payload.caption = `⚠️ <b>PERINGATAN DARI ADMIN (${warnings}/4)</b>\n\nMedia yang Anda kirim telah dilaporkan dan melanggar aturan komunitas. Harap patuhi aturan atau akun Anda akan diblokir otomatis.`;
                     payload.parse_mode = 'HTML';
                 } else {
-                    await sendTelegramMessage(botToken, parseInt(senderId), `⚠️ <b>PERINGATAN DARI ADMIN</b>\nVideo Note yang Anda kirim melanggar aturan komunitas.`, payload.reply_markup);
+                    await sendTelegramMessage(botToken, parseInt(senderId), `⚠️ <b>PERINGATAN DARI ADMIN (${warnings}/4)</b>\nVideo Note yang Anda kirim melanggar aturan komunitas.`, payload.reply_markup);
                 }
             } else {
                 payload.reply_markup = {
                     inline_keyboard: [[
-                        { text: '💸 Bayar Denda', callback_data: 'pay_fine' },
-                        { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'buy_premium_normal_7' }
+                        { text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' },
+                        { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }
                     ]]
                 };
                 if (mediaField !== 'video_note') {
-                    payload.caption = `🚫 <b>AKUN DIBLOKIR</b>\n\nAkun Anda telah diblokir otomatis selama 15 hari oleh Admin karena mengirim media terlarang.`;
+                    payload.caption = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ <b>Alasan:</b> Anda telah mencapai batas peringatan (4/4) akibat mengirim media terlarang. Akses chat Anda <b>dinonaktifkan</b>.\n\nPilih opsi di bawah untuk memulihkan akun:`;
                     payload.parse_mode = 'HTML';
                 } else {
-                    await sendTelegramMessage(botToken, parseInt(senderId), `🚫 <b>AKUN DIBLOKIR</b>\nVideo Note yang Anda kirim melanggar aturan.`, payload.reply_markup);
+                    await sendTelegramMessage(botToken, parseInt(senderId), `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ <b>Alasan:</b> Anda telah mencapai batas peringatan (4/4) akibat mengirim Video Note terlarang.`, payload.reply_markup);
                 }
                 
                 // Disconnect their chat if active
@@ -4129,24 +4120,14 @@ Deno.serve(async (req) => {
             });
         }
         
-        // Remove keyboard and update text for admin
-        const newCaption = action === 'warn' ? `✅ Peringatan telah dikirim ke ${senderId}.` : `✅ User ${senderId} telah diblokir.`;
+        // Remove media from admin chat
+        await deleteTelegramMessage(botToken, query.message.chat.id, query.message.message_id);
         
-        if (mediaField !== 'video_note') {
-            await fetch(`${TELEGRAM_API}${botToken}/editMessageCaption`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: query.message.chat.id,
-                    message_id: query.message.message_id,
-                    caption: newCaption,
-                    reply_markup: { inline_keyboard: [] }
-                })
-            });
-        } else {
-            // Can't edit video note, just send a message
-            await sendTelegramMessage(botToken, query.message.chat.id, newCaption);
-        }
+        const newCaption = (actualAction === 'warned' || actualAction === 'warn') 
+            ? `✅ Peringatan (${warnings}/4) telah dikirim ke ${senderId}.` 
+            : `✅ User ${senderId} telah diblokir (Batas 4/4 Peringatan).`;
+            
+        await sendTelegramMessage(botToken, query.message.chat.id, newCaption);
         
         await answerCallbackQuery(botToken, query.id, 'Berhasil', false);
         return new Response('OK', { status: 200 });
