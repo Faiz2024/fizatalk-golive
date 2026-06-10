@@ -4039,7 +4039,7 @@ Deno.serve(async (req) => {
 
       if (callbackData.startsWith('admin_warnm_') || callbackData.startsWith('admin_blockm_')) {
         const action = callbackData.startsWith('admin_warnm_') ? 'warn' : 'block';
-        const senderId = callbackData.split('_')[1];
+        const senderId = callbackData.split('_')[2];
         
         let fileId = '';
         let mediaEndpoint = '';
