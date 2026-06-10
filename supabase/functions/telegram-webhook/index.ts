@@ -2394,6 +2394,7 @@ async function sendSearchingMessage(
 interface StickerPackData {
   status: string;
   fiza_pack_name: string | null;
+  submission_count: number;
 }
 // Cache in-memory untuk memutus query berulang
 const stickerPackCache = new Map<string, StickerPackData>();
@@ -2639,12 +2640,12 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
   // 4. Jika tidak ada di cache, sinkronkan ke DB
   if (!packData) {
     const { data } = await supabase.from('sticker_packs')
-      .select('status, fiza_pack_name')
+      .select('status, fiza_pack_name, submission_count')
       .eq('pack_name', packName)
       .single();
       
     if (data) {
-      packData = { status: data.status, fiza_pack_name: data.fiza_pack_name };
+      packData = { status: data.status, fiza_pack_name: data.fiza_pack_name, submission_count: data.submission_count || 1 };
       stickerPackCache.set(packName, packData); 
     }
   }
@@ -2667,7 +2668,39 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
     }
     
     if (packData.status === 'pending') {
+      packData.submission_count = (packData.submission_count || 1) + 1;
+      
+      // Update DB tanpa menunggu
+      supabase.from('sticker_packs')
+        .update({ submission_count: packData.submission_count })
+        .eq('pack_name', packName)
+        .then();
+        
+      stickerPackCache.set(packName, packData);
+
       await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker tersebut sedang ditinjau oleh admin.\n💡 <i>Rekomendasi: Gunakan stiker dari channel @FizaStick terlebih dahulu.</i>", premiumUpgradeKeyboard);
+      
+      const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+      if (adminChatId) {
+        const { data: packDb } = await supabase.from('sticker_packs').select('id').eq('pack_name', packName).single();
+        if (packDb) {
+          await fetch(`${TELEGRAM_API}${botToken}/sendSticker`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: adminChatId, sticker: sticker.file_id })
+          });
+
+          const reviewKeyboard = {
+            inline_keyboard: [
+              [
+                { text: '✅ Izinkan & Kloning', callback_data: `ap_${packDb.id}` },
+                { text: '❌ Tolak Pack', callback_data: `dp_${packDb.id}` }
+              ]
+            ]
+          };
+          await sendTelegramMessage(botToken, parseInt(adminChatId), `⚠️ <b>Review Stiker Baru (Kiriman ke-${packData.submission_count})</b>\n\nNama Pack: <code>${packName}</code>\nPengirim: <code>${chatId}</code>\n\nJika diizinkan, bot otomatis mengkloning pack ini menjadi milik @FizaTalkBot.`, reviewKeyboard);
+        }
+      }
       return false;
     }
   }
@@ -2697,7 +2730,7 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
           ]
         ]
       };
-      await sendTelegramMessage(botToken, parseInt(adminChatId), `⚠️ <b>Review Stiker Baru</b>\n\nNama Pack: <code>${packName}</code>\nPengirim: <code>${chatId}</code>\n\nJika diizinkan, bot otomatis mengkloning pack ini menjadi milik @FizaTalkBot.`, reviewKeyboard);
+      await sendTelegramMessage(botToken, parseInt(adminChatId), `⚠️ <b>Review Stiker Baru (Kiriman ke-1)</b>\n\nNama Pack: <code>${packName}</code>\nPengirim: <code>${chatId}</code>\n\nJika diizinkan, bot otomatis mengkloning pack ini menjadi milik @FizaTalkBot.`, reviewKeyboard);
     }
   } else {
     await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker ini sedang diproses sistem.");
