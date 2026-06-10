@@ -2504,6 +2504,8 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData === 'check_channel_joined') return 'search_partner'; // Sama dengan search
   if (callbackData.startsWith('dismiss_promo')) return 'search_partner'; // Dismiss promo = search
   if (callbackData.startsWith('cs_approve_') || callbackData.startsWith('cs_reject_')) return 'cs_action';
+  if (callbackData.startsWith('reportm_')) return 'report_media';
+  if (callbackData.startsWith('admin_warnm_') || callbackData.startsWith('admin_blockm_')) return 'admin_media_action';
   return 'default';
 }
 
@@ -3964,6 +3966,190 @@ Deno.serve(async (req) => {
         await handleAdminSpamAction(supabase, botToken, targetId, 'block', message, userId);
         await answerCallbackQuery(botToken, query.id, 'User telah diblokir.');
         return new Response('OK');
+      }
+
+
+      // MEDIA REPORT LOGIC
+      if (callbackData.startsWith('reportm_')) {
+        const senderId = callbackData.split('_')[1];
+        
+        // 1. Delete message from partner
+        await fetch(`${TELEGRAM_API}${botToken}/deleteMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: userId, message_id: query.message.message_id })
+        });
+        
+        await answerCallbackQuery(botToken, query.id, '✅ Media berhasil dihapus dan dilaporkan ke Admin.', true);
+        
+        // 2. Extract file_id from query.message
+        let fileId = '';
+        let mediaEndpoint = '';
+        let mediaField = '';
+        
+        if (query.message.photo) {
+            mediaEndpoint = 'sendPhoto';
+            mediaField = 'photo';
+            fileId = query.message.photo[query.message.photo.length - 1].file_id;
+        } else if (query.message.video) {
+            mediaEndpoint = 'sendVideo';
+            mediaField = 'video';
+            fileId = query.message.video.file_id;
+        } else if (query.message.animation) {
+            mediaEndpoint = 'sendAnimation';
+            mediaField = 'animation';
+            fileId = query.message.animation.file_id;
+        } else if (query.message.video_note) {
+            mediaEndpoint = 'sendVideoNote';
+            mediaField = 'video_note';
+            fileId = query.message.video_note.file_id;
+        }
+        
+        // 3. Send to Admin
+        const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+        if (adminChatId && fileId) {
+            const adminKeyboard = {
+                inline_keyboard: [
+                    [{ text: '⚠️ Beri Peringatan', callback_data: `admin_warnm_${senderId}` }],
+                    [{ text: '🚫 Blokir User', callback_data: `admin_blockm_${senderId}` }]
+                ]
+            };
+            
+            const payload: any = {
+                chat_id: adminChatId,
+                [mediaField]: fileId,
+                reply_markup: adminKeyboard
+            };
+            
+            if (mediaField !== 'video_note') {
+                payload.caption = `⚠️ <b>LAPORAN MEDIA</b>\n\nPengirim: <code>${senderId}</code>\nMedia ini dilaporkan oleh partner.`;
+                payload.parse_mode = 'HTML';
+            } else {
+                await sendTelegramMessage(botToken, parseInt(adminChatId), `⚠️ <b>LAPORAN VIDEO NOTE</b>\nPengirim: <code>${senderId}</code>\nDi bawah ini adalah video bulat yang dilaporkan.`);
+            }
+            
+            await fetch(`${TELEGRAM_API}${botToken}/${mediaEndpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
+        return new Response('OK', { status: 200 });
+      }
+
+      if (callbackData.startsWith('admin_warnm_') || callbackData.startsWith('admin_blockm_')) {
+        const action = callbackData.startsWith('admin_warnm_') ? 'warn' : 'block';
+        const senderId = callbackData.split('_')[1];
+        
+        let fileId = '';
+        let mediaEndpoint = '';
+        let mediaField = '';
+        
+        if (query.message.photo) {
+            mediaEndpoint = 'sendPhoto';
+            mediaField = 'photo';
+            fileId = query.message.photo[query.message.photo.length - 1].file_id;
+        } else if (query.message.video) {
+            mediaEndpoint = 'sendVideo';
+            mediaField = 'video';
+            fileId = query.message.video.file_id;
+        } else if (query.message.animation) {
+            mediaEndpoint = 'sendAnimation';
+            mediaField = 'animation';
+            fileId = query.message.animation.file_id;
+        } else if (query.message.video_note) {
+            mediaEndpoint = 'sendVideoNote';
+            mediaField = 'video_note';
+            fileId = query.message.video_note.file_id;
+        }
+        
+        const { data, error } = await supabase.rpc('admin_process_media_report', {
+            p_sender_id: parseInt(senderId),
+            p_action: action
+        });
+        
+        if (data?.error === 'user_is_premium') {
+            const premMsg = `✅ User ${senderId} adalah pengguna Premium dan kebal dari aksi.`;
+            if (mediaField !== 'video_note') {
+                await fetch(`${TELEGRAM_API}${botToken}/editMessageCaption`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: query.message.chat.id,
+                        message_id: query.message.message_id,
+                        caption: premMsg,
+                        reply_markup: { inline_keyboard: [] }
+                    })
+                });
+            } else {
+                await sendTelegramMessage(botToken, query.message.chat.id, premMsg);
+            }
+            await answerCallbackQuery(botToken, query.id, 'User Premium kebal dari blokir.', false);
+            return new Response('OK', { status: 200 });
+        }
+        
+        if (fileId) {
+            const payload: any = {
+                chat_id: senderId,
+                [mediaField]: fileId
+            };
+            
+            if (action === 'warn') {
+                payload.reply_markup = {
+                    inline_keyboard: [[{ text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'buy_premium_normal_7' }]]
+                };
+                if (mediaField !== 'video_note') {
+                    payload.caption = `⚠️ <b>PERINGATAN DARI ADMIN</b>\n\nMedia yang Anda kirim telah dilaporkan dan melanggar aturan komunitas. Harap patuhi aturan atau akun Anda akan diblokir.`;
+                    payload.parse_mode = 'HTML';
+                } else {
+                    await sendTelegramMessage(botToken, parseInt(senderId), `⚠️ <b>PERINGATAN DARI ADMIN</b>\nVideo Note yang Anda kirim melanggar aturan komunitas.`, payload.reply_markup);
+                }
+            } else {
+                payload.reply_markup = {
+                    inline_keyboard: [[
+                        { text: '💸 Bayar Denda', callback_data: 'pay_fine' },
+                        { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'buy_premium_normal_7' }
+                    ]]
+                };
+                if (mediaField !== 'video_note') {
+                    payload.caption = `🚫 <b>AKUN DIBLOKIR</b>\n\nAkun Anda telah diblokir otomatis selama 15 hari oleh Admin karena mengirim media terlarang.`;
+                    payload.parse_mode = 'HTML';
+                } else {
+                    await sendTelegramMessage(botToken, parseInt(senderId), `🚫 <b>AKUN DIBLOKIR</b>\nVideo Note yang Anda kirim melanggar aturan.`, payload.reply_markup);
+                }
+                
+                // Disconnect their chat if active
+                await supabase.rpc('search_or_next_partner', { p_user_id: parseInt(senderId), p_is_next: true });
+            }
+            
+            await fetch(`${TELEGRAM_API}${botToken}/${mediaEndpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
+        
+        // Remove keyboard and update text for admin
+        const newCaption = action === 'warn' ? `✅ Peringatan telah dikirim ke ${senderId}.` : `✅ User ${senderId} telah diblokir.`;
+        
+        if (mediaField !== 'video_note') {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageCaption`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: query.message.chat.id,
+                    message_id: query.message.message_id,
+                    caption: newCaption,
+                    reply_markup: { inline_keyboard: [] }
+                })
+            });
+        } else {
+            // Can't edit video note, just send a message
+            await sendTelegramMessage(botToken, query.message.chat.id, newCaption);
+        }
+        
+        await answerCallbackQuery(botToken, query.id, 'Berhasil', false);
+        return new Response('OK', { status: 200 });
       }
 
       if (callbackData.startsWith('reveal_')) {
@@ -5656,35 +5842,58 @@ if (callbackData.startsWith('accept_reconnect_') || callbackData.startsWith('rej
                 await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
                 }
               } else {
+                let mediaEndpoint = '';
+                let mediaField = '';
+                let fileId = '';
 
-                
-                // Media ini support caption, jadi kita 'inject' quote ke dalam caption
-                const originalCaption = message.caption || "";
-                
-                if (isReply) {
-                    let finalCaption = `${visualQuote}${originalCaption}`;
-    
-                    // Potong jika terlalu panjang (Limit Telegram 1024)
-                    if (finalCaption.length > 1000) {
-                        finalCaption = finalCaption.substring(0, 997) + "...";
-                    }
-                    
-                    // Gunakan copyMessage dengan caption override
-                    await fetch(`${TELEGRAM_API}${botToken}/copyMessage`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chat_id: partnerId,
-                            from_chat_id: userId,
-                            message_id: message.message_id,
-                            caption: finalCaption,
-                            parse_mode: 'HTML'
-                        })
-                    });
-                } else {
-                    // Bukan reply, copy biasa (mempertahankan caption asli user jika ada)
-                    await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
+                if (message.photo) {
+                    mediaEndpoint = 'sendPhoto';
+                    mediaField = 'photo';
+                    fileId = message.photo[message.photo.length - 1].file_id;
+                } else if (message.video) {
+                    mediaEndpoint = 'sendVideo';
+                    mediaField = 'video';
+                    fileId = message.video.file_id;
+                } else if (message.animation) {
+                    mediaEndpoint = 'sendAnimation';
+                    mediaField = 'animation';
+                    fileId = message.animation.file_id;
+                } else if (message.video_note) {
+                    mediaEndpoint = 'sendVideoNote';
+                    mediaField = 'video_note';
+                    fileId = message.video_note.file_id;
                 }
+
+                const originalCaption = message.caption || "";
+                let finalCaption = isReply ? `${visualQuote}${originalCaption}` : originalCaption;
+                if (finalCaption.length > 1000) {
+                    finalCaption = finalCaption.substring(0, 997) + "...";
+                }
+
+                const { data: senderData } = await supabase.from('telegram_users').select('premium_until').eq('id', userId).single();
+                const isPremiumSender = senderData?.premium_until && new Date(senderData.premium_until) > new Date();
+                
+                const reportMarkup = isPremiumSender 
+                    ? { inline_keyboard: [] } 
+                    : { inline_keyboard: [[{ text: '🗑️ Hapus & Laporkan', callback_data: `reportm_${userId}` }]] };
+                
+                const bodyPayload: any = {
+                    chat_id: partnerId,
+                    [mediaField]: fileId,
+                    reply_markup: reportMarkup
+                };
+
+                if (!message.video_note) {
+                    bodyPayload.caption = finalCaption;
+                    if (finalCaption) bodyPayload.parse_mode = 'HTML';
+                    bodyPayload.has_spoiler = true;
+                }
+
+                await fetch(`${TELEGRAM_API}${botToken}/${mediaEndpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bodyPayload)
+                });
             }
         
             }
