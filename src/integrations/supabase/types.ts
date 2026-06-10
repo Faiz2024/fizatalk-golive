@@ -788,6 +788,10 @@ export type Database = {
       }
     }
     Functions: {
+      admin_process_media_report: {
+        Args: { p_action: string; p_sender_id: number }
+        Returns: Json
+      }
       apply_daily_penalty_decay: { Args: never; Returns: number }
       bridge_exec_sql: {
         Args: { p_params?: Json; p_sql: string }
