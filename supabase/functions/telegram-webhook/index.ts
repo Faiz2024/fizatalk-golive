@@ -2395,6 +2395,7 @@ interface StickerPackData {
   status: string;
   fiza_pack_name: string | null;
   submission_count: number;
+  submitter_ids?: number[];
 }
 // Cache in-memory untuk memutus query berulang
 const stickerPackCache = new Map<string, StickerPackData>();
@@ -2642,12 +2643,12 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
   // 4. Jika tidak ada di cache, sinkronkan ke DB
   if (!packData) {
     const { data } = await supabase.from('sticker_packs')
-      .select('status, fiza_pack_name, submission_count')
+      .select('status, fiza_pack_name, submission_count, submitter_ids')
       .eq('pack_name', packName)
       .single();
       
     if (data) {
-      packData = { status: data.status, fiza_pack_name: data.fiza_pack_name, submission_count: data.submission_count || 1 };
+      packData = { status: data.status, fiza_pack_name: data.fiza_pack_name, submission_count: data.submission_count || 1, submitter_ids: data.submitter_ids || [] };
       stickerPackCache.set(packName, packData); 
     }
   }
@@ -2670,20 +2671,30 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
     }
     
     if (packData.status === 'pending') {
-      packData.submission_count = (packData.submission_count || 1) + 1;
-      
-      // Update DB tanpa menunggu
-      supabase.from('sticker_packs')
-        .update({ submission_count: packData.submission_count })
-        .eq('pack_name', packName)
-        .then();
+      const submitters = packData.submitter_ids || [];
+      const isNewSubmitter = !submitters.includes(chatId);
+
+      if (isNewSubmitter) {
+        submitters.push(chatId);
+        packData.submitter_ids = submitters;
+        packData.submission_count = submitters.length;
         
-      stickerPackCache.set(packName, packData);
+        // Update DB tanpa menunggu
+        supabase.from('sticker_packs')
+          .update({ submission_count: packData.submission_count, submitter_ids: packData.submitter_ids })
+          .eq('pack_name', packName)
+          .then();
+          
+        stickerPackCache.set(packName, packData);
+      } else {
+        // Tetap update cache jika ada perubahan (meski tidak seharusnya)
+        stickerPackCache.set(packName, packData);
+      }
 
       await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker tersebut sedang ditinjau oleh admin.\n💡 <i>Rekomendasi: Gunakan stiker dari channel @FizaStick terlebih dahulu.</i>", premiumUpgradeKeyboard);
       
       const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
-      if (adminChatId) {
+      if (adminChatId && isNewSubmitter) {
         const { data: packDb } = await supabase.from('sticker_packs').select('id').eq('pack_name', packName).single();
         if (packDb) {
           await fetch(`${TELEGRAM_API}${botToken}/sendSticker`, {
@@ -2709,11 +2720,11 @@ async function handleStickerReview(supabase: any, botToken: string, message: any
 
   // 6. PACK BARU (Belum Terdaftar) -> Simpan Requester dan Minta Review
   const { data: newPack, error } = await supabase.from('sticker_packs')
-    .insert({ pack_name: packName, status: 'pending', requester_id: chatId })
+    .insert({ pack_name: packName, status: 'pending', requester_id: chatId, submitter_ids: [chatId], submission_count: 1 })
     .select('id').single();
 
   if (!error && newPack) {
-    stickerPackCache.set(packName, { status: 'pending', fiza_pack_name: null }); 
+    stickerPackCache.set(packName, { status: 'pending', fiza_pack_name: null, submission_count: 1, submitter_ids: [chatId] }); 
     await sendTelegramMessage(botToken, chatId, "⏳ Pack stiker tersebut akan ditinjau oleh admin.\n💡 <i>Rekomendasi: Gunakan stiker dari channel @FizaStick terlebih dahulu.</i>", premiumUpgradeKeyboard);
 
     const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
