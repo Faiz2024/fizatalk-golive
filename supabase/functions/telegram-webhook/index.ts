@@ -159,7 +159,7 @@ function formatRemainingTime(blockedUntilStr?: string): string {
   const diffMs = blockedUntil.getTime() - now.getTime();
   if (diffMs <= 0) return '0 menit';
   
-  const diffMinutes = Math.ceil(diffMs / 60000);
+  const diffMinutes = Math.floor(diffMs / 60000);
   if (diffMinutes < 60) {
     return `${diffMinutes} menit`;
   }
@@ -486,12 +486,12 @@ async function handleSuccessfulStarsPayment(
 
       // Update user
       await supabase.from('telegram_users')
-        .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0 })
+        .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0, spam_warnings: 0, spam_warning_until: null, unacknowledged_reports_count: 0 })
         .eq('id', userId);
 
       // Unblock if blocked
       await supabase.from('blocked_users')
-        .update({ is_active: false })
+        .update({ is_active: false, unblocked_at: new Date().toISOString() })
         .eq('user_id', userId);
 
       // Record in premium_requests
@@ -569,7 +569,7 @@ async function handleSuccessfulStarsPayment(
 
       // Reset penalty
       await supabase.from('telegram_users')
-        .update({ penalty_points: 0 })
+        .update({ penalty_points: 0, spam_warnings: 0, spam_warning_until: null, unacknowledged_reports_count: 0 })
         .eq('id', userId);
 
       // Record in pending_transactions
@@ -1030,12 +1030,12 @@ async function handleCSApproveReject(
       }
 
       await supabase.from('telegram_users')
-        .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0 })
+        .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0, spam_warnings: 0, spam_warning_until: null, unacknowledged_reports_count: 0 })
         .eq('id', userId);
 
       // Unblock if blocked
       await supabase.from('blocked_users')
-        .update({ is_active: false }).eq('user_id', userId);
+        .update({ is_active: false, unblocked_at: new Date().toISOString() }).eq('user_id', userId);
 
       // Record transaction
       await supabase.from('coin_transactions').insert({
@@ -1112,7 +1112,7 @@ async function handleCSApproveReject(
 
       // Reset penalty
       await supabase.from('telegram_users')
-        .update({ penalty_points: 0 }).eq('id', userId);
+        .update({ penalty_points: 0, spam_warnings: 0, spam_warning_until: null, unacknowledged_reports_count: 0 }).eq('id', userId);
 
       await supabase.from('coin_transactions').insert({
         user_id: userId, amount: -fineReq.amount, type: 'fine_payment',
