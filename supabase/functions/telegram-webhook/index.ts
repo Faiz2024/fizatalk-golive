@@ -156,7 +156,12 @@ function formatRemainingTime(blockedUntilStr?: string): string {
   if (!blockedUntilStr) return '15 hari';
   const blockedUntil = new Date(blockedUntilStr);
   const now = new Date();
-  const diffMs = blockedUntil.getTime() - now.getTime();
+  let diffMs = blockedUntil.getTime() - now.getTime();
+  
+  if (diffMs > 0) {
+    diffMs -= 60000;
+  }
+  
   if (diffMs <= 0) return '0 menit';
   
   const diffMinutes = Math.floor(diffMs / 60000);
