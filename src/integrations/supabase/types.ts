@@ -511,6 +511,7 @@ export type Database = {
           requester_id: number | null
           status: string
           submission_count: number
+          submitter_ids: number[] | null
           updated_at: string | null
         }
         Insert: {
@@ -521,6 +522,7 @@ export type Database = {
           requester_id?: number | null
           status?: string
           submission_count?: number
+          submitter_ids?: number[] | null
           updated_at?: string | null
         }
         Update: {
@@ -531,6 +533,7 @@ export type Database = {
           requester_id?: number | null
           status?: string
           submission_count?: number
+          submitter_ids?: number[] | null
           updated_at?: string | null
         }
         Relationships: []
