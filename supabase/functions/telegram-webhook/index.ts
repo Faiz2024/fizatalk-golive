@@ -4929,7 +4929,7 @@ Deno.serve(async (req) => {
       if (callbackData === 'chat_next') {
         await answerCallbackQuery(botToken, query.id, '⏭️ Mencari partner baru...');
 
-        // === FIX RACE CONDITION ===
+        // === FIX RACE CONDITION & DOUBLE MESSAGE ===
         // Pre-fetch data user SEBELUM RPC agar bisa mengirim pesan "Mengakhiri chat..."
         // SEBELUM user dimasukkan ke waiting_queue oleh RPC.
         // Ini mencegah user lain mendapatkan match dan mengirim "Partner ditemukan!"
@@ -4940,36 +4940,48 @@ Deno.serve(async (req) => {
           .eq('id', userId)
           .single();
 
+        const { data: blockedData } = await supabase
+          .from('blocked_users')
+          .select('is_active')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .limit(1)
+          .maybeSingle();
+
         const preNextPenalty = preNextData?.penalty_points || 0;
         const preNextIsPremium = preNextData?.premium_until && new Date(preNextData.premium_until) > new Date();
-        const preNextFilterInfo = preNextIsPremium ? {
-          target_gender: preNextData?.target_gender,
-          target_location: preNextData?.target_location
-        } : undefined;
+        const isUserBlocked = blockedData?.is_active || (preNextPenalty >= 100 && !preNextIsPremium);
 
-        // Bangun keyboard Laporkan/Asik/Baik untuk partner lama
-        const preNextInlineKeyboard: any[][] = [];
-        if (preNextData?.partner_id && preNextPenalty < 40) {
-          preNextInlineKeyboard.push([
-            { text: '🚩 Laporkan', callback_data: `report_user_${preNextData.partner_id}` },
-            { text: '😎 Asik', callback_data: `rate_asik_${preNextData.partner_id}` },
-            { text: '👍 Baik', callback_data: `rate_baik_${preNextData.partner_id}` }
-          ]);
-        }
-        if (preNextPenalty >= 40 && !preNextIsPremium) {
-          preNextInlineKeyboard.push([
-            { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
-          ]);
-        }
-        const preNextKeyboard = preNextInlineKeyboard.length > 0 ? { inline_keyboard: preNextInlineKeyboard } : undefined;
+        if (!isUserBlocked) {
+          const preNextFilterInfo = preNextIsPremium ? {
+            target_gender: preNextData?.target_gender,
+            target_location: preNextData?.target_location
+          } : undefined;
 
-        // Kirim pesan "Mengakhiri chat dan mencari partner baru..." SEBELUM RPC
-        const preNextReputation = preNextPenalty >= 40 ? {
-          status: preNextPenalty >= 70 ? 'critical' : 'warning',
-          message: null,
-          penalty_points: preNextPenalty
-        } : undefined;
-        await sendSearchingMessage(botToken, userId, preNextReputation, true, false, preNextKeyboard, preNextFilterInfo);
+          // Bangun keyboard Laporkan/Asik/Baik untuk partner lama
+          const preNextInlineKeyboard: any[][] = [];
+          if (preNextData?.partner_id && preNextPenalty < 40) {
+            preNextInlineKeyboard.push([
+              { text: '🚩 Laporkan', callback_data: `report_user_${preNextData.partner_id}` },
+              { text: '😎 Asik', callback_data: `rate_asik_${preNextData.partner_id}` },
+              { text: '👍 Baik', callback_data: `rate_baik_${preNextData.partner_id}` }
+            ]);
+          }
+          if (preNextPenalty >= 40 && !preNextIsPremium) {
+            preNextInlineKeyboard.push([
+              { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
+            ]);
+          }
+          const preNextKeyboard = preNextInlineKeyboard.length > 0 ? { inline_keyboard: preNextInlineKeyboard } : undefined;
+
+          // Kirim pesan "Mengakhiri chat dan mencari partner baru..." SEBELUM RPC
+          const preNextReputation = preNextPenalty >= 40 ? {
+            status: preNextPenalty >= 70 ? 'critical' : 'warning',
+            message: null,
+            penalty_points: preNextPenalty
+          } : undefined;
+          await sendSearchingMessage(botToken, userId, preNextReputation, true, false, preNextKeyboard, preNextFilterInfo);
+        }
 
         // SEKARANG baru panggil RPC (user aman masuk queue setelah pesan terkirim)
         const { success, handled, result: searchResult } = await comprehensiveSearchAction(
