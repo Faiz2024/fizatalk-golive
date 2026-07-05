@@ -2999,7 +2999,7 @@ async function handleComprehensiveSearchResult(
     // skipIfLowPenalty = true: jika penalty < 40 dan matched, lewati pesan pencarian
     if (isNext || penaltyPoints >= 40) {
       await sendSearchingMessage(botToken, userId, result.reputation, isNext, false, endChatKeyboard, filterInfo);
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
   }
   // Jika penalty < 40 dan matched: langsung ke notifikasi pairing (lewati pesan pencarian)
@@ -3485,46 +3485,7 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
     .eq('id', userId)
     .single();
 
-  const { data: blockedData } = await supabase
-    .from('blocked_users')
-    .select('is_active')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .limit(1)
-    .maybeSingle();
 
-  const preNextPenalty = preNextData?.penalty_points || 0;
-  const preNextIsPremium = preNextData?.premium_until && new Date(preNextData.premium_until) > new Date();
-  const isUserBlocked = blockedData?.is_active || (preNextPenalty >= 100 && !preNextIsPremium);
-
-  if (!isUserBlocked) {
-    const preNextFilterInfo = preNextIsPremium ? {
-      target_gender: preNextData?.target_gender,
-      target_location: preNextData?.target_location
-    } : undefined;
-
-    const preNextInlineKeyboard: any[][] = [];
-    if (preNextData?.partner_id && preNextPenalty < 40) {
-      preNextInlineKeyboard.push([
-        { text: '🚩 Laporkan', callback_data: `report_user_${preNextData.partner_id}` },
-        { text: '😎 Asik', callback_data: `rate_asik_${preNextData.partner_id}` },
-        { text: '👍 Baik', callback_data: `rate_baik_${preNextData.partner_id}` }
-      ]);
-    }
-    if (preNextPenalty >= 40 && !preNextIsPremium) {
-      preNextInlineKeyboard.push([
-        { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
-      ]);
-    }
-    const preNextKeyboard = preNextInlineKeyboard.length > 0 ? { inline_keyboard: preNextInlineKeyboard } : undefined;
-
-    const preNextReputation = preNextPenalty >= 40 ? {
-      status: preNextPenalty >= 70 ? 'critical' : 'warning',
-      message: null,
-      penalty_points: preNextPenalty
-    } : undefined;
-    await sendSearchingMessage(botToken, userId, preNextReputation, true, false, preNextKeyboard, preNextFilterInfo);
-  }
 
   const targetIdParsed = targetPartnerId ? parseInt(targetPartnerId) : (preNextData?.partner_id || null);
   const { success, handled, result: searchResult } = await comprehensiveSearchAction(
@@ -3554,7 +3515,7 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
         return;
       }
     }
-    await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true, true);
+    await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true, false);
   }
 }
 
@@ -6060,8 +6021,7 @@ Deno.serve(async (req) => {
         );
       }
       else if (text === '/next') {
-        // Jika tidak chatting, langsung cari partner
-        await sendTelegramMessage(botToken, userId, '🔍 Mencari partner...');
+        // Jika tidak chatting, langsung cari partner (pesan pencarian dikirim oleh autoSearchPartner)
         await searchPartnerWithQueueCheck(supabase, botToken, userId);
       }
       else if (text === '/stop') {
