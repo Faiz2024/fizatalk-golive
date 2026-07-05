@@ -3587,8 +3587,6 @@ async function executeChatStop(supabase: any, botToken: string, userId: number, 
 }
 
 Deno.serve(async (req) => {
-
-Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
