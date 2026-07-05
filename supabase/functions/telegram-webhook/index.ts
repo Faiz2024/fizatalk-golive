@@ -2768,16 +2768,17 @@ async function comprehensiveSearchAction(
   userId: number,
   username: string | undefined,
   firstName: string | undefined,
-  isNext: boolean = false
+  isNext: boolean = false,
+  targetPartnerId: number | null = null
 ): Promise<{ success: boolean; handled: boolean; result?: ComprehensiveSearchResult }> {
-
 
   // SINGLE RPC CALL - handles everything!
   const { data, error } = await supabase.rpc('comprehensive_search_action', {
     p_user_id: userId,
     p_username: username || null,
     p_first_name: firstName || null,
-    p_is_next: isNext
+    p_is_next: isNext,
+    p_target_partner_id: targetPartnerId
   });
 
   if (error) {
