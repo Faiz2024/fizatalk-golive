@@ -2490,8 +2490,8 @@ function isButtonOnCooldown(userId: number, action: string): boolean {
 // Helper: Get action type dari callback data
 function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData === 'search_partner' || callbackData.startsWith('search_partner:')) return 'search_partner';
-  if (callbackData === 'chat_next') return 'chat_next';
-  if (callbackData === 'chat_stop') return 'chat_stop';
+  if (callbackData.startsWith('chat_next')) return 'chat_next';
+  if (callbackData.startsWith('chat_stop')) return 'chat_stop';
   if (callbackData.startsWith('send_gift_')) return 'send_gift';
   if (callbackData.startsWith('init_topup_')) return 'init_topup';
   if (callbackData.startsWith('buy_premium_')) return 'buy_premium';
@@ -3084,11 +3084,11 @@ async function sendPairingNotifications(
   const user2IsPremium = !!(user2PremiumUntil && new Date(user2PremiumUntil) > new Date());
 
   // Build chat action keyboard
-  const buildChatKeyboard = (isPremium: boolean) => ({
+  const buildChatKeyboard = (isPremium: boolean, partnerId: number) => ({
     inline_keyboard: [
       [
-        { text: '🛑 Stop', callback_data: 'chat_stop' },
-        { text: '⏭️ Next', callback_data: 'chat_next' }
+        { text: '🛑 Stop', callback_data: `chat_stop_${partnerId}` },
+        { text: '⏭️ Next', callback_data: `chat_next_${partnerId}` }
       ],
       [
         { text: '🎯 Filter Gender', callback_data: 'change_target' },
@@ -3132,14 +3132,14 @@ async function sendPairingNotifications(
       user1Id,
       // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
       `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
-      buildChatKeyboard(user1IsPremium)
+      buildChatKeyboard(user1IsPremium, user2Id)
     ),
     sendTelegramMessage(
       botToken,
       user2Id,
       // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
       `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
-      buildChatKeyboard(user2IsPremium)
+      buildChatKeyboard(user2IsPremium, user1Id)
     )
   ]);
 }
@@ -3472,6 +3472,121 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
 }
 
 
+
+async function executeChatNext(supabase: any, botToken: string, userId: number, from: any, queryId: string | null, targetPartnerId: string) {
+  if (queryId) {
+    await answerCallbackQuery(botToken, queryId, '⏭️ Mencari partner baru...');
+  }
+
+  const { data: preNextData } = await supabase
+    .from('telegram_users')
+    .select('partner_id, penalty_points, target_gender, target_location, premium_until')
+    .eq('id', userId)
+    .single();
+
+  const { data: blockedData } = await supabase
+    .from('blocked_users')
+    .select('is_active')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+
+  const preNextPenalty = preNextData?.penalty_points || 0;
+  const preNextIsPremium = preNextData?.premium_until && new Date(preNextData.premium_until) > new Date();
+  const isUserBlocked = blockedData?.is_active || (preNextPenalty >= 100 && !preNextIsPremium);
+
+  if (!isUserBlocked) {
+    const preNextFilterInfo = preNextIsPremium ? {
+      target_gender: preNextData?.target_gender,
+      target_location: preNextData?.target_location
+    } : undefined;
+
+    const preNextInlineKeyboard: any[][] = [];
+    if (preNextData?.partner_id && preNextPenalty < 40) {
+      preNextInlineKeyboard.push([
+        { text: '🚩 Laporkan', callback_data: `report_user_${preNextData.partner_id}` },
+        { text: '😎 Asik', callback_data: `rate_asik_${preNextData.partner_id}` },
+        { text: '👍 Baik', callback_data: `rate_baik_${preNextData.partner_id}` }
+      ]);
+    }
+    if (preNextPenalty >= 40 && !preNextIsPremium) {
+      preNextInlineKeyboard.push([
+        { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
+      ]);
+    }
+    const preNextKeyboard = preNextInlineKeyboard.length > 0 ? { inline_keyboard: preNextInlineKeyboard } : undefined;
+
+    const preNextReputation = preNextPenalty >= 40 ? {
+      status: preNextPenalty >= 70 ? 'critical' : 'warning',
+      message: null,
+      penalty_points: preNextPenalty
+    } : undefined;
+    await sendSearchingMessage(botToken, userId, preNextReputation, true, false, preNextKeyboard, preNextFilterInfo);
+  }
+
+  const targetIdParsed = targetPartnerId ? parseInt(targetPartnerId) : (preNextData?.partner_id || null);
+  const { success, handled, result: searchResult } = await comprehensiveSearchAction(
+    supabase, botToken, userId,
+    from?.username, from?.first_name,
+    true, // isNext = true
+    targetIdParsed
+  );
+
+  if (handled) {
+    return;
+  }
+
+  if (success && searchResult) {
+    if (searchResult.action === 'show_promo') {
+      await executePromoAction(supabase, botToken, userId);
+      return;
+    }
+    if (searchResult.action === 'needs_channel_check') {
+      const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
+      if (!isMember) {
+        await sendJoinChannelMessage(botToken, userId, botNotAdmin);
+        return;
+      } else {
+        await supabase.from('telegram_users').update({ is_channel_member: true }).eq('id', userId);
+        await searchPartnerWithQueueCheck(supabase, botToken, userId);
+        return;
+      }
+    }
+    await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true, true);
+  }
+}
+
+async function executeChatStop(supabase: any, botToken: string, userId: number, queryId: string | null, targetPartnerId: string) {
+  if (queryId) {
+    await answerCallbackQuery(botToken, queryId, '🛑 Chat diakhiri');
+  }
+
+  const { data: stopUserData } = await supabase
+    .from('telegram_users')
+    .select('state')
+    .eq('id', userId)
+    .single();
+
+  if (stopUserData?.state !== 'chatting') {
+    const startKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '🔍 Cari Partner', callback_data: 'search_partner' }
+        ],
+        [
+          { text: '🎯 Filter Gender', callback_data: 'change_target' },
+          { text: '📍 Filter Lokasi', callback_data: 'change_location' }
+        ]
+      ]
+    };
+    await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam chat. Pilih aksi:', startKeyboard);
+    return;
+  }
+  await endChat(supabase, botToken, userId);
+}
+
+Deno.serve(async (req) => {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -4359,10 +4474,10 @@ Deno.serve(async (req) => {
             inline_keyboard: [
               [
                 isChatting
-                  ? { text: '🛑 Stop', callback_data: 'chat_stop' }
+                  ? { text: '🛑 Stop', callback_data: `chat_stop_${userState?.partner_id || ''}` }
                   : { text: '🔍 Cari Partner', callback_data: 'search_partner' },
                 isChatting
-                  ? { text: '⏭️ Next Partner', callback_data: 'chat_next' }
+                  ? { text: '⏭️ Next Partner', callback_data: `chat_next_${userState?.partner_id || ''}` }
                   : null
               ].filter(Boolean), // Filter akan otomatis membuang nilai null
               [
@@ -4415,10 +4530,10 @@ Deno.serve(async (req) => {
             inline_keyboard: [
               [
                 isChatting
-                  ? { text: '🛑 Stop', callback_data: 'chat_stop' }
+                  ? { text: '🛑 Stop', callback_data: `chat_stop_${userState?.partner_id || ''}` }
                   : { text: '🔍 Cari Partner', callback_data: 'search_partner' },
                 isChatting
-                  ? { text: '⏭️ Next Partner', callback_data: 'chat_next' }
+                  ? { text: '⏭️ Next Partner', callback_data: `chat_next_${userState?.partner_id || ''}` }
                   : null
               ].filter(Boolean),
               [
@@ -4926,136 +5041,20 @@ Deno.serve(async (req) => {
       }
 
       // --- LOGIKA CHAT NEXT (INLINE BUTTON) - SATU PANGGILAN RPC ---
-      if (callbackData === 'chat_next') {
-        await answerCallbackQuery(botToken, query.id, '⏭️ Mencari partner baru...');
-
-        // === FIX RACE CONDITION & DOUBLE MESSAGE ===
-        // Pre-fetch data user SEBELUM RPC agar bisa mengirim pesan "Mengakhiri chat..."
-        // SEBELUM user dimasukkan ke waiting_queue oleh RPC.
-        // Ini mencegah user lain mendapatkan match dan mengirim "Partner ditemukan!"
-        // sebelum pesan "Mengakhiri chat..." sempat terkirim.
-        const { data: preNextData } = await supabase
-          .from('telegram_users')
-          .select('partner_id, penalty_points, target_gender, target_location, premium_until')
-          .eq('id', userId)
-          .single();
-
-        const { data: blockedData } = await supabase
-          .from('blocked_users')
-          .select('is_active')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .limit(1)
-          .maybeSingle();
-
-        const preNextPenalty = preNextData?.penalty_points || 0;
-        const preNextIsPremium = preNextData?.premium_until && new Date(preNextData.premium_until) > new Date();
-        const isUserBlocked = blockedData?.is_active || (preNextPenalty >= 100 && !preNextIsPremium);
-
-        if (!isUserBlocked) {
-          const preNextFilterInfo = preNextIsPremium ? {
-            target_gender: preNextData?.target_gender,
-            target_location: preNextData?.target_location
-          } : undefined;
-
-          // Bangun keyboard Laporkan/Asik/Baik untuk partner lama
-          const preNextInlineKeyboard: any[][] = [];
-          if (preNextData?.partner_id && preNextPenalty < 40) {
-            preNextInlineKeyboard.push([
-              { text: '🚩 Laporkan', callback_data: `report_user_${preNextData.partner_id}` },
-              { text: '😎 Asik', callback_data: `rate_asik_${preNextData.partner_id}` },
-              { text: '👍 Baik', callback_data: `rate_baik_${preNextData.partner_id}` }
-            ]);
-          }
-          if (preNextPenalty >= 40 && !preNextIsPremium) {
-            preNextInlineKeyboard.push([
-              { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
-            ]);
-          }
-          const preNextKeyboard = preNextInlineKeyboard.length > 0 ? { inline_keyboard: preNextInlineKeyboard } : undefined;
-
-          // Kirim pesan "Mengakhiri chat dan mencari partner baru..." SEBELUM RPC
-          const preNextReputation = preNextPenalty >= 40 ? {
-            status: preNextPenalty >= 70 ? 'critical' : 'warning',
-            message: null,
-            penalty_points: preNextPenalty
-          } : undefined;
-          await sendSearchingMessage(botToken, userId, preNextReputation, true, false, preNextKeyboard, preNextFilterInfo);
-        }
-
-        // SEKARANG baru panggil RPC (user aman masuk queue setelah pesan terkirim)
-        const { success, handled, result: searchResult } = await comprehensiveSearchAction(
-          supabase, botToken, userId,
-          query.from.username, query.from.first_name,
-          true // isNext = true
-        );
-
-        if (handled) {
-          // RPC sudah menangani notifikasi (banned, blocked, error)
-          return new Response('OK', { status: 200 });
-        }
-
-        if (success && searchResult) {
-          // 1. TANGANI PROMO DARI DATABASE (Cegah Partner Nyangkut)
-          if (searchResult.action === 'show_promo') {
-            await executePromoAction(supabase, botToken, userId);
-            return new Response('OK', { status: 200 });
-          }
-
-          // TANGANI CHANNEL CHECK
-          if (searchResult.action === 'needs_channel_check') {
-            const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
-            if (!isMember) {
-              await sendJoinChannelMessage(botToken, userId, botNotAdmin);
-              return new Response('OK', { status: 200 });
-            } else {
-              // UPDATE FLAG AGAR TIDAK DICEK LAGI SEUMUR HIDUP
-              await supabase.from('telegram_users').update({ is_channel_member: true }).eq('id', userId);
-
-              // Masukkan ke antrean
-              await searchPartnerWithQueueCheck(supabase, botToken, userId);
-              return new Response('OK', { status: 200 });
-            }
-          }
-
-          // 3. JIKA BUKAN PROMO & SUDAH JOIN CHANNEL -> NORMAL MATCHING
-          // searchMessageAlreadySent = true: pesan sudah dikirim di atas sebelum RPC
-          await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true, true);
-        }
-
+      if (callbackData.startsWith('chat_next')) {
+        const targetPartnerId = callbackData.replace('chat_next_', '') || '';
+        await executeChatNext(supabase, botToken, userId, query.from, query.id, targetPartnerId);
         return new Response('OK', { status: 200 });
       }
 
       // --- LOGIKA CHAT STOP (INLINE BUTTON) ---
-      if (callbackData === 'chat_stop') {
-
-        // Ambil state user terlebih dahulu
-        const { data: stopUserData } = await supabase
-          .from('telegram_users')
-          .select('state')
-          .eq('id', userId)
-          .single();
-
-        await answerCallbackQuery(botToken, query.id, '🛑 Chat diakhiri');
-
-        if (stopUserData?.state !== 'chatting') {
-          const startKeyboard = {
-            inline_keyboard: [
-              [
-                { text: '🔍 Cari Partner', callback_data: 'search_partner' }
-              ],
-              [
-                { text: '🎯 Filter Gender', callback_data: 'change_target' },
-                { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-              ]
-            ]
-          };
-          await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam chat. Pilih aksi:', startKeyboard);
-          return new Response('OK', { status: 200 });
-        }
-        await endChat(supabase, botToken, userId);
+      if (callbackData.startsWith('chat_stop')) {
+        const targetPartnerId = callbackData.replace('chat_stop_', '') || '';
+        await executeChatStop(supabase, botToken, userId, query.id, targetPartnerId);
         return new Response('OK', { status: 200 });
       }
+
+
 
       // --- LOGIKA RECONNECT PARTNER (FITUR PREMIUM) ---
       if (callbackData.startsWith('reconnect_')) {
@@ -5531,34 +5530,14 @@ Deno.serve(async (req) => {
       // 1. Cek dan Proses Command (Prioritas Utama saat chatting)
       if (text) {
         if (text === '/next') {
-          const chattingKeyboard = {
-            inline_keyboard: [
-              [
-                { text: '⏭️ Next', callback_data: 'chat_next' }
-              ],
-              [
-                { text: '🎯 Filter Gender', callback_data: 'change_target' },
-                { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-              ]
-            ]
-          };
-          await sendTelegramMessage(botToken, userId, '🔵 Kamu yakin ingin mangakhiri chat saat ini dan mencari partner baru?.\n\nPilih aksi:', chattingKeyboard);
+          const partnerId = currentUser?.partner_id || '';
+          await executeChatNext(supabase, botToken, userId, message.from, null, partnerId.toString());
           isCommand = true;
         } else if (text === '/stop') {
-
-          const chattingKeyboard = {
-            inline_keyboard: [
-              [
-                { text: '🛑 Stop', callback_data: 'chat_stop' }
-              ],
-              [
-                { text: '🎯 Filter Gender', callback_data: 'change_target' },
-                { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-              ]
-            ]
-          };
-          await sendTelegramMessage(botToken, userId, '🔵 Kamu yakin ingin mangakhiri chat?.\n\nPilih aksi:', chattingKeyboard);
+          const partnerId = currentUser?.partner_id || '';
+          await executeChatStop(supabase, botToken, userId, null, partnerId.toString());
           isCommand = true;
+
         } else if (text === '/start') {
           const chattingKeyboard = {
             inline_keyboard: [
@@ -6082,19 +6061,9 @@ Deno.serve(async (req) => {
         );
       }
       else if (text === '/next') {
-        // Jika tidak chatting, tampilkan menu start
-        const startKeyboard = {
-          inline_keyboard: [
-            [
-              { text: '🔍 Cari Partner', callback_data: 'search_partner' }
-            ],
-            [
-              { text: '🎯 Filter Gender', callback_data: 'change_target' },
-              { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-            ]
-          ]
-        };
-        await sendTelegramMessage(botToken, userId, '👋 Kamu belum dalam chat. Pilih aksi:', startKeyboard);
+        // Jika tidak chatting, langsung cari partner
+        await sendTelegramMessage(botToken, userId, '🔍 Mencari partner...');
+        await searchPartnerWithQueueCheck(supabase, botToken, userId);
       }
       else if (text === '/stop') {
         // Jika tidak chatting, tampilkan menu start
@@ -6109,8 +6078,9 @@ Deno.serve(async (req) => {
             ]
           ]
         };
-        await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam chat. Pilih aksi:', startKeyboard);
+        await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam obrolan. Pilih aksi:', startKeyboard);
       }
+
       else if (text === '/live') {
         // Panggil RPC Toggle
         const { data: toggleRes, error } = await supabase.rpc('toggle_tiktok_mode', {
