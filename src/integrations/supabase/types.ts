@@ -804,15 +804,26 @@ export type Database = {
       cancel_premium_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_topup_transaction: { Args: { p_user_id: number }; Returns: Json }
       cleanup_inactive_users: { Args: never; Returns: undefined }
-      comprehensive_search_action: {
-        Args: {
-          p_first_name?: string
-          p_is_next?: boolean
-          p_user_id: number
-          p_username?: string
-        }
-        Returns: Json
-      }
+      comprehensive_search_action:
+        | {
+            Args: {
+              p_first_name?: string
+              p_is_next?: boolean
+              p_user_id: number
+              p_username?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_first_name?: string
+              p_is_next?: boolean
+              p_target_partner_id?: number
+              p_user_id: number
+              p_username?: string
+            }
+            Returns: Json
+          }
       end_chat_comprehensive: { Args: { p_user_id: number }; Returns: Json }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
@@ -857,10 +868,18 @@ export type Database = {
         Args: { p_action: string; p_request_id: string }
         Returns: Json
       }
-      search_or_next_partner: {
-        Args: { p_is_next?: boolean; p_user_id: number }
-        Returns: Json
-      }
+      search_or_next_partner:
+        | { Args: { p_is_next?: boolean; p_user_id: number }; Returns: Json }
+        | {
+            Args: {
+              p_first_name?: string
+              p_is_next?: boolean
+              p_target_partner_id?: number
+              p_user_id: number
+              p_username?: string
+            }
+            Returns: Json
+          }
       set_user_payment_state: { Args: { p_user_id: number }; Returns: Json }
       should_show_channel_join: {
         Args: { p_user_id: number }
