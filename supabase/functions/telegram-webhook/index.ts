@@ -4815,14 +4815,21 @@ Deno.serve(async (req) => {
         let specialEffect = '';
         if (selectedGift.price >= 1000) specialEffect = '\n✨✨✨ <b>SULTAN VIBES!</b> ✨✨✨';
 
-        const PARTY_EFFECT_ID = "5046509860389126442";
+        let effectId = "5046509860389126442"; // Default: 🎉 Party
+        const isRose = selectedGift.name.toLowerCase().includes('mawar') || selectedGift.emoji === '🌹';
+
+        if (isRose) {
+          effectId = "5144581208506187511"; // ❤️ Love
+        } else if (selectedGift.price >= 1000) {
+          effectId = "5104841245755180586"; // 🔥 Fire
+        }
 
         await sendTelegramMessage(
           botToken,
           partnerId,
           `🎁 <b>GIFT DITERIMA!</b>${specialEffect}\n\nPartner mengirim: ${selectedGift.emoji} <b>${selectedGift.name}</b>\n💰 Kamu menerima: <b>+${payoutAmount} koin</b>`,
           undefined,
-          PARTY_EFFECT_ID
+          effectId
         );
 
         return new Response('OK', { status: 200 });
