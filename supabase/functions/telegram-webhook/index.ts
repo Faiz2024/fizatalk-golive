@@ -2136,7 +2136,12 @@ async function sendTelegramMessage(botToken: string, chatId: number, text: strin
         body: JSON.stringify(payload)
       });
       if (response.ok) return true;
-      if (response.status === 429) await new Promise(res => setTimeout(res, 1000)); // Rate limit handling
+      // Fallback: jika effect_id ditolak, kirim ulang tanpa effect agar pesan tetap sampai
+      if (response.status === 400 && messageEffectId) {
+        messageEffectId = undefined;
+        continue;
+      }
+      if (response.status === 429) await new Promise(res => setTimeout(res, 1000));
     } catch (error) {
       if (i === retries - 1) return false;
     }
@@ -4819,7 +4824,7 @@ Deno.serve(async (req) => {
         const isRose = selectedGift.name.toLowerCase().includes('mawar') || selectedGift.emoji === '🌹';
 
         if (isRose) {
-          effectId = "5144581208506187511"; // ❤️ Love
+          effectId = "5159385139981059251"; // ❤️ Heart
         } else if (selectedGift.price >= 1000) {
           effectId = "5104841245755180586"; // 🔥 Fire
         }
