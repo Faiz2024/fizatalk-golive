@@ -1,0 +1,2 @@
+-- Migration utama 20260706130000_add_channel_invite.sql harus diterapkan bersama dependensi dan 20260706121000_update_premium_report_and_promo.sql
+-- Jika file ini berukuran besar, kita cek isinya terlebih dahulu
