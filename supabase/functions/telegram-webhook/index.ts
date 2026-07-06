@@ -2510,8 +2510,8 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData === 'search_partner' || callbackData.startsWith('search_partner:')) return 'search_partner';
   if (callbackData.startsWith('chat_next')) return 'chat_next';
   if (callbackData.startsWith('chat_stop')) return 'chat_stop';
-  if (callbackData === 'channel_later_next') return 'search_partner'; // Sama dengan search
-  if (callbackData === 'channel_later_stop') return 'chat_stop'; // Sama dengan stop
+  if (callbackData === 'channel_later_next') return 'channel_later_next';
+  if (callbackData === 'channel_later_stop') return 'channel_later_stop';
   if (callbackData.startsWith('send_gift_')) return 'send_gift';
   if (callbackData.startsWith('init_topup_')) return 'init_topup';
   if (callbackData.startsWith('buy_premium_')) return 'buy_premium';
