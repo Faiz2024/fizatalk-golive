@@ -3400,12 +3400,54 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   });
 
   if (error) {
+    console.error('[END_CHAT_FAIL] rpc_error', error);
     return false;
   }
 
   const result = data as EndChatResult;
 
   if (!result.success) {
+    const failReason = (result as any).error;
+    console.warn('[END_CHAT_FAIL]', failReason, 'partner=', result.partner_id);
+
+    // already_reset = partner klik Stop/Next lebih dulu, state user sudah di-reset.
+    // Tetap kirim pesan penutup + rating keyboard supaya user dapat feedback.
+    // Partner sudah dinotifikasi oleh RPC-nya sendiri (mencegah duplikasi notif).
+    if (failReason === 'already_reset' && result.partner_id) {
+      const endChatKeyboard = buildEndChatKeyboard(result.partner_id);
+      await sendTelegramMessage(
+        botToken,
+        userId,
+        `👋 Anda mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
+        endChatKeyboard
+      );
+      return false;
+    }
+
+    // not_in_chat = state inkonsisten (chatting tanpa partner_id). Paksa reset guarded
+    // supaya user tidak terjebak, lalu tampilkan menu awal.
+    if (failReason === 'not_in_chat') {
+      await supabase
+        .from('telegram_users')
+        .update({ state: 'idle', partner_id: null })
+        .eq('id', userId)
+        .eq('state', 'chatting');
+
+      const startKeyboard = {
+        inline_keyboard: [
+          [
+            { text: '🔍 Cari Partner', callback_data: 'search_partner' }
+          ],
+          [
+            { text: '🎯 Filter Gender', callback_data: 'change_target' },
+            { text: '📍 Filter Lokasi', callback_data: 'change_location' }
+          ]
+        ]
+      };
+      await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam chat. Pilih aksi:', startKeyboard);
+      return false;
+    }
+
     return false;
   }
 
