@@ -2136,7 +2136,12 @@ async function sendTelegramMessage(botToken: string, chatId: number, text: strin
         body: JSON.stringify(payload)
       });
       if (response.ok) return true;
-      if (response.status === 429) await new Promise(res => setTimeout(res, 1000)); // Rate limit handling
+      // Fallback: jika effect_id ditolak, kirim ulang tanpa effect agar pesan tetap sampai
+      if (response.status === 400 && messageEffectId) {
+        messageEffectId = undefined;
+        continue;
+      }
+      if (response.status === 429) await new Promise(res => setTimeout(res, 1000));
     } catch (error) {
       if (i === retries - 1) return false;
     }
