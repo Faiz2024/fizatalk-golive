@@ -2271,6 +2271,23 @@ Setelah bergabung, tekan tombol "✅ Sudah Gabung" untuk melanjutkan.`;
   await sendTelegramMessage(botToken, userId, message, keyboard);
 }
 
+// Helper: Kirim pesan ajakan bergabung ke channel (soft invite, bukan mandatory)
+// source: 'next' | 'stop' - menentukan callback data tombol "Nanti Saja"
+async function sendChannelInviteMessage(botToken: string, userId: number, source: 'next' | 'stop'): Promise<void> {
+  const channelInviteText = `⚠️ <b>Sepertinya kamu belum bergabung dengan channel kami!</b>\n\n📢 Gabung channel resmi @FizaTalkCh sekarang untuk mendapatkan info terbaru dan update fitur menarik lainnya dari FizaTalk!`;
+
+  const callbackData = source === 'next' ? 'channel_later_next' : 'channel_later_stop';
+
+  const channelInviteKeyboard = {
+    inline_keyboard: [
+      [{ text: '✅ Gabung Sekarang', url: 'https://t.me/FizaTalkCh' }],
+      [{ text: '⏭️ Nanti Saja', callback_data: callbackData }]
+    ]
+  };
+
+  await sendTelegramMessage(botToken, userId, channelInviteText, channelInviteKeyboard);
+}
+
 // ============================================
 // RPC-BASED PARTNER MATCHING (Cost Optimized)
 // Menggunakan database RPC untuk mengurangi round-trip
@@ -2320,6 +2337,7 @@ interface ComprehensiveSearchResult {
     message: string | null;
     penalty_points: number;
   };
+  should_send_channel_invite?: boolean;
 }
 
 // HELPER: Build pesan pencarian dengan peringatan reputasi (jika ada)
@@ -2492,6 +2510,8 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData === 'search_partner' || callbackData.startsWith('search_partner:')) return 'search_partner';
   if (callbackData.startsWith('chat_next')) return 'chat_next';
   if (callbackData.startsWith('chat_stop')) return 'chat_stop';
+  if (callbackData === 'channel_later_next') return 'search_partner'; // Sama dengan search
+  if (callbackData === 'channel_later_stop') return 'chat_stop'; // Sama dengan stop
   if (callbackData.startsWith('send_gift_')) return 'send_gift';
   if (callbackData.startsWith('init_topup_')) return 'init_topup';
   if (callbackData.startsWith('buy_premium_')) return 'buy_premium';
@@ -3362,6 +3382,8 @@ interface EndChatResult {
   partner_reset?: boolean;
   user_promo?: { should_send: boolean };
   partner_promo?: { should_send: boolean };
+  should_send_channel_invite?: boolean;
+  partner_should_send_channel_invite?: boolean;
   reconnect_notification?: {
     request_id: string;
     requester_id: number;
@@ -3415,11 +3437,17 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   // Kirim promo ke user jika syarat terpenuhi (dari RPC)
   if (result.user_promo?.should_send) {
     await executePromoAction(supabase, botToken, userId);
+  } else if (result.should_send_channel_invite) {
+    // Kirim channel invite ke user (hanya jika promo TIDAK terkirim)
+    await sendChannelInviteMessage(botToken, userId, 'stop');
   }
 
   // Kirim promo ke partner jika syarat terpenuhi (dari RPC)
   if (result.partner_promo?.should_send) {
     await executePromoAction(supabase, botToken, partnerId);
+  } else if (result.partner_should_send_channel_invite) {
+    // Kirim channel invite ke partner (hanya jika promo TIDAK terkirim)
+    await sendChannelInviteMessage(botToken, partnerId, 'stop');
   }
 
 
@@ -3502,6 +3530,11 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
   if (success && searchResult) {
     if (searchResult.action === 'show_promo') {
       await executePromoAction(supabase, botToken, userId);
+      return;
+    }
+    // Channel invite check (setelah promo check, sebelum channel check)
+    if (searchResult.should_send_channel_invite) {
+      await sendChannelInviteMessage(botToken, userId, 'next');
       return;
     }
     if (searchResult.action === 'needs_channel_check') {
@@ -4949,6 +4982,12 @@ Deno.serve(async (req) => {
             }
           }
 
+          // Cek channel invite sebelum pencarian (untuk Cari Partner / idle next)
+          if (result.should_send_channel_invite) {
+            await sendChannelInviteMessage(botToken, userId, 'next');
+            return new Response('OK', { status: 200 });
+          }
+
           // Handle hasil pencarian partner (isNext = false untuk tombol Cari Partner)
           await handleComprehensiveSearchResult(supabase, botToken, userId, result, false);
         }
@@ -5011,6 +5050,27 @@ Deno.serve(async (req) => {
       if (callbackData.startsWith('chat_stop')) {
         const targetPartnerId = callbackData.replace('chat_stop_', '') || '';
         await executeChatStop(supabase, botToken, userId, query.id, targetPartnerId);
+        return new Response('OK', { status: 200 });
+      }
+
+      // --- HANDLER TOMBOL "NANTI SAJA" CHANNEL INVITE ---
+      if (callbackData === 'channel_later_next') {
+        await answerCallbackQuery(botToken, query.id, '🔍 Mencari partner...');
+        // Hapus pesan ajakan channel
+        if (message) {
+          await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+        }
+        // Langsung cari partner
+        await searchPartnerWithQueueCheck(supabase, botToken, userId);
+        return new Response('OK', { status: 200 });
+      }
+
+      if (callbackData === 'channel_later_stop') {
+        await answerCallbackQuery(botToken, query.id);
+        // Hapus pesan ajakan channel
+        if (message) {
+          await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+        }
         return new Response('OK', { status: 200 });
       }
 
@@ -6021,23 +6081,35 @@ Deno.serve(async (req) => {
         );
       }
       else if (text === '/next') {
-        // Jika tidak chatting, langsung cari partner (pesan pencarian dikirim oleh autoSearchPartner)
-        await searchPartnerWithQueueCheck(supabase, botToken, userId);
+        // Cek channel invite eligibility sebelum cari partner
+        const { data: chInvData } = await supabase.rpc('check_channel_invite_eligibility', { p_user_id: userId });
+        if (chInvData === true) {
+          await sendChannelInviteMessage(botToken, userId, 'next');
+        } else {
+          // Jika tidak chatting, langsung cari partner
+          await searchPartnerWithQueueCheck(supabase, botToken, userId);
+        }
       }
       else if (text === '/stop') {
-        // Jika tidak chatting, tampilkan menu start
-        const startKeyboard = {
-          inline_keyboard: [
-            [
-              { text: '🔍 Cari Partner', callback_data: 'search_partner' }
-            ],
-            [
-              { text: '🎯 Filter Gender', callback_data: 'change_target' },
-              { text: '📍 Filter Lokasi', callback_data: 'change_location' }
+        // Cek channel invite eligibility
+        const { data: chInvStopData } = await supabase.rpc('check_channel_invite_eligibility', { p_user_id: userId });
+        if (chInvStopData === true) {
+          await sendChannelInviteMessage(botToken, userId, 'stop');
+        } else {
+          // Jika tidak chatting, tampilkan menu start
+          const startKeyboard = {
+            inline_keyboard: [
+              [
+                { text: '🔍 Cari Partner', callback_data: 'search_partner' }
+              ],
+              [
+                { text: '🎯 Filter Gender', callback_data: 'change_target' },
+                { text: '📍 Filter Lokasi', callback_data: 'change_location' }
+              ]
             ]
-          ]
-        };
-        await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam obrolan. Pilih aksi:', startKeyboard);
+          };
+          await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam obrolan. Pilih aksi:', startKeyboard);
+        }
       }
 
       else if (text === '/live') {
