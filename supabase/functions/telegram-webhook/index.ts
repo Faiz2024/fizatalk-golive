@@ -3564,6 +3564,11 @@ async function executeChatStop(supabase: any, botToken: string, userId: number, 
     .single();
 
   if (stopUserData?.state !== 'chatting') {
+    if (stopUserData?.state === 'waiting') {
+      await supabase.from('waiting_queue').delete().eq('user_id', userId);
+      await supabase.from('telegram_users').update({ state: 'idle' }).eq('id', userId);
+    }
+
     const startKeyboard = {
       inline_keyboard: [
         [
