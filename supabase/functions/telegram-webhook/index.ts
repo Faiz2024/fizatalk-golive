@@ -105,6 +105,7 @@ interface TelegramUpdate {
   callback_query?: CallbackQuery;
   chat_member?: ChatMemberUpdate;
   pre_checkout_query?: PreCheckoutQuery;
+  edited_message?: TelegramMessage;
 }
 
 interface Gift {
@@ -5535,6 +5536,28 @@ Deno.serve(async (req) => {
     // ************************************************
     // START LOGIKA PESAN/COMMAND
     // ************************************************
+
+    // Handle edited_message
+    if (update.edited_message) {
+      const editedMsg = update.edited_message;
+      const userId = editedMsg.from.id;
+      
+      // Cek apakah user sedang chatting
+      const { data: userState } = await supabase.rpc('comprehensive_search_action', { p_user_id: userId, p_action: 'check_state' });
+      
+      if (userState && userState.state === 'chatting' && userState.partner_id) {
+        let newText = editedMsg.text || editedMsg.caption || "";
+        if (newText && !newText.startsWith("*")) {
+          newText = "*" + newText;
+        }
+        
+        if (newText) {
+          // Kirim teks yang sudah dikoreksi ke partner
+          await sendTelegramMessage(botToken, userState.partner_id, newText);
+        }
+      }
+      return new Response("OK", { status: 200 });
+    }
 
     // Handle successful Stars payment
     if (update.message?.successful_payment) {
