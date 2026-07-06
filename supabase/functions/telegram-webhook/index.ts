@@ -2075,7 +2075,8 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
         user_id: targetId,
         reason: 'spam_block',
         blocked_message: 'Akun diblokir karena melakukan spam link / pelanggaran keras.',
-        is_active: true
+        is_active: true,
+        blocked_at: new Date().toISOString()
       }, { onConflict: 'user_id' });
 
       // Gunakan UI Blokir Existing
