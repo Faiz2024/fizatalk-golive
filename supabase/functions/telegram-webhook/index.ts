@@ -2076,7 +2076,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
         reason: 'spam_block',
         blocked_message: 'Akun diblokir karena melakukan spam link / pelanggaran keras.',
         is_active: true
-      });
+      }, { onConflict: 'user_id' });
 
       // Gunakan UI Blokir Existing
       const blockedKeyboard = {
@@ -3595,7 +3595,12 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
         return;
       } else {
         await supabase.from('telegram_users').update({ is_channel_member: true }).eq('id', userId);
-        await searchPartnerWithQueueCheck(supabase, botToken, userId);
+        await comprehensiveSearchAction(
+          supabase, botToken, userId,
+          from?.username, from?.first_name,
+          true,
+          targetIdParsed
+        );
         return;
       }
     }
@@ -5044,7 +5049,12 @@ Deno.serve(async (req) => {
               await supabase.from('telegram_users').update({ is_channel_member: true }).eq('id', userId);
 
               // Masukkan ke antrean
-              await searchPartnerWithQueueCheck(supabase, botToken, userId);
+              await comprehensiveSearchAction(
+                supabase, botToken, userId,
+                query.from.username, query.from.first_name,
+                false,
+                null
+              );
               return new Response('OK', { status: 200 });
             }
           }
@@ -6180,7 +6190,12 @@ Deno.serve(async (req) => {
           await sendChannelInviteMessage(botToken, userId, 'next');
         } else {
           // Jika tidak chatting, langsung cari partner
-          await searchPartnerWithQueueCheck(supabase, botToken, userId);
+          await comprehensiveSearchAction(
+            supabase, botToken, userId,
+            update.message?.from?.username, update.message?.from?.first_name,
+            true,
+            null
+          );
         }
       }
       else if (text === '/stop') {
