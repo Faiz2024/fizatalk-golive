@@ -6086,6 +6086,10 @@ Deno.serve(async (req) => {
         );
       }
       else if (text === '/next') {
+        // Hapus dari antrean jika ada sebelum mengecek channel invite
+        await supabase.from('waiting_queue').delete().eq('user_id', userId);
+        await supabase.from('telegram_users').update({ state: 'idle' }).eq('id', userId);
+
         // Cek channel invite eligibility sebelum cari partner
         const { data: chInvData } = await supabase.rpc('check_channel_invite_eligibility', { p_user_id: userId });
         if (chInvData === true) {
@@ -6096,6 +6100,10 @@ Deno.serve(async (req) => {
         }
       }
       else if (text === '/stop') {
+        // Hapus dari antrean jika ada (menggantikan executeChatStop)
+        await supabase.from('waiting_queue').delete().eq('user_id', userId);
+        await supabase.from('telegram_users').update({ state: 'idle' }).eq('id', userId);
+
         // Cek channel invite eligibility
         const { data: chInvStopData } = await supabase.rpc('check_channel_invite_eligibility', { p_user_id: userId });
         if (chInvStopData === true) {
