@@ -5537,23 +5537,23 @@ Deno.serve(async (req) => {
     // START LOGIKA PESAN/COMMAND
     // ************************************************
 
-    // Handle edited_message
+    // Handle edited_message - forward koreksi ke partner dengan prefix *
     if (update.edited_message) {
       const editedMsg = update.edited_message;
       const userId = editedMsg.from.id;
-      
-      // Cek apakah user sedang chatting
-      const { data: userState } = await supabase.rpc('comprehensive_search_action', { p_user_id: userId, p_action: 'check_state' });
-      
-      if (userState && userState.state === 'chatting' && userState.partner_id) {
-        let newText = editedMsg.text || editedMsg.caption || "";
-        if (newText && !newText.startsWith("*")) {
-          newText = "*" + newText;
-        }
-        
-        if (newText) {
-          // Kirim teks yang sudah dikoreksi ke partner
-          await sendTelegramMessage(botToken, userState.partner_id, newText);
+      const newText = editedMsg.text || editedMsg.caption || "";
+
+      if (newText) {
+        // Query ringan langsung ke tabel (hindari RPC search yang berat)
+        const { data: userRow } = await supabase
+          .from('telegram_users')
+          .select('state, partner_id')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (userRow?.state === 'chatting' && userRow.partner_id) {
+          const forwardText = newText.startsWith("*") ? newText : "*" + newText;
+          await sendTelegramMessage(botToken, userRow.partner_id, forwardText);
         }
       }
       return new Response("OK", { status: 200 });
