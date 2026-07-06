@@ -549,6 +549,7 @@ export type Database = {
           is_channel_member: boolean | null
           is_tiktok_mode: boolean | null
           last_active: string
+          last_channel_invite_sent_at: string | null
           last_partners: number[] | null
           last_promo_sent_at: string | null
           last_reengagement_message_id: number | null
@@ -575,6 +576,7 @@ export type Database = {
           is_channel_member?: boolean | null
           is_tiktok_mode?: boolean | null
           last_active?: string
+          last_channel_invite_sent_at?: string | null
           last_partners?: number[] | null
           last_promo_sent_at?: string | null
           last_reengagement_message_id?: number | null
@@ -601,6 +603,7 @@ export type Database = {
           is_channel_member?: boolean | null
           is_tiktok_mode?: boolean | null
           last_active?: string
+          last_channel_invite_sent_at?: string | null
           last_partners?: number[] | null
           last_promo_sent_at?: string | null
           last_reengagement_message_id?: number | null
@@ -803,6 +806,10 @@ export type Database = {
       cancel_fine_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_premium_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_topup_transaction: { Args: { p_user_id: number }; Returns: Json }
+      check_channel_invite_eligibility: {
+        Args: { p_user_id: number }
+        Returns: boolean
+      }
       cleanup_inactive_users: { Args: never; Returns: undefined }
       comprehensive_search_action: {
         Args: {
