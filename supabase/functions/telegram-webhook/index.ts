@@ -4819,7 +4819,7 @@ Deno.serve(async (req) => {
         const isRose = selectedGift.name.toLowerCase().includes('mawar') || selectedGift.emoji === '🌹';
 
         if (isRose) {
-          effectId = "5144581208506187511"; // ❤️ Love
+          effectId = "5159385139981059251"; // ❤️ Heart
         } else if (selectedGift.price >= 1000) {
           effectId = "5104841245755180586"; // 🔥 Fire
         }
