@@ -2141,6 +2141,45 @@ async function sendTelegramMessage(botToken: string, chatId: number, text: strin
   return false;
 }
 
+async function sendTelegramMessageAndGetId(botToken: string, chatId: number, text: string, replyMarkup?: any, retries = 2): Promise<number | null> {
+  const url = `${TELEGRAM_API}${botToken}/sendMessage`;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', reply_markup: replyMarkup })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return data.result.message_id;
+      }
+      if (response.status === 429) await new Promise(res => setTimeout(res, 1000));
+    } catch (error) {
+      if (i === retries - 1) return null;
+    }
+  }
+  return null;
+}
+
+async function setTelegramReaction(botToken: string, chatId: number, messageId: number, emoji: string, isBig: boolean = true) {
+  const url = `${TELEGRAM_API}${botToken}/setMessageReaction`;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        reaction: [{ type: "emoji", emoji: emoji }],
+        is_big: isBig
+      })
+    });
+  } catch (e) {
+    console.error("Gagal set reaction:", e);
+  }
+}
+
 async function answerCallbackQuery(botToken: string, callbackQueryId: string, text?: string, showAlert: boolean = false, url?: string) {
   const apiUrl = `${TELEGRAM_API}${botToken}/answerCallbackQuery`;
   const body: any = {
@@ -4812,11 +4851,16 @@ Deno.serve(async (req) => {
         let specialEffect = '';
         if (selectedGift.price >= 1000) specialEffect = '\n✨✨✨ <b>SULTAN VIBES!</b> ✨✨✨';
 
-        await sendTelegramMessage(
+        const msgId = await sendTelegramMessageAndGetId(
           botToken,
           partnerId,
           `🎁 <b>GIFT DITERIMA!</b>${specialEffect}\n\nPartner mengirim: ${selectedGift.emoji} <b>${selectedGift.name}</b>\n💰 Kamu menerima: <b>+${payoutAmount} koin</b>`
         );
+
+        if (msgId) {
+          // Fire and forget untuk menambahkan efek visual reaksi emoji
+          setTelegramReaction(botToken, partnerId, msgId, "🎉", true).then().catch();
+        }
 
         return new Response('OK', { status: 200 });
       }
