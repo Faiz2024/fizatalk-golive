@@ -5994,7 +5994,7 @@ Deno.serve(async (req) => {
         } else {
           // Mode biasa (non-Live)
           if (isReply) {
-            const finalMessage = `${visualQuote}${text}`;
+            const finalMessage = `${visualQuote}${escapeHtml(text)}`;
             await sendTelegramMessage(botToken, partnerId, finalMessage, spamMarkup);
           } else {
             await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
