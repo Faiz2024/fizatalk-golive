@@ -5994,7 +5994,7 @@ Deno.serve(async (req) => {
         } else {
           // Mode biasa (non-Live)
           if (isReply) {
-            const finalMessage = `${visualQuote}${text}`;
+            const finalMessage = `${visualQuote}${escapeHtml(text)}`;
             await sendTelegramMessage(botToken, partnerId, finalMessage, spamMarkup);
           } else {
             await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
@@ -6055,11 +6055,8 @@ Deno.serve(async (req) => {
           const originalCaption = message.caption || "";
 
           if (isReply) {
-            let finalCaption = `${visualQuote}${originalCaption}`;
-            if (finalCaption.length > 1000) {
-              finalCaption = finalCaption.substring(0, 997) + "...";
-            }
-            hiddenMsg = `${visualQuote}${originalCaption}\n\n${hiddenMsg}.`;
+            const safeCaption = originalCaption ? escapeHtml(originalCaption) : "";
+            hiddenMsg = `${visualQuote}${safeCaption}\n\n${hiddenMsg}.`;
             await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
           } else {
             await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
