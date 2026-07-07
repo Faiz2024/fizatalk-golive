@@ -1206,6 +1206,81 @@ function getMediaType(msg: TelegramMessage): string {
   return 'Media 📁';
 }
 
+// ============================================
+// HELPER: Sensor Teks untuk Live TikTok Mode
+// ============================================
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Daftar kata terlarang TikTok Live (case-insensitive, word-boundary aware)
+// Diurutkan dari frasa terpanjang ke terpendek agar multi-word match duluan
+const LIVE_BLACKLIST_PATTERNS: string[] = [
+  // --- Frasa multi-kata (harus dicocokkan duluan) ---
+  'open bo', 'link di bio', 'no hp', 'nomor telepon', 'nomor hp',
+  'anak sd', 'gantung diri', 'pola slot', 'admin slot',
+  // --- Platform pesaing & pengalihan trafik ---
+  'instagram', 'whatsapp', 'facebook', 'youtube', 'telegram',
+  'discord', 'snapchat', 'twitter', 'litmatch', 'michat',
+  'tinder', 'wechat', 'twitch', 'saweria', 'onlyfans',
+  'ig', 'wa', 'tele', 'fb', 'yt',
+  // --- Ajakan, transaksi, promosi & data pribadi ---
+  'follback', 'follow', 'subscribe', 'subs', 'mutualan',
+  'donate', 'donasi', 'sawer', 'transfer', 'rekening',
+  'shopeepay', 'gopay', 'qris', 'dana', 'spay', 'ovo',
+  'nomor', 'alamat', 'rek', 'ktp', 'nik', 'pin', 'atm',
+  'bayar', 'jual', 'beli', 'harga', 'promo', 'diskon',
+  'murah', 'order', 'pesan', 'tf',
+  // --- Seksual & pornografi ---
+  'ngentot', 'kontol', 'memek', 'jembut', 'toket',
+  'pantat', 'jablay', 'lonte', 'pelacur', 'perek',
+  'payudara', 'kelamin', 'desahan', 'desah',
+  'bugil', 'bokep', 'porno', 'porn', 'sange',
+  'coli', 'peli', 'tete', 'susu', 'pap',
+  'sex', 'vcs', 'vc', 'bo', 'ph',
+  // --- Umpatan, harassment & bullying ---
+  'bajingan', 'bangsat', 'goblok', 'anjing', 'tolol',
+  'idiot', 'cacat', 'autis', 'yatim', 'babi', 'bego',
+  'asu',
+  // --- Kekerasan, senjata & self-harm ---
+  'tembak', 'pistol', 'pisau', 'senjata', 'bunuh',
+  'bacok', 'darah', 'siksa', 'pukul', 'hajar', 'mati',
+  'bom',
+  // --- Perjudian & zat terlarang ---
+  'scatter', 'maxwin', 'taruhan', 'togel', 'bandar',
+  'gacor', 'slot', 'judi', 'zeus', 'depo', 'rtp',
+  'narkoba', 'sabu', 'ganja', 'cimeng', 'ekstasi',
+  'alkohol', 'miras', 'vape',
+  'wd',
+  // --- Minor safety ---
+  'bocil', 'smp', 'sd',
+];
+
+// Build satu regex gabungan dari semua pola (case-insensitive)
+// Menggunakan word boundary (\b) agar tidak salah sensor substring
+const LIVE_BLACKLIST_REGEX = new RegExp(
+  '\\b(' + LIVE_BLACKLIST_PATTERNS.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b',
+  'gi'
+);
+
+/**
+ * Sensor teks untuk Live TikTok Mode.
+ * Mengembalikan { censored: string, hasCensored: boolean }.
+ * Kata yang cocok akan dibungkus dalam <tg-spoiler> (fitur bawaan Telegram).
+ */
+function censorLiveText(rawText: string): { censored: string; hasCensored: boolean } {
+  const escaped = escapeHtml(rawText);
+  let hasCensored = false;
+  const censored = escaped.replace(LIVE_BLACKLIST_REGEX, (match) => {
+    hasCensored = true;
+    return `<tg-spoiler>${match}</tg-spoiler>`;
+  });
+  return { censored, hasCensored };
+}
+
 // Fungsi untuk mengirim media ke Spreadsheet secara background
 // async function sendMediaToSheet(botToken: string, message: any, supabase: any) {
 //   try {
@@ -5852,8 +5927,8 @@ Deno.serve(async (req) => {
             const statusText = isActive ? '🟢 <b>AKTIF</b>' : '🔴 <b>NONAKTIF</b>';
 
             const msg = `🎥 <b>Mode Live TikTok</b>\n\nStatus: ${statusText}\n\n${isActive
-              ? '✅ Semua foto, video, dan stiker dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik "Buka" untuk melihatnya.\n🛡️ Aman untuk streaming!'
-              : '❌ Media akan tampil otomatis seperti biasa.'}`;
+              ? '✅ Semua foto, video, stiker, dan <b>kata-kata terlarang</b> dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik untuk melihatnya.\n🛡️ Aman untuk streaming!'
+              : '❌ Media dan teks akan tampil otomatis seperti biasa.'}`;
 
             await sendTelegramMessage(botToken, userId, msg);
           };
@@ -5882,6 +5957,8 @@ Deno.serve(async (req) => {
 
 
 
+
+
       // === LOGIKA HANDLER REPLY / BALAS PESAN (UPDATED) ===
 
       const isReply = message.reply_to_message ? true : false;
@@ -5892,40 +5969,75 @@ Deno.serve(async (req) => {
         visualQuote = getReplyPreview(message.reply_to_message, userId);
       }
 
+      // === CEK STATUS TIKTOK MODE PARTNER (Digunakan oleh Blok A, Stiker, dan B) ===
+      const { data: partnerSettings } = await supabase.rpc('get_partner_settings', {
+        p_partner_id: partnerId
+      });
+      const isPartnerInTikTokMode = partnerSettings?.is_tiktok_mode || false;
 
 
       // A. Jika USER MENGIRIM TEKS
       if (text) {
-        if (isReply) {
-          // Gabungkan Quote + Pesan Baru
-          const finalMessage = `${visualQuote}${text}`;
-          await sendTelegramMessage(botToken, partnerId, finalMessage, spamMarkup);
+        if (isPartnerInTikTokMode) {
+          // === SENSOR TEKS LIVE MODE ===
+          const { censored, hasCensored } = censorLiveText(text);
+          if (isReply) {
+            const finalMessage = `${visualQuote}${hasCensored ? censored : escapeHtml(text)}`;
+            await sendTelegramMessage(botToken, partnerId, finalMessage, spamMarkup);
+          } else if (hasCensored) {
+            // Ada kata yang disensor -> kirim via sendMessage agar tag <tg-spoiler> aktif
+            await sendTelegramMessage(botToken, partnerId, censored, spamMarkup);
+          } else {
+            // Tidak ada kata terlarang -> copyMessage biasa (format asli terjaga)
+            await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
+          }
         } else {
-          // Copy message biasa
-          await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
+          // Mode biasa (non-Live)
+          if (isReply) {
+            const finalMessage = `${visualQuote}${text}`;
+            await sendTelegramMessage(botToken, partnerId, finalMessage, spamMarkup);
+          } else {
+            await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
+          }
         }
       } else if (message.sticker) {
         const isAllowed = await handleStickerReview(supabase, botToken, message, isSenderPremium);
         if (!isAllowed) {
           return new Response('OK', { status: 200, headers: corsHeaders });
         }
-        // Sticker diizinkan -> teruskan ke partner
-        if (isReply) {
-          await sendTelegramMessage(botToken, partnerId, visualQuote + "<i>(membalas dengan sticker)</i>");
+
+        // === SENSOR STIKER SELEKTIF LIVE MODE ===
+        const botUsername = Deno.env.get('BOT_USERNAME') || 'FizaTalkBot';
+        const packName = message.sticker.set_name || '';
+        const isClonedStickerPack = packName.endsWith(`_by_${botUsername}`);
+
+        if (isPartnerInTikTokMode && !isClonedStickerPack) {
+          // Stiker BELUM di-cloning / kustom -> SENSOR untuk keamanan Live
+          const revealData = `reveal_${userId}_${message.message_id}`;
+          const hiddenKeyboard = {
+            inline_keyboard: [
+              [{ text: '🔓 Buka Sticker 🎭', callback_data: revealData }]
+            ]
+          };
+          let hiddenMsg = `🛡️ <b>SENSOR LIVE MODE</b>\n\nPartner mengirim <b>Sticker 🎭</b>.\nKonten disembunyikan untuk keamanan Live Streaming.`;
+          if (isReply) {
+            hiddenMsg = `${visualQuote}\n\n${hiddenMsg}`;
+          }
+          await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
+        } else {
+          // Stiker aman (sudah di-cloning) ATAU partner tidak dalam Live Mode -> teruskan biasa
+          if (isReply) {
+            await sendTelegramMessage(botToken, partnerId, visualQuote + "<i>(membalas dengan sticker)</i>");
+          }
+          await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
         }
-        await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
       }
 
       // ... Lanjut ke kode aslinya: 
       // await copyTelegramMessage(botToken, partnerId, userId, messageId, ...);
       // B. Jika USER MENGIRIM MEDIA (Photo/Video/Animation/VideoNote)
       else if (message.photo || message.video || message.animation || message.video_note) {
-        // Cek apakah partner mengaktifkan Mode TikTok
-        const { data: partnerSettings } = await supabase.rpc('get_partner_settings', {
-          p_partner_id: partnerId
-        });
-
-        const isPartnerInTikTokMode = partnerSettings?.is_tiktok_mode || false;
+        // isPartnerInTikTokMode sudah dievaluasi di atas
 
         // SKENARIO A: Partner Mode TikTok AKTIF -> SENSOR
         if (isPartnerInTikTokMode) {
@@ -6236,8 +6348,8 @@ Deno.serve(async (req) => {
           const statusText = isActive ? '🟢 <b>AKTIF</b>' : '🔴 <b>NONAKTIF</b>';
 
           const msg = `🎥 <b>Mode Live TikTok</b>\n\nStatus: ${statusText}\n\n${isActive
-            ? '✅ Semua foto, video, dan stiker dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik "Buka" untuk melihatnya.\n🛡️ Aman untuk streaming!'
-            : '❌ Media akan tampil otomatis seperti biasa.'}`;
+            ? '✅ Semua foto, video, stiker, dan <b>kata-kata terlarang</b> dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik untuk melihatnya.\n🛡️ Aman untuk streaming!'
+            : '❌ Media dan teks akan tampil otomatis seperti biasa.'}`;
 
           await sendTelegramMessage(botToken, userId, msg);
         };
