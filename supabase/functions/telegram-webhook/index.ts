@@ -6055,11 +6055,8 @@ Deno.serve(async (req) => {
           const originalCaption = message.caption || "";
 
           if (isReply) {
-            let finalCaption = `${visualQuote}${originalCaption}`;
-            if (finalCaption.length > 1000) {
-              finalCaption = finalCaption.substring(0, 997) + "...";
-            }
-            hiddenMsg = `${visualQuote}${originalCaption}\n\n${hiddenMsg}.`;
+            const safeCaption = originalCaption ? escapeHtml(originalCaption) : "";
+            hiddenMsg = `${visualQuote}${safeCaption}\n\n${hiddenMsg}.`;
             await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
           } else {
             await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
