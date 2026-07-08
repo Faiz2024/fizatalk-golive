@@ -3633,75 +3633,113 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   return true;
 }
 
-
+const processingNext = new Set<number>();
 
 async function executeChatNext(supabase: any, botToken: string, userId: number, from: any, queryId: string | null, targetPartnerId: string) {
-  if (queryId) {
-    await answerCallbackQuery(botToken, queryId, '⏭️ Mencari partner baru...');
-  }
-
-  const { data: preNextData } = await supabase
-    .from('telegram_users')
-    .select('partner_id, penalty_points, target_gender, target_location, premium_until, state')
-    .eq('id', userId)
-    .single();
-
-  const isActuallyChatting = preNextData?.state === 'chatting';
-  const isPremium = preNextData?.premium_until && new Date(preNextData.premium_until) > new Date();
-  
-  const filterInfo = isPremium ? { 
-    target_gender: preNextData?.target_gender, 
-    target_location: preNextData?.target_location 
-  } : undefined;
-
-  const reputation = {
-    penalty_points: preNextData?.penalty_points || 0,
-    status: (preNextData?.penalty_points || 0) >= 70 ? 'critical' : ((preNextData?.penalty_points || 0) >= 40 ? 'warning' : 'normal'),
-    message: ''
-  };
-
-  // SEND MESSAGE BEFORE RPC
-  await sendSearchingMessage(botToken, userId, reputation, isActuallyChatting, false, undefined, filterInfo);
-
-  const targetIdParsed = targetPartnerId ? parseInt(targetPartnerId) : (preNextData?.partner_id || null);
-  const { success, handled, result: searchResult } = await comprehensiveSearchAction(
-    supabase, botToken, userId,
-    from?.username, from?.first_name,
-    true, // isNext = true
-    targetIdParsed
-  );
-
-  if (handled) {
+  if (processingNext.has(userId)) {
+    console.log(`[Webhook] Blocked double-click/spam for executeChatNext, user: ${userId}`);
     return;
   }
+  processingNext.add(userId);
 
-  if (success && searchResult) {
-    if (searchResult.action === 'show_promo') {
-      await executePromoAction(supabase, botToken, userId);
+  try {
+    if (queryId) {
+      await answerCallbackQuery(botToken, queryId, '⏭️ Mencari partner baru...');
+    }
+
+    const { data: preNextData } = await supabase
+      .from('telegram_users')
+      .select('partner_id, penalty_points, target_gender, target_location, premium_until, state')
+      .eq('id', userId)
+      .single();
+
+    const isActuallyChatting = preNextData?.state === 'chatting';
+    const isPremium = preNextData?.premium_until && new Date(preNextData.premium_until) > new Date();
+    
+    const filterInfo = isPremium ? { 
+      target_gender: preNextData?.target_gender, 
+      target_location: preNextData?.target_location 
+    } : undefined;
+
+    const penaltyPoints = preNextData?.penalty_points || 0;
+    const isBanned = penaltyPoints >= 100;
+
+    const reputation = {
+      penalty_points: penaltyPoints,
+      status: penaltyPoints >= 70 ? 'critical' : (penaltyPoints >= 40 ? 'warning' : 'normal'),
+      message: ''
+    };
+
+    // SEND MESSAGE BEFORE RPC, ONLY IF NOT BANNED
+    if (!isBanned) {
+      let endChatKeyboard: any = undefined;
+      const inlineKeyboard: any[][] = [];
+      
+      // Jika user sedang chatting dan penalti < 40, tambahkan tombol rating untuk partner lamanya
+      if (isActuallyChatting && preNextData?.partner_id && penaltyPoints < 40) {
+        inlineKeyboard.push([
+          { text: '🚩 Laporkan', callback_data: `report_user_${preNextData.partner_id}` },
+          { text: '😎 Asik', callback_data: `rate_asik_${preNextData.partner_id}` },
+          { text: '👍 Baik', callback_data: `rate_baik_${preNextData.partner_id}` }
+        ]);
+      }
+      
+      // Jika penalty >= 40, tambahkan tombol Upgrade Premium (Anti Banned)
+      if (penaltyPoints >= 40 && !isPremium) {
+        inlineKeyboard.push([
+          { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
+        ]);
+      }
+
+      if (inlineKeyboard.length > 0) {
+        endChatKeyboard = { inline_keyboard: inlineKeyboard };
+      }
+
+      await sendSearchingMessage(botToken, userId, reputation, isActuallyChatting, false, endChatKeyboard, filterInfo);
+    }
+
+    const targetIdParsed = targetPartnerId ? parseInt(targetPartnerId) : (preNextData?.partner_id || null);
+    const { success, handled, result: searchResult } = await comprehensiveSearchAction(
+      supabase, botToken, userId,
+      from?.username, from?.first_name,
+      true, // isNext = true
+      targetIdParsed
+    );
+
+    if (handled) {
       return;
     }
-    // Channel invite check (setelah promo check, sebelum channel check)
-    if (searchResult.should_send_channel_invite) {
-      await sendChannelInviteMessage(botToken, userId, 'next');
-      return;
-    }
-    if (searchResult.action === 'needs_channel_check') {
-      const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
-      if (!isMember) {
-        await sendJoinChannelMessage(botToken, userId, botNotAdmin);
-        return;
-      } else {
-        await supabase.from('telegram_users').update({ is_channel_member: true }).eq('id', userId);
-        await comprehensiveSearchAction(
-          supabase, botToken, userId,
-          from?.username, from?.first_name,
-          true,
-          targetIdParsed
-        );
+
+    if (success && searchResult) {
+      if (searchResult.action === 'show_promo') {
+        await executePromoAction(supabase, botToken, userId);
         return;
       }
+      // Channel invite check (setelah promo check, sebelum channel check)
+      if (searchResult.should_send_channel_invite) {
+        await sendChannelInviteMessage(botToken, userId, 'next');
+        return;
+      }
+      if (searchResult.action === 'needs_channel_check') {
+        const { isMember, botNotAdmin } = await checkChannelMembership(botToken, userId, REQUIRED_CHANNEL);
+        if (!isMember) {
+          await sendJoinChannelMessage(botToken, userId, botNotAdmin);
+          return;
+        } else {
+          await supabase.from('telegram_users').update({ is_channel_member: true }).eq('id', userId);
+          await comprehensiveSearchAction(
+            supabase, botToken, userId,
+            from?.username, from?.first_name,
+            true,
+            targetIdParsed
+          );
+        }
+      } else {
+        await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true, true);
+      }
     }
-    await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true, true);
+  } finally {
+    processingNext.delete(userId);
   }
 }
 
