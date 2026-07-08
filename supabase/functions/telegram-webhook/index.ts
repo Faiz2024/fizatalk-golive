@@ -2887,6 +2887,12 @@ async function comprehensiveSearchAction(
   });
 
   if (error) {
+    // Tangkap error concurrent_request (fitur anti-spam / advisory lock)
+    if (error.message?.includes('concurrent_request') || error.details?.includes('concurrent_request')) {
+      await sendTelegramMessage(botToken, userId, '🔍 Sistem sedang mencarikanmu partner...');
+      return { success: false, handled: true };
+    }
+
     // Fallback: masukkan user ke antrian secara manual
     await supabase.from('waiting_queue').upsert({
       user_id: userId,
@@ -3636,11 +3642,26 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
 
   const { data: preNextData } = await supabase
     .from('telegram_users')
-    .select('partner_id, penalty_points, target_gender, target_location, premium_until')
+    .select('partner_id, penalty_points, target_gender, target_location, premium_until, state')
     .eq('id', userId)
     .single();
 
+  const isActuallyChatting = preNextData?.state === 'chatting';
+  const isPremium = preNextData?.premium_until && new Date(preNextData.premium_until) > new Date();
+  
+  const filterInfo = isPremium ? { 
+    target_gender: preNextData?.target_gender, 
+    target_location: preNextData?.target_location 
+  } : undefined;
 
+  const reputation = {
+    penalty_points: preNextData?.penalty_points || 0,
+    status: (preNextData?.penalty_points || 0) >= 70 ? 'critical' : ((preNextData?.penalty_points || 0) >= 40 ? 'warning' : 'normal'),
+    message: ''
+  };
+
+  // SEND MESSAGE BEFORE RPC
+  await sendSearchingMessage(botToken, userId, reputation, isActuallyChatting, false, undefined, filterInfo);
 
   const targetIdParsed = targetPartnerId ? parseInt(targetPartnerId) : (preNextData?.partner_id || null);
   const { success, handled, result: searchResult } = await comprehensiveSearchAction(
@@ -3680,7 +3701,7 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
         return;
       }
     }
-    await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true, false);
+    await handleComprehensiveSearchResult(supabase, botToken, userId, searchResult, true, true);
   }
 }
 
@@ -6290,48 +6311,10 @@ Deno.serve(async (req) => {
         );
       }
       else if (text === '/next') {
-        // Hapus dari antrean jika ada sebelum mengecek channel invite
-        await supabase.from('waiting_queue').delete().eq('user_id', userId);
-        await supabase.from('telegram_users').update({ state: 'idle' }).eq('id', userId);
-
-        // Cek channel invite eligibility sebelum cari partner
-        const { data: chInvData } = await supabase.rpc('check_channel_invite_eligibility', { p_user_id: userId });
-        if (chInvData === true) {
-          await sendChannelInviteMessage(botToken, userId, 'next');
-        } else {
-          // Jika tidak chatting, langsung cari partner
-          await comprehensiveSearchAction(
-            supabase, botToken, userId,
-            update.message?.from?.username, update.message?.from?.first_name,
-            true,
-            null
-          );
-        }
+        await executeChatNext(supabase, botToken, userId, update.message?.from, null, '');
       }
       else if (text === '/stop') {
-        // Hapus dari antrean jika ada (menggantikan executeChatStop)
-        await supabase.from('waiting_queue').delete().eq('user_id', userId);
-        await supabase.from('telegram_users').update({ state: 'idle' }).eq('id', userId);
-
-        // Cek channel invite eligibility
-        const { data: chInvStopData } = await supabase.rpc('check_channel_invite_eligibility', { p_user_id: userId });
-        if (chInvStopData === true) {
-          await sendChannelInviteMessage(botToken, userId, 'stop');
-        } else {
-          // Jika tidak chatting, tampilkan menu start
-          const startKeyboard = {
-            inline_keyboard: [
-              [
-                { text: '🔍 Cari Partner', callback_data: 'search_partner' }
-              ],
-              [
-                { text: '🎯 Filter Gender', callback_data: 'change_target' },
-                { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-              ]
-            ]
-          };
-          await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam obrolan. Pilih aksi:', startKeyboard);
-        }
+        await executeChatStop(supabase, botToken, userId, null, '');
       }
 
       else if (text === '/live') {
