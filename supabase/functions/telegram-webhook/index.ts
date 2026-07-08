@@ -3643,10 +3643,6 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
   processingNext.add(userId);
 
   try {
-    if (queryId) {
-      await answerCallbackQuery(botToken, queryId, '⏭️ Mencari partner baru...');
-    }
-
     const { data: preNextData } = await supabase
       .from('telegram_users')
       .select('partner_id, penalty_points, target_gender, target_location, premium_until, state')
@@ -3654,6 +3650,19 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
       .single();
 
     const isActuallyChatting = preNextData?.state === 'chatting';
+
+    // BLOKIR TOMBOL NEXT DARI PARTNER LAMA
+    if (isActuallyChatting && targetPartnerId && targetPartnerId !== String(preNextData?.partner_id)) {
+      if (queryId) {
+        await answerCallbackQuery(botToken, queryId, '⚠️ Gunakan tombol Next pada partner saat ini!', true);
+      }
+      return;
+    }
+
+    if (queryId) {
+      await answerCallbackQuery(botToken, queryId, '⏭️ Mencari partner baru...');
+    }
+
     const isPremium = preNextData?.premium_until && new Date(preNextData.premium_until) > new Date();
     
     const filterInfo = isPremium ? { 
