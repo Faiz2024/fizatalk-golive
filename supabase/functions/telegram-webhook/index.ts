@@ -1261,20 +1261,19 @@ const LIVE_BLACKLIST_PATTERNS: string[] = [
 
 // Build satu regex gabungan dari semua pola (case-insensitive)
 // Menggunakan word boundary (\b) agar tidak salah sensor substring
-const LIVE_BLACKLIST_REGEX = new RegExp(
-  '\\b(' + LIVE_BLACKLIST_PATTERNS.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b',
-  'gi'
-);
-
 /**
- * Sensor teks untuk Live TikTok Mode.
+ * Sensor teks untuk Live TikTok Mode (Hanya Username).
  * Mengembalikan { censored: string, hasCensored: boolean }.
  * Kata yang cocok akan dibungkus dalam <tg-spoiler> (fitur bawaan Telegram).
  */
 function censorLiveText(rawText: string): { censored: string; hasCensored: boolean } {
   const escaped = escapeHtml(rawText);
   let hasCensored = false;
-  const censored = escaped.replace(LIVE_BLACKLIST_REGEX, (match) => {
+  
+  // Deteksi kata yang diawali dengan @ (username)
+  const USERNAME_REGEX = /@\w+/gi;
+  
+  const censored = escaped.replace(USERNAME_REGEX, (match) => {
     hasCensored = true;
     return `<tg-spoiler>${match}</tg-spoiler>`;
   });
@@ -3944,6 +3943,47 @@ Deno.serve(async (req) => {
       }
 
       // ============================================
+      // TOGGLE LIVE MODE
+      // ============================================
+      if (callbackData === 'toggle_live_mode') {
+        const { data: toggleRes } = await supabase.rpc('toggle_tiktok_mode', {
+          p_user_id: userId
+        });
+
+        if (toggleRes) {
+          const isActive = toggleRes.is_active;
+          const statusText = isActive ? '🟢 <b>AKTIF</b>' : '🔴 <b>NONAKTIF</b>';
+          const toggleButtonText = isActive ? '🔴 Nonaktifkan' : '🟢 Aktifkan';
+
+          const msg = `🎥 <b>Mode Live TikTok</b>\n\nStatus: ${statusText}\n\n${isActive
+            ? '✅ Semua foto, video, stiker, dan <b>username</b> dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik untuk melihatnya.\n🛡️ Aman untuk streaming!'
+            : '❌ Media dan teks akan tampil otomatis seperti biasa.'}`;
+
+          const liveKeyboard = {
+            inline_keyboard: [
+              [{ text: toggleButtonText, callback_data: 'toggle_live_mode' }]
+            ]
+          };
+
+          if (message) {
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message.chat.id,
+                message_id: message.message_id,
+                text: msg,
+                parse_mode: 'HTML',
+                reply_markup: liveKeyboard
+              })
+            });
+          }
+        }
+        await answerCallbackQuery(botToken, query.id, 'Status Live Mode diperbarui!');
+        return new Response('OK', { status: 200 });
+      }
+
+      // ============================================
       // STEP 1.5: PROMO EXPIRATION CHECK (Dual Validation)
       // ============================================
       // Validasi ganda: Telegram message.date + Database last_promo_sent_at
@@ -5985,21 +6025,30 @@ Deno.serve(async (req) => {
           );
           isCommand = true;
         } else if (text === '/live') {
-          // Panggil RPC Toggle
-          const { data: toggleRes, error } = await supabase.rpc('toggle_tiktok_mode', {
-            p_user_id: userId
-          });
+          // Ambil status saat ini tanpa mengubah
+          const { data: userStatus } = await supabase
+            .from('telegram_users')
+            .select('is_tiktok_mode')
+            .eq('id', userId)
+            .single();
 
-          if (toggleRes) {
-            const isActive = toggleRes.is_active;
+          if (userStatus) {
+            const isActive = userStatus.is_tiktok_mode || false;
             const statusText = isActive ? '🟢 <b>AKTIF</b>' : '🔴 <b>NONAKTIF</b>';
+            const toggleButtonText = isActive ? '🔴 Nonaktifkan' : '🟢 Aktifkan';
 
             const msg = `🎥 <b>Mode Live TikTok</b>\n\nStatus: ${statusText}\n\n${isActive
-              ? '✅ Semua foto, video, stiker, dan <b>kata-kata terlarang</b> dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik untuk melihatnya.\n🛡️ Aman untuk streaming!'
+              ? '✅ Semua foto, video, stiker, dan <b>username</b> dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik untuk melihatnya.\n🛡️ Aman untuk streaming!'
               : '❌ Media dan teks akan tampil otomatis seperti biasa.'}`;
 
-            await sendTelegramMessage(botToken, userId, msg);
-          };
+            const liveKeyboard = {
+              inline_keyboard: [
+                [{ text: toggleButtonText, callback_data: 'toggle_live_mode' }]
+              ]
+            };
+
+            await sendTelegramMessage(botToken, userId, msg, liveKeyboard);
+          }
           isCommand = true;
 
         }
