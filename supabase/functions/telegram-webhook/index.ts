@@ -6414,21 +6414,28 @@ Deno.serve(async (req) => {
       }
 
       else if (text === '/live') {
-        // Panggil RPC Toggle
-        const { data: toggleRes, error } = await supabase.rpc('toggle_tiktok_mode', {
-          p_user_id: userId
-        });
+        // Ambil status saat ini tanpa mengubah
+        const { data: userStatus } = await supabase
+          .from('telegram_users')
+          .select('is_tiktok_mode')
+          .eq('id', userId)
+          .single();
 
-        if (toggleRes) {
-          const isActive = toggleRes.is_active;
-          const statusText = isActive ? '🟢 <b>AKTIF</b>' : '🔴 <b>NONAKTIF</b>';
+        const isActive = userStatus?.is_tiktok_mode || false;
+        const statusText = isActive ? '🟢 <b>AKTIF</b>' : '🔴 <b>NONAKTIF</b>';
+        const toggleButtonText = isActive ? '🔴 Nonaktifkan' : '🟢 Aktifkan';
 
-          const msg = `🎥 <b>Mode Live TikTok</b>\n\nStatus: ${statusText}\n\n${isActive
-            ? '✅ Semua foto, video, stiker, dan <b>kata-kata terlarang</b> dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik untuk melihatnya.\n🛡️ Aman untuk streaming!'
-            : '❌ Media dan teks akan tampil otomatis seperti biasa.'}`;
+        const msg = `🎥 <b>Mode Live TikTok</b>\n\nStatus: ${statusText}\n\n${isActive
+          ? '✅ Semua foto, video, stiker, dan <b>username</b> dari partner akan <b>disensor otomatis</b>.\n👆 Kamu harus klik untuk melihatnya.\n🛡️ Aman untuk streaming!'
+          : '❌ Media dan teks akan tampil otomatis seperti biasa.'}`;
 
-          await sendTelegramMessage(botToken, userId, msg);
+        const liveKeyboard = {
+          inline_keyboard: [
+            [{ text: toggleButtonText, callback_data: 'toggle_live_mode' }]
+          ]
         };
+
+        await sendTelegramMessage(botToken, userId, msg, liveKeyboard);
       }
 
       // COMMAND /GENDER - Ganti gender (tanpa auto-search partner)
