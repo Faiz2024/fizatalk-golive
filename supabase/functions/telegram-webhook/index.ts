@@ -4397,6 +4397,7 @@ Deno.serve(async (req) => {
           if (mediaField !== 'video_note') {
             payload.caption = `⚠️ <b>LAPORAN MEDIA</b>\n\nPengirim: <code>${senderId}</code>\nMedia ini dilaporkan oleh partner.`;
             payload.parse_mode = 'HTML';
+            payload.has_spoiler = true;
           } else {
             await sendTelegramMessage(botToken, parseInt(adminChatId), `⚠️ <b>LAPORAN VIDEO NOTE</b>\nPengirim: <code>${senderId}</code>\nDi bawah ini adalah video bulat yang dilaporkan.`);
           }
