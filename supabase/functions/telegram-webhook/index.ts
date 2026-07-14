@@ -6082,6 +6082,12 @@ Deno.serve(async (req) => {
 
 
 
+      // === CEK STATUS TIKTOK MODE PARTNER (Digunakan oleh Blok A, Stiker, dan B) ===
+      const { data: partnerSettings } = await supabase.rpc('get_partner_settings', {
+        p_partner_id: partnerId
+      });
+      const isPartnerInTikTokMode = partnerSettings?.is_tiktok_mode || false;
+
       // === LOGIKA HANDLER REPLY / BALAS PESAN (UPDATED) ===
 
       const isReply = message.reply_to_message ? true : false;
@@ -6092,11 +6098,6 @@ Deno.serve(async (req) => {
         visualQuote = getReplyPreview(message.reply_to_message, userId, isPartnerInTikTokMode);
       }
 
-      // === CEK STATUS TIKTOK MODE PARTNER (Digunakan oleh Blok A, Stiker, dan B) ===
-      const { data: partnerSettings } = await supabase.rpc('get_partner_settings', {
-        p_partner_id: partnerId
-      });
-      const isPartnerInTikTokMode = partnerSettings?.is_tiktok_mode || false;
 
 
       // A. Jika USER MENGIRIM TEKS
