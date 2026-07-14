@@ -2017,7 +2017,7 @@ function buildTopupKeyboard() {
 
 
 // HELPER: Mendapatkan preview pesan yang dibalas (1 Baris & Bersih)
-function getReplyPreview(replyMsg: any, currentUserId: number): string {
+function getReplyPreview(replyMsg: any, currentUserId: number, isTikTokMode: boolean = false): string {
   if (!replyMsg) return '';
 
   // 1. Tentukan Label Pengirim
@@ -2075,11 +2075,16 @@ function getReplyPreview(replyMsg: any, currentUserId: number): string {
     previewText = previewText.substring(0, 25) + "...";
   }
 
-  // 4. Escape HTML (Penting)
-  previewText = previewText
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  // 4. Proses Teks (Escape HTML atau Sensor TikTok)
+  if (isTikTokMode) {
+    const censorResult = censorLiveText(previewText);
+    previewText = censorResult.censored;
+  } else {
+    previewText = previewText
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
 
   // Format Akhir
   return `<blockquote><b>${senderName}:</b>\n${previewText}</blockquote>\n`;
@@ -6084,7 +6089,7 @@ Deno.serve(async (req) => {
 
       if (isReply) {
         // Pass userId ke fungsi helper yang baru
-        visualQuote = getReplyPreview(message.reply_to_message, userId);
+        visualQuote = getReplyPreview(message.reply_to_message, userId, isPartnerInTikTokMode);
       }
 
       // === CEK STATUS TIKTOK MODE PARTNER (Digunakan oleh Blok A, Stiker, dan B) ===
@@ -6155,31 +6160,26 @@ Deno.serve(async (req) => {
       // await copyTelegramMessage(botToken, partnerId, userId, messageId, ...);
       // B. Jika USER MENGIRIM MEDIA (Photo/Video/Animation/VideoNote)
       else if (message.photo || message.video || message.animation || message.video_note) {
-        // isPartnerInTikTokMode sudah dievaluasi di atas
-
-        // SKENARIO A: Partner Mode TikTok AKTIF -> SENSOR
-        if (isPartnerInTikTokMode) {
+        
+        if (message.video_note && isPartnerInTikTokMode) {
+          // Sistem tombol lama khusus untuk video_note di TikTok Mode
           const mediaType = getMediaType(message);
-
           const revealData = `reveal_${userId}_${message.message_id}`;
-
           const hiddenKeyboard = {
             inline_keyboard: [
               [{ text: `🔓 Buka ${mediaType}`, callback_data: revealData }]
             ]
           };
-
           let hiddenMsg = `🛡️ <b>SENSOR LIVE MODE</b>\n\nPartner mengirim <b>${mediaType}</b>.\nKonten disembunyikan untuk keamanan Live Streaming.`;
-          const originalCaption = message.caption || "";
-
+          
           if (isReply) {
-            const safeCaption = originalCaption ? escapeHtml(originalCaption) : "";
-            hiddenMsg = `${visualQuote}${safeCaption}\n\n${hiddenMsg}.`;
+            hiddenMsg = `${visualQuote}\n\n${hiddenMsg}.`;
             await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
           } else {
             await sendTelegramMessage(botToken, partnerId, hiddenMsg, hiddenKeyboard);
           }
         } else {
+          // photo, video, animation (TikTok & Normal Mode) ATAU video_note (Normal Mode)
           let mediaEndpoint = '';
           let mediaField = '';
           let fileId = '';
@@ -6203,7 +6203,18 @@ Deno.serve(async (req) => {
           }
 
           const originalCaption = message.caption || "";
-          let finalCaption = isReply ? `${visualQuote}${originalCaption}` : originalCaption;
+          
+          // Pemrosesan Caption
+          let processedCaption = "";
+          if (originalCaption) {
+            if (isPartnerInTikTokMode) {
+               processedCaption = censorLiveText(originalCaption).censored;
+            } else {
+               processedCaption = escapeHtml(originalCaption);
+            }
+          }
+
+          let finalCaption = isReply ? `${visualQuote}${processedCaption}` : processedCaption;
           if (finalCaption.length > 1000) {
             finalCaption = finalCaption.substring(0, 997) + "...";
           }
