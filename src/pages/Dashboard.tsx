@@ -31,6 +31,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useEffect } from "react";
+import { PromoStatsChart } from "@/components/PromoStatsChart";
 
 const fetchStats = async () => {
   const { data, error } = await supabase.functions.invoke("admin-stats");
@@ -53,12 +54,18 @@ const fetchStats = async () => {
       sent: number;
     }[];
     transactions: {
+      date: string;
       label: string;
       premium: number;
       topup: number;
       fine: number;
       total: number;
     }[];
+    special_promo: {
+      eligibleToday: number;
+      sentToday: number;
+      purchasedToday: number;
+    };
   };
 };
 
@@ -145,6 +152,12 @@ const Dashboard = () => {
       <main className="container space-y-6 py-6">
         {isLoading && (
           <p className="text-sm text-muted-foreground">Memuat data...</p>
+        )}
+        {statsQ.data?.special_promo && (
+          <PromoStatsChart 
+            stats={statsQ.data.special_promo} 
+            isLoading={isLoading} 
+          />
         )}
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

@@ -326,6 +326,8 @@ const PREMIUM_PAY_CONFIG: Record<string, { days: number; price: number; label: s
   '1': { days: 1, price: 5000, label: 'PREMIUM 1 HARI' },
   'n7': { days: 7, price: 25000, label: 'PREMIUM 7 HARI' },
   'n30': { days: 30, price: 60000, label: 'PREMIUM 30 HARI' },
+  'sp30': { days: 30, price: 15000, label: 'PREMIUM 30 HARI (PROMO HARI INI)' },
+  'sp7': { days: 7, price: 10000, label: 'PREMIUM 7 HARI (PROMO HARI INI)' },
 };
 
 const BUY_PREMIUM_MAP: Record<string, string> = {
@@ -336,6 +338,8 @@ const BUY_PREMIUM_MAP: Record<string, string> = {
   'buy_premium_1': '1',
   'buy_premium_normal_7': 'n7',
   'buy_premium_normal_30': 'n30',
+  'special_buy_premium_30': 'sp30',
+  'special_buy_premium_7': 'sp7',
 };
 
 // === TELEGRAM STARS PAYMENT ===
@@ -490,9 +494,21 @@ async function handleSuccessfulStarsPayment(
         premiumEndDate.setDate(premiumEndDate.getDate() + config.days);
       }
 
+      const isSpecialPromo = configKey.startsWith('sp');
+      const updatePayload: any = { 
+        premium_until: premiumEndDate.toISOString(), 
+        penalty_points: 0, 
+        spam_warnings: 0, 
+        spam_warning_until: null, 
+        unacknowledged_reports_count: 0 
+      };
+      if (isSpecialPromo) {
+        updatePayload.special_promo_purchased_at = new Date().toISOString();
+      }
+
       // Update user
       await supabase.from('telegram_users')
-        .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0, spam_warnings: 0, spam_warning_until: null, unacknowledged_reports_count: 0 })
+        .update(updatePayload)
         .eq('id', userId);
 
       // Unblock if blocked
@@ -1039,8 +1055,20 @@ async function handleCSApproveReject(
         premiumEndDate.setDate(premiumEndDate.getDate() + premReq.duration_days);
       }
 
+      const isSpecialPromo = (premReq.price === 15000 && premReq.duration_days === 30) || (premReq.price === 10000 && premReq.duration_days === 7);
+      const updatePayload: any = { 
+        premium_until: premiumEndDate.toISOString(), 
+        penalty_points: 0, 
+        spam_warnings: 0, 
+        spam_warning_until: null, 
+        unacknowledged_reports_count: 0 
+      };
+      if (isSpecialPromo) {
+        updatePayload.special_promo_purchased_at = new Date().toISOString();
+      }
+
       await supabase.from('telegram_users')
-        .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0, spam_warnings: 0, spam_warning_until: null, unacknowledged_reports_count: 0 })
+        .update(updatePayload)
         .eq('id', userId);
 
       // Unblock if blocked
@@ -3402,15 +3430,18 @@ async function validatePromoExpiration(supabase: any, userId: number, configKey:
   // Paket normal tidak akan kadaluarsa
   if (configKey.startsWith('n')) return true;
 
+  const isSpecialPromo = configKey.startsWith('sp');
+  const dateColumn = isSpecialPromo ? 'special_promo_sent_at' : 'last_promo_sent_at';
+
   const { data: promoData } = await supabase
     .from('telegram_users')
-    .select('last_promo_sent_at')
+    .select(dateColumn)
     .eq('id', userId)
     .single();
 
-  if (!promoData || !promoData.last_promo_sent_at) return false;
+  if (!promoData || !promoData[dateColumn]) return false;
 
-  let dbTimeStr = promoData.last_promo_sent_at;
+  let dbTimeStr = promoData[dateColumn];
   if (dbTimeStr.endsWith('Z')) {
     dbTimeStr = dbTimeStr.slice(0, -1) + '+07:00';
   } else if (dbTimeStr.includes('+00:00')) {
@@ -3421,9 +3452,33 @@ async function validatePromoExpiration(supabase: any, userId: number, configKey:
 
   const lastPromoTimeMs = new Date(dbTimeStr).getTime();
   const currentTimeMs = Date.now();
-  const ageHours = (currentTimeMs - lastPromoTimeMs) / (1000 * 60 * 60);
 
-  return ageHours <= 1;
+  if (isSpecialPromo) {
+    // Special Promo: Kadaluarsa pukul 00:00 WIB hari berikutnya
+    // Buat Date object untuk waktu promo (WIB)
+    const promoDate = new Date(lastPromoTimeMs);
+    const offsetPromoWib = promoDate.getTime() + (7 * 60 * 60 * 1000);
+    const promoWib = new Date(offsetPromoWib);
+
+    // Buat Date object untuk waktu sekarang (WIB)
+    const currentDate = new Date(currentTimeMs);
+    const offsetCurrentWib = currentDate.getTime() + (7 * 60 * 60 * 1000);
+    const currentWib = new Date(offsetCurrentWib);
+
+    // Jika beda hari/bulan/tahun, berarti sudah melewati 00:00 WIB
+    if (
+      promoWib.getUTCFullYear() === currentWib.getUTCFullYear() &&
+      promoWib.getUTCMonth() === currentWib.getUTCMonth() &&
+      promoWib.getUTCDate() === currentWib.getUTCDate()
+    ) {
+      return true;
+    }
+    return false;
+  } else {
+    // Promo Biasa: Kadaluarsa 1 jam
+    const ageHours = (currentTimeMs - lastPromoTimeMs) / (1000 * 60 * 60);
+    return ageHours <= 1;
+  }
 }
 
 // Helper Global untuk mengirim promo agar sinkron di semua fitur
@@ -3464,6 +3519,48 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
   };
 
   // Kirim menggunakan File ID yang terpilih
+  return await sendPromoToUser(botToken, userId, promoMessage, selectedPromoFileId, promoKeyboard);
+}
+
+async function executeSpecialPromoAction(supabase: any, botToken: string, userId: number) {
+  let selectedPromoFileId: string | null = null;
+  if (PROMO_FILEID_LIST && PROMO_FILEID_LIST.length > 0) {
+    const randomIndex = Math.floor(Math.random() * PROMO_FILEID_LIST.length);
+    selectedPromoFileId = PROMO_FILEID_LIST[randomIndex];
+  } else {
+    selectedPromoFileId = await getPromoPremiumFileId(supabase);
+  }
+
+  const promoMessage = `🎉 <b>SELAMAT! ANDA TERPILIH!</b> 🎉
+
+Anda adalah 1 dari 50 pengguna yang berhak mendapatkan <b>PENAWARAN SPESIAL 1 KALI INI SAJA!</b> 🌟
+
+🚨 <b>PROMO HANGUS PADA PUKUL 00:00 WIB HARI INI!</b> 🚨
+
+💎 <b>Benefit Premium Khusus:</b>
+✅ Bebas Kirim Stiker & GIF
+✅ Anti Banned (Perlindungan Ekstra)
+✅ Filter Gender & Lokasi Sepuasnya
+✅ Badge Premium VIP
+
+🎁 <b>PENAWARAN SPESIAL (HANYA HARI INI):</b>
+━━━━━━━━━━━━━━━━━━━━
+📦 <b>PREMIUM 30 HARI</b>
+<s>Rp 60.000</s> → <b>HANYA Rp 15.000!</b> 🔥
+
+📦 <b>PREMIUM 7 HARI</b>
+<s>Rp 25.000</s> → <b>HANYA Rp 10.000!</b> 🔥
+━━━━━━━━━━━━━━━━━━━━
+⏳ <i>Klaim sekarang sebelum batas waktu habis! Kesempatan ini tidak akan datang lagi.</i>`;
+
+  const promoKeyboard = {
+    inline_keyboard: [
+      [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 15.000 (Spesial!)', callback_data: 'special_buy_premium_30' }],
+      [{ text: '📦 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 10.000 (Spesial!)', callback_data: 'special_buy_premium_7' }],
+      [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
+    ]
+  };
+
   return await sendPromoToUser(botToken, userId, promoMessage, selectedPromoFileId, promoKeyboard);
 }
 
@@ -3726,6 +3823,10 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
     if (success && searchResult) {
       if (searchResult.action === 'show_promo') {
         await executePromoAction(supabase, botToken, userId);
+        return;
+      }
+      if (searchResult.action === 'show_special_promo') {
+        await executeSpecialPromoAction(supabase, botToken, userId);
         return;
       }
       // Channel invite check (setelah promo check, sebelum channel check)

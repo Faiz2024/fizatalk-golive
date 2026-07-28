@@ -42,6 +42,11 @@ Deno.serve(async (req) => {
         fine: number;
         total: number;
       }[];
+      special_promo: {
+        eligibleToday: number;
+        sentToday: number;
+        purchasedToday: number;
+      };
     };
 
     // Format label tanggal Indonesia (di edge agar client tetap ringan)
@@ -112,7 +117,7 @@ Deno.serve(async (req) => {
     });
 
     return new Response(
-      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats, transactions }),
+      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats, transactions, special_promo: raw.special_promo }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {

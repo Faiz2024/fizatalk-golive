@@ -116,9 +116,15 @@ async function handlePremiumSuccess(supabase: any, botToken: string, merchantRef
   }
 
   // Update user: activate premium + reset penalty
+  const isSpecialPromo = (req.price === 15000 && req.duration_days === 30) || (req.price === 10000 && req.duration_days === 7);
+  const updatePayload: any = { premium_until: premiumEndDate.toISOString(), penalty_points: 0 };
+  if (isSpecialPromo) {
+    updatePayload.special_promo_purchased_at = new Date().toISOString();
+  }
+
   await supabase
     .from('telegram_users')
-    .update({ premium_until: premiumEndDate.toISOString(), penalty_points: 0 })
+    .update(updatePayload)
     .eq('id', req.user_id);
 
   // Unblock if blocked
