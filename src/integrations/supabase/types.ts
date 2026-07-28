@@ -545,6 +545,7 @@ export type Database = {
           created_at: string
           first_name: string | null
           gender: string | null
+          has_received_special_promo: boolean | null
           id: number
           is_channel_member: boolean | null
           is_tiktok_mode: boolean | null
@@ -560,6 +561,8 @@ export type Database = {
           premium_until: string | null
           spam_warning_until: string | null
           spam_warnings: number | null
+          special_promo_purchased_at: string | null
+          special_promo_sent_at: string | null
           state: Database["public"]["Enums"]["user_state"]
           target_gender: string | null
           target_location: string | null
@@ -572,6 +575,7 @@ export type Database = {
           created_at?: string
           first_name?: string | null
           gender?: string | null
+          has_received_special_promo?: boolean | null
           id: number
           is_channel_member?: boolean | null
           is_tiktok_mode?: boolean | null
@@ -587,6 +591,8 @@ export type Database = {
           premium_until?: string | null
           spam_warning_until?: string | null
           spam_warnings?: number | null
+          special_promo_purchased_at?: string | null
+          special_promo_sent_at?: string | null
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
           target_location?: string | null
@@ -599,6 +605,7 @@ export type Database = {
           created_at?: string
           first_name?: string | null
           gender?: string | null
+          has_received_special_promo?: boolean | null
           id?: number
           is_channel_member?: boolean | null
           is_tiktok_mode?: boolean | null
@@ -614,6 +621,8 @@ export type Database = {
           premium_until?: string | null
           spam_warning_until?: string | null
           spam_warnings?: number | null
+          special_promo_purchased_at?: string | null
+          special_promo_sent_at?: string | null
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
           target_location?: string | null
@@ -806,6 +815,10 @@ export type Database = {
       cancel_fine_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_premium_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_topup_transaction: { Args: { p_user_id: number }; Returns: Json }
+      check_and_claim_special_promo: {
+        Args: { p_user_id: number }
+        Returns: boolean
+      }
       check_channel_invite_eligibility: {
         Args: { p_user_id: number }
         Returns: boolean
