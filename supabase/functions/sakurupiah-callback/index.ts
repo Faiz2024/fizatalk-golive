@@ -102,9 +102,42 @@ async function handlePremiumSuccess(supabase: any, botToken: string, merchantRef
   // Calculate premium end date
   const { data: userData } = await supabase
     .from('telegram_users')
-    .select('premium_until')
+    .select('premium_until, special_promo_purchased_at, has_received_special_promo, special_promo_sent_at')
     .eq('id', req.user_id)
     .single();
+
+  const isSpecialPromo = (req.price === 15000 && req.duration_days === 30) || (req.price === 10000 && req.duration_days === 7);
+
+  // Validasi Lapis 3: Cek apakah invoice telat dibayar (melewati batas hari) atau sudah klaim
+  if (isSpecialPromo) {
+    let isPromoValid = false;
+    if (userData?.has_received_special_promo && userData?.special_promo_sent_at) {
+      const sentAt = new Date(userData.special_promo_sent_at);
+      const sentWib = new Date(sentAt.getTime() + (7 * 60 * 60 * 1000));
+      const sentDate = sentWib.toISOString().split('T')[0];
+
+      const now = new Date();
+      const nowWib = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+      const nowDate = nowWib.toISOString().split('T')[0];
+
+      if (sentDate === nowDate) {
+        isPromoValid = true;
+      }
+    }
+
+    if (!isPromoValid || userData?.special_promo_purchased_at) {
+      console.warn(`[CALLBACK] Special promo rejected for ${req.user_id}: expired or already purchased.`);
+      
+      // Update request status as rejected or expired
+      await supabase
+        .from('premium_requests')
+        .update({ status: 'expired', processed_at: new Date().toISOString() })
+        .eq('id', requestId);
+
+      await sendTelegramMessage(botToken, req.user_id, '⚠️ <b>Transaksi Ditolak</b>\n\nPembayaran diterima, namun batas waktu penawaran promo khusus ini telah habis (kedaluwarsa) atau jatah (1x seumur hidup) telah terpakai. Transaksi promo tidak berlaku lagi.');
+      return;
+    }
+  }
 
   let premiumEndDate: Date;
   if (userData?.premium_until && new Date(userData.premium_until) > new Date()) {
@@ -116,7 +149,6 @@ async function handlePremiumSuccess(supabase: any, botToken: string, merchantRef
   }
 
   // Update user: activate premium + reset penalty
-  const isSpecialPromo = (req.price === 15000 && req.duration_days === 30) || (req.price === 10000 && req.duration_days === 7);
   const updatePayload: any = { premium_until: premiumEndDate.toISOString(), penalty_points: 0 };
   if (isSpecialPromo) {
     updatePayload.special_promo_purchased_at = new Date().toISOString();

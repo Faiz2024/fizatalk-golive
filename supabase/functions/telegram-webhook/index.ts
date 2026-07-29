@@ -481,8 +481,20 @@ async function handleSuccessfulStarsPayment(
       // Get existing premium
       const { data: userData } = await supabase
         .from('telegram_users')
-        .select('premium_until')
+        .select('premium_until, special_promo_purchased_at')
         .eq('id', userId).single();
+
+      const isSpecialPromo = configKey.startsWith('sp');
+
+      // Lapis Keamanan Tambahan untuk Stars Payment
+      if (isSpecialPromo) {
+        const isPromoValid = await validatePromoExpiration(supabase, userId, configKey);
+        if (!isPromoValid || userData?.special_promo_purchased_at) {
+          console.warn(`[STARS] Special promo rejected for ${userId}: expired or already purchased.`);
+          await sendTelegramMessage(botToken, userId, '⚠️ Pembayaran diterima namun penawaran promo khusus ini telah kedaluwarsa atau jatah seumur hidup telah terpakai. Transaksi promo tidak berlaku lagi.');
+          return;
+        }
+      }
 
       let premiumEndDate: Date;
       const existing = userData?.premium_until;
@@ -494,7 +506,6 @@ async function handleSuccessfulStarsPayment(
         premiumEndDate.setDate(premiumEndDate.getDate() + config.days);
       }
 
-      const isSpecialPromo = configKey.startsWith('sp');
       const updatePayload: any = { 
         premium_until: premiumEndDate.toISOString(), 
         penalty_points: 0, 
@@ -3523,13 +3534,7 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 }
 
 async function executeSpecialPromoAction(supabase: any, botToken: string, userId: number) {
-  let selectedPromoFileId: string | null = null;
-  if (PROMO_FILEID_LIST && PROMO_FILEID_LIST.length > 0) {
-    const randomIndex = Math.floor(Math.random() * PROMO_FILEID_LIST.length);
-    selectedPromoFileId = PROMO_FILEID_LIST[randomIndex];
-  } else {
-    selectedPromoFileId = await getPromoPremiumFileId(supabase);
-  }
+  let selectedPromoFileId: string | null = await getBotSetting(supabase, 'special_promo_premium_file_id');
 
   const promoMessage = `🎉 <b>SELAMAT! ANDA TERPILIH!</b> 🎉
 
@@ -3556,8 +3561,7 @@ Anda adalah 1 dari 50 pengguna yang berhak mendapatkan <b>PENAWARAN SPESIAL 1 KA
   const promoKeyboard = {
     inline_keyboard: [
       [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 15.000 (Spesial!)', callback_data: 'special_buy_premium_30' }],
-      [{ text: '📦 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 10.000 (Spesial!)', callback_data: 'special_buy_premium_7' }],
-      [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
+      [{ text: '📦 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 10.000 (Spesial!)', callback_data: 'special_buy_premium_7' }]
     ]
   };
 
@@ -5801,7 +5805,10 @@ Deno.serve(async (req) => {
         }
 
         await answerCallbackQuery(botToken, query.id);
-        if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+        // Jangan hapus pesan promo khusus agar bisa ditekan kapanpun selama belum expired
+        if (message && !configKey.startsWith('sp')) {
+          await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+        }
 
         const premiumStarsPrice = calculateStarsPrice(config.price);
         const premiumStarsPayload = JSON.stringify({ t: 'p', k: configKey, u: userId });
@@ -6743,6 +6750,23 @@ Deno.serve(async (req) => {
           await sendTelegramMessage(botToken, userId, `✅ <b>Foto Promo berhasil diperbarui!</b>\n\nFile ID: <code>${fileId.substring(0, 30)}...</code>`);
         } else {
           await sendTelegramMessage(botToken, userId, '⚠️ Reply ke foto Promo dengan command /set_promo');
+        }
+      }
+      // COMMAND /SET_SPECIAL_PROMO - ADMIN ONLY (Reply to photo to set Special Promo image)
+      if (text === '/set_special_promo') {
+        const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+        if (userId.toString() !== csChatId) {
+          await sendTelegramMessage(botToken, userId, '❌ Command ini hanya untuk admin.');
+          return new Response('OK', { status: 200 });
+        }
+
+        if (message.reply_to_message?.photo) {
+          const photo = message.reply_to_message.photo;
+          const fileId = photo[photo.length - 1].file_id;
+          await setBotSetting(supabase, 'special_promo_premium_file_id', fileId, userId);
+          await sendTelegramMessage(botToken, userId, `✅ <b>Foto Promo Khusus berhasil diperbarui!</b>\n\nFile ID: <code>${fileId.substring(0, 30)}...</code>`);
+        } else {
+          await sendTelegramMessage(botToken, userId, '⚠️ Reply ke foto Promo Khusus dengan command /set_special_promo');
         }
       }
       // COMMAND /SET_REENGAGE_CAT - ADMIN ONLY (Reply to photo to set Cute Cat image)
