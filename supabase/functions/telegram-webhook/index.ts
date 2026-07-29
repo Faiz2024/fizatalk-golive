@@ -3548,20 +3548,12 @@ Anda adalah 1 dari 50 pengguna yang berhak mendapatkan <b>PENAWARAN SPESIAL 1 KA
 ✅ Filter Gender & Lokasi Sepuasnya
 ✅ Badge Premium VIP
 
-🎁 <b>PENAWARAN SPESIAL (HANYA HARI INI):</b>
-━━━━━━━━━━━━━━━━━━━━
-📦 <b>PREMIUM 30 HARI</b>
-<s>Rp 60.000</s> → <b>HANYA Rp 15.000!</b> 🔥
-
-📦 <b>PREMIUM 7 HARI</b>
-<s>Rp 25.000</s> → <b>HANYA Rp 10.000!</b> 🔥
-━━━━━━━━━━━━━━━━━━━━
 ⏳ <i>Klaim sekarang sebelum batas waktu habis! Kesempatan ini tidak akan datang lagi.</i>`;
 
   const promoKeyboard = {
     inline_keyboard: [
-      [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 15.000 (Spesial!)', callback_data: 'special_buy_premium_30' }],
-      [{ text: '📦 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 10.000 (Spesial!)', callback_data: 'special_buy_premium_7' }]
+      [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 15.000 (1x)', callback_data: 'special_buy_premium_30' }],
+      [{ text: '🔥 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 10.000 (1x)', callback_data: 'special_buy_premium_7' }]
     ]
   };
 
