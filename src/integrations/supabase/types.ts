@@ -903,6 +903,7 @@ export type Database = {
         Returns: Json
       }
       toggle_tiktok_mode: { Args: { p_user_id: number }; Returns: Json }
+      update_daily_eligible_count: { Args: never; Returns: undefined }
       update_last_active_daily: {
         Args: { p_user_id: number }
         Returns: boolean
