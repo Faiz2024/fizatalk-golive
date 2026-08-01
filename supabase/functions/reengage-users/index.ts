@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
         .lt("last_active", sevenDaysAgo)
         .or(`last_reengagement_sent_at.is.null,last_reengagement_sent_at.lt.${sevenDaysAgo}`)
         .order("last_active", { ascending: false }) // prioritize recently inactive users (descending)
-        .limit(300); // increased batch limit from 100 to 300 to process queue faster
+        .limit(150); // reduced batch limit to 150 for 5-minute intervals and throttling
 
       if (usersError) throw usersError;
       users = normalUsers ?? [];
@@ -163,8 +163,11 @@ Deno.serve(async (req) => {
     // Kumpulkan semua update DB di memori, eksekusi bulk di akhir loop
     const bulkUpdates: { id: number; last_reengagement_sent_at: string; last_reengagement_message_id: number | null }[] = [];
 
-    // 4. Proses pengiriman batch (loop dengan delay 100ms)
-    for (const user of users) {
+    // 4. Proses pengiriman batch dengan Promise.all & Throttling (maksimal 5 request per detik)
+    const MAX_CONCURRENT = 5; 
+    let currentIndex = 0;
+
+    const processUser = async (user: any) => {
       // a. Hapus pesan lama jika ada
       if (user.last_reengagement_message_id) {
         try {
@@ -223,9 +226,8 @@ Deno.serve(async (req) => {
             const largestPhoto = photos[photos.length - 1];
             if (largestPhoto && largestPhoto.file_id) {
               const fileId = largestPhoto.file_id;
-              cachedFileIds[template.imageKey] = fileId; // simpan di memori lokal batch
+              cachedFileIds[template.imageKey] = fileId; 
               
-              // Simpan ke database secara asinkron agar tidak memblokir loop
               supabase.from("bot_settings").upsert({
                 key: `reengage_file_id_${template.imageKey}`,
                 value: fileId,
@@ -238,7 +240,6 @@ Deno.serve(async (req) => {
             }
           }
 
-          // e. Kumpulkan update (akan di-bulk upsert di akhir loop)
           bulkUpdates.push({
             id: user.id,
             last_reengagement_sent_at: new Date().toISOString(),
@@ -255,7 +256,6 @@ Deno.serve(async (req) => {
             desc.includes("chat not found")
           ) {
             blockedCount++;
-            // Tandai dengan tanggal 2099 agar tidak di-query lagi selamanya
             bulkUpdates.push({
               id: user.id,
               last_reengagement_sent_at: "2099-12-31T00:00:00+00:00",
@@ -265,7 +265,6 @@ Deno.serve(async (req) => {
           } else {
             errorCount++;
             console.error(`[Reengage] Telegram sendPhoto failed for user ${user.id}: ${desc}`);
-            // Tetap update last_reengagement_sent_at agar tidak dicoba terus-menerus di batch berikutnya
             bulkUpdates.push({
               id: user.id,
               last_reengagement_sent_at: new Date().toISOString(),
@@ -277,11 +276,24 @@ Deno.serve(async (req) => {
         errorCount++;
         console.error(`[Reengage] Exception when sending to user ${user.id}:`, err);
       }
+    };
 
-      // Berikan jeda acak (jitter) antar pengiriman untuk menghindari rate limit dan deteksi bot Telegram
-      const delay = Math.floor(Math.random() * 100) + 80; // 80-180ms
-      await new Promise(resolve => setTimeout(resolve, delay));
+    // Fungsi worker untuk menjalankan task secara paralel namun terkontrol
+    const worker = async () => {
+      while (currentIndex < users.length) {
+        const idx = currentIndex++;
+        await processUser(users[idx]);
+        // Jeda ~200ms antar iterasi untuk masing-masing worker
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    };
+
+    // Jalankan worker secara bersamaan (maks 5 request simultan)
+    const workers = [];
+    for (let i = 0; i < MAX_CONCURRENT; i++) {
+      workers.push(worker());
     }
+    await Promise.all(workers);
 
     // 5. Eksekusi bulk upsert ke database (1 panggilan menggantikan ratusan individual update)
     if (bulkUpdates.length > 0) {
@@ -313,38 +325,31 @@ Deno.serve(async (req) => {
     try {
       const todayWIB = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
       
-      // Hitung eligible count saat ini
-      const sevenDaysAgoNow = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { count: eligibleCount } = await supabase
-        .from("v_eligible_reengagement_users")
-        .select("id", { count: "exact", head: true })
-        .eq("state", "idle")
-        .lt("last_active", sevenDaysAgoNow)
-        .or(`last_reengagement_sent_at.is.null,last_reengagement_sent_at.lt.${sevenDaysAgoNow}`);
-
-      // Upsert daily stats: eligible di-overwrite (snapshot terbaru), sent/blocked/error di-akumulasi
+      // Upsert daily stats: sent/blocked/error di-akumulasi. (eligible_count tidak dihitung ulang secara sinkron untuk menghindari timeout)
+      // Kita asumsikan eligible_count tidak di-overwrite menjadi 0 jika nilainya sudah ada.
       const { data: existingStats } = await supabase
         .from("reengagement_daily_stats")
-        .select("sent_count, blocked_count, error_count")
+        .select("eligible_count, sent_count, blocked_count, error_count")
         .eq("date", todayWIB)
         .maybeSingle();
 
       const newSent = (existingStats?.sent_count ?? 0) + successCount;
       const newBlocked = (existingStats?.blocked_count ?? 0) + blockedCount;
       const newError = (existingStats?.error_count ?? 0) + errorCount;
+      const currentEligible = existingStats?.eligible_count ?? 0;
 
       await supabase
         .from("reengagement_daily_stats")
         .upsert({
           date: todayWIB,
-          eligible_count: eligibleCount ?? 0,
+          eligible_count: currentEligible,
           sent_count: newSent,
           blocked_count: newBlocked,
           error_count: newError,
           updated_at: new Date().toISOString()
         }, { onConflict: "date" });
 
-      console.log(`[Reengage] Daily stats recorded for ${todayWIB}: eligible=${eligibleCount}, sent=${newSent}, blocked=${newBlocked}, error=${newError}`);
+      console.log(`[Reengage] Daily stats recorded for ${todayWIB}: sent=${newSent}, blocked=${newBlocked}, error=${newError}`);
     } catch (statsErr) {
       console.error("[Reengage] Failed to record daily stats:", statsErr);
     }
