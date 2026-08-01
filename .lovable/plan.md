@@ -1,32 +1,52 @@
-## Analisis
+# Diagnosis: Bot Sering Berhenti Merespon
 
-Tombol Stop masih gagal saat sedang chatting karena RPC `end_chat_comprehensive` error sebelum selesai. Log backend terbaru menunjukkan:
+## Temuan dari log & database (terverifikasi)
 
-```text
-[END_CHAT_FAIL] rpc_error: column "message_id" does not exist
-```
+Bot tidak "crash" — database yang kehabisan nafas. Saat cek barusan:
 
-Penyebabnya ada di migration ajakan channel yang mengubah `end_chat_comprehensive`: RPC membaca `reconnect_requests.message_id`, padahal tabel yang aktif punya kolom `requester_message_id`. Saat user sedang chatting dan klik Stop, RPC masuk ke blok reconnect notification, query kolom salah itu melempar error, sehingga reset chat tidak tuntas. Saat user tidak chatting, alurnya tidak memanggil RPC ini, jadi tombol Stop tetap terlihat berfungsi.
+- Log Edge Function `telegram-webhook` penuh dengan:
+  `[CRITICAL] DB Error fetching user: canceling statement due to statement timeout`
+  dan `upstream request timeout`.
+- Log Postgres: ratusan `canceling statement due to statement timeout` beruntun.
+- `pg_stat_activity` saat cek: query matchmaking (`comprehensive_search_action`) berjalan **45 detik**, menunggu lock `WALInsert`; autovacuum ANALYZE di `telegram_users` sudah jalan **17 menit**.
+- Endpoint metrics/health database sendiri timeout (tidak merespon) — konsisten dengan overload.
 
-## Rencana Perbaikan Minimal
+## Penyebab utama (berdasar statistik query nyata)
 
-1. Buat migration kecil untuk memperbaiki RPC `end_chat_comprehensive` saja:
-   - Ganti referensi `message_id` menjadi `requester_message_id` pada query `reconnect_requests`.
-   - Pertahankan output JSON tetap bernama `requester_message_id` agar kode Edge Function tidak perlu berubah.
-   - Tidak mengubah logika promo, ajakan channel, rating, waiting queue, reconnect status, atau alur Stop/Next lainnya.
+| Query | Panggilan | Rata-rata | Total waktu DB |
+|---|---|---|---|
+| Scan `v_eligible_reengagement_users` (cron re-engage tiap 5 menit) | 4.371 | **5.081 ms** | ~6,2 jam |
+| `get_admin_dashboard_stats` (dashboard) | 4.560 | **1.950 ms** | ~2,5 jam |
+| Query kedua `v_eligible_reengagement_users` | 3.721 | 2.177 ms | ~2,3 jam |
+| `comprehensive_search_action` (matchmaking) | 6,9 juta | 10,4 ms | ~20 jam |
 
-2. Deploy ulang komponen yang terdampak:
-   - Jalankan migration database.
-   - Deploy ulang function `telegram-webhook` jika diperlukan agar webhook memakai kode terbaru yang sudah ada.
-   - Setup ulang webhook setelah deploy.
+1. **Cron re-engage tiap 5 menit** menjalankan query 2–5 detik yang men-scan seluruh `telegram_users` (130.822 baris, 118 MB) plus anti-join ke `blocked_users`. View `v_eligible_reengagement_users` tidak bisa memanfaatkan indeks parsial yang ada karena filternya diterapkan di atas view. Setiap eksekusi mengunci resource dan bentrok dengan traffic bot.
+2. **Kontensi tulis (`WALInsert`)**: `telegram_users` di-update sangat sering (state, last_active, partner_id), 12.443 dead tuple, autovacuum berjalan lama dan memperparah I/O.
+3. **Jam ~2 pagi WIB** = jam puncak bot anonim + tumpukan job terjadwal (`update_daily_eligible_count` tiap 6 jam, cron re-engage tiap 5 menit, autovacuum). Kombinasinya melewati kapasitas compute instance sehingga statement timeout massal → webhook gagal → bot terasa mati.
+4. **Dashboard admin** memanggil `get_admin_dashboard_stats` (±2 detik/panggilan) berulang, menambah beban di saat yang sama.
 
-3. Verifikasi:
-   - Cek log `[END_CHAT_FAIL]` setelah perbaikan untuk memastikan error kolom hilang.
-   - Uji jalur RPC secara aman dengan data non-destruktif/terbatas bila memungkinkan, tanpa mengubah state user aktif sembarangan.
-   - Pastikan Stop saat tidak chatting tetap tidak berubah.
+## Rencana perbaikan
 
-## Dampak dan Batasan
+### A. Hentikan sumber beban terbesar (prioritas 1)
+- Ubah cron `reengage-inactive-users` dari **tiap 5 menit → tiap 30 menit**, dan jadwalkan hanya di jam sepi (hindari 00:00–04:00 WIB).
+- Ganti query view dengan **RPC khusus** `get_reengagement_batch(p_limit)` yang:
+  - memfilter langsung di `telegram_users` (bukan lewat view) agar indeks parsial `idx_reengage_eligible` terpakai,
+  - melakukan cek blokir per-baris hanya untuk kandidat yang lolos limit (bukan anti-join seluruh tabel),
+  - mengembalikan maksimum N baris dengan `LIMIT` yang didorong ke dalam.
+- Fungsi `reengage-users` dipakai untuk memanggil RPC ini, bukan `.from("v_eligible_reengagement_users")`.
 
-- Perubahan hanya menyasar bug kolom salah di RPC.
-- Tidak ada table baru, tidak ada policy/RLS baru, dan tidak ada perubahan UI website.
-- Biaya cloud tetap hemat: tidak menambah query baru; hanya memperbaiki query yang sudah ada agar tidak error.
+### B. Kurangi biaya matchmaking & tulis
+- Tambah indeks komposit untuk jalur pencarian partner (`state`, `gender`, `location`, `last_active`) agar `comprehensive_search_action` tidak melakukan scan berulang.
+- Setel `autovacuum_vacuum_scale_factor` lebih agresif khusus `telegram_users` supaya vacuum berjalan singkat dan sering, bukan lama sekali dan menahan I/O.
+
+### C. Dashboard admin
+- Cache hasil `get_admin_dashboard_stats` (tabel snapshot yang di-refresh berkala) alih-alih menghitung ulang setiap kali dashboard dibuka.
+
+### D. Ketahanan bot
+- Perpendek timeout query di webhook dan kirim pesan "sistem sedang sibuk, coba lagi" ketika DB timeout, supaya user tidak merasa bot mati total.
+
+### E. Verifikasi
+Setelah perubahan: pantau ulang `pg_stat_statements` (rata-rata query re-engage harus turun dari ~5 detik ke <100 ms) dan pastikan tidak ada lagi `statement timeout` di log Postgres selama 24 jam, khususnya jam 01:00–03:00 WIB.
+
+## Catatan
+Jika setelah A–C beban masih menyentuh batas saat jam puncak, opsi berikutnya adalah menaikkan ukuran compute backend — tetapi optimasi di atas dikerjakan lebih dulu karena penyebab dominan jelas berasal dari query yang tidak efisien, bukan semata volume traffic.
