@@ -2491,14 +2491,24 @@ function buildSearchMessageWithReputation(
     filterText = `\n🎯Target Gender: <b>${gLabel}</b>\n📍Target Lokasi: <b>${locLabel}</b>`;
   }
 
+  // Keterangan shadowban: pencocokan bisa lebih lama (berlaku untuk semua user)
+  let shadowNote = '';
+  if (reputation?.shadowbanned) {
+    const untilText = reputation.shadowban_until
+      ? ` Status ini berakhir otomatis pada ${formatDateTimeWIB(new Date(reputation.shadowban_until))}.`
+      : '';
+    shadowNote = `\n\n⏳ <b>Pencocokan mungkin memakan waktu lebih lama</b> karena Anda terlalu sering mendapat laporan negatif.${untilText}`;
+  }
+
   // Jika tidak ada reputation atau penalty di bawah 40
   if (!reputation || reputation.penalty_points < 40) {
-    // Jika skipIfLowPenalty = true, tidak perlu kirim pesan
-    if (skipIfLowPenalty) {
+    // Jika skipIfLowPenalty = true, tidak perlu kirim pesan (kecuali sedang shadowban)
+    if (skipIfLowPenalty && !reputation?.shadowbanned) {
       return null;
     }
-    return `${baseAction}${filterText}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}`;
+    return `${baseAction}${filterText}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}${shadowNote}`;
   }
+
 
   // Penalty 40-69: Status Peringatan
   if (reputation.status === 'warning') {
