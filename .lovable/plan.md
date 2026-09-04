@@ -1,52 +1,69 @@
-# Diagnosis: Bot Sering Berhenti Merespon
+# Karantina Pelapor Negatif + Perbaikan Alur Tombol Laporkan
 
-## Temuan dari log & database (terverifikasi)
+## Ringkasan
 
-Bot tidak "crash" — database yang kehabisan nafas. Saat cek barusan:
+Tiga perubahan pada bot Telegram:
 
-- Log Edge Function `telegram-webhook` penuh dengan:
-  `[CRITICAL] DB Error fetching user: canceling statement due to statement timeout`
-  dan `upstream request timeout`.
-- Log Postgres: ratusan `canceling statement due to statement timeout` beruntun.
-- `pg_stat_activity` saat cek: query matchmaking (`comprehensive_search_action`) berjalan **45 detik**, menunggu lock `WALInsert`; autovacuum ANALYZE di `telegram_users` sudah jalan **17 menit**.
-- Endpoint metrics/health database sendiri timeout (tidak merespon) — konsisten dengan overload.
+1. User yang menerima **4 laporan negatif (spam/sange) dalam 12 jam** masuk **karantina 3 hari** — hanya dicocokkan dengan sesama user karantina.
+2. Saat menekan **Cari Partner** atau **Next**, user karantina melihat keterangan bahwa pencocokan mungkin lama karena terlalu sering dilaporkan.
+3. Saat menekan tombol **🚩 Laporkan**, pesan berubah jadi himbauan memilih jenis laporan, dengan tambahan tombol **🔍 Cari Partner Baru**.
 
-## Penyebab utama (berdasar statistik query nyata)
+Aturan peluruhan: hitungan laporan berkurang **1 setiap 3 jam**, hanya berjalan bila **tidak ada laporan baru selama 12 jam** terakhir.
 
-| Query | Panggilan | Rata-rata | Total waktu DB |
-|---|---|---|---|
-| Scan `v_eligible_reengagement_users` (cron re-engage tiap 5 menit) | 4.371 | **5.081 ms** | ~6,2 jam |
-| `get_admin_dashboard_stats` (dashboard) | 4.560 | **1.950 ms** | ~2,5 jam |
-| Query kedua `v_eligible_reengagement_users` | 3.721 | 2.177 ms | ~2,3 jam |
-| `comprehensive_search_action` (matchmaking) | 6,9 juta | 10,4 ms | ~20 jam |
+## Perubahan Database (migrasi)
 
-1. **Cron re-engage tiap 5 menit** menjalankan query 2–5 detik yang men-scan seluruh `telegram_users` (130.822 baris, 118 MB) plus anti-join ke `blocked_users`. View `v_eligible_reengagement_users` tidak bisa memanfaatkan indeks parsial yang ada karena filternya diterapkan di atas view. Setiap eksekusi mengunci resource dan bentrok dengan traffic bot.
-2. **Kontensi tulis (`WALInsert`)**: `telegram_users` di-update sangat sering (state, last_active, partner_id), 12.443 dead tuple, autovacuum berjalan lama dan memperparah I/O.
-3. **Jam ~2 pagi WIB** = jam puncak bot anonim + tumpukan job terjadwal (`update_daily_eligible_count` tiap 6 jam, cron re-engage tiap 5 menit, autovacuum). Kombinasinya melewati kapasitas compute instance sehingga statement timeout massal → webhook gagal → bot terasa mati.
-4. **Dashboard admin** memanggil `get_admin_dashboard_stats` (±2 detik/panggilan) berulang, menambah beban di saat yang sama.
+Kolom baru di `telegram_users` (semua ringan, tanpa tabel baru):
 
-## Rencana perbaikan
+- `negative_reports_count` (integer, default 0) — hitungan laporan negatif berjalan
+- `last_negative_report_at` (timestamptz) — waktu laporan negatif terakhir
+- `reports_decay_at` (timestamptz) — penanda kapan peluruhan terakhir dihitung
+- `match_quarantine_until` (timestamptz) — akhir masa karantina 3 hari
 
-### A. Hentikan sumber beban terbesar (prioritas 1)
-- Ubah cron `reengage-inactive-users` dari **tiap 5 menit → tiap 30 menit**, dan jadwalkan hanya di jam sepi (hindari 00:00–04:00 WIB).
-- Ganti query view dengan **RPC khusus** `get_reengagement_batch(p_limit)` yang:
-  - memfilter langsung di `telegram_users` (bukan lewat view) agar indeks parsial `idx_reengage_eligible` terpakai,
-  - melakukan cek blokir per-baris hanya untuk kandidat yang lolos limit (bukan anti-join seluruh tabel),
-  - mengembalikan maksimum N baris dengan `LIMIT` yang didorong ke dalam.
-- Fungsi `reengage-users` dipakai untuk memanggil RPC ini, bukan `.from("v_eligible_reengagement_users")`.
+Indeks parsial `WHERE match_quarantine_until IS NOT NULL` agar pencocokan tetap murah.
 
-### B. Kurangi biaya matchmaking & tulis
-- Tambah indeks komposit untuk jalur pencarian partner (`state`, `gender`, `location`, `last_active`) agar `comprehensive_search_action` tidak melakukan scan berulang.
-- Setel `autovacuum_vacuum_scale_factor` lebih agresif khusus `telegram_users` supaya vacuum berjalan singkat dan sering, bukan lama sekali dan menahan I/O.
+### Fungsi bantu `public.decay_negative_reports(p_user_id)`
+Peluruhan **lazy** (tanpa cron, hemat biaya): dipanggil hanya saat user melapor / dilaporkan / mencari partner. Logika:
+- Jika `now() - last_negative_report_at >= 12 jam`, kurangi hitungan sebanyak `floor(jam sejak awal peluruhan / 3)`, minimum 0.
+- Hanya menulis ke DB bila nilainya benar-benar berubah.
 
-### C. Dashboard admin
-- Cache hasil `get_admin_dashboard_stats` (tabel snapshot yang di-refresh berkala) alih-alih menghitung ulang setiap kali dashboard dibuka.
+### `submit_partner_report` (diubah)
+Setelah laporan spam/sange tercatat:
+1. Jalankan peluruhan lazy untuk user yang dilaporkan.
+2. Naikkan `negative_reports_count`, set `last_negative_report_at = now()`.
+3. Jika hitungan mencapai **>= 4** dan laporan pertama dalam jendela masih di dalam 12 jam → set `match_quarantine_until = now() + 3 hari` (tidak diperpanjang berulang jika karantina masih aktif; diperpanjang hanya bila sudah kedaluwarsa).
+4. User premium dikecualikan dari karantina, konsisten dengan aturan penalti yang ada.
 
-### D. Ketahanan bot
-- Perpendek timeout query di webhook dan kirim pesan "sistem sedang sibuk, coba lagi" ketika DB timeout, supaya user tidak merasa bot mati total.
+Semua tetap dalam satu RPC — tidak ada tambahan round-trip dari Edge Function.
 
-### E. Verifikasi
-Setelah perubahan: pantau ulang `pg_stat_statements` (rata-rata query re-engage harus turun dari ~5 detik ke <100 ms) dan pastikan tidak ada lagi `statement timeout` di log Postgres selama 24 jam, khususnya jam 01:00–03:00 WIB.
+### `comprehensive_search_action` (diubah)
+- Ambil `match_quarantine_until` user saat mengambil baris user (tanpa query tambahan).
+- Jalankan peluruhan lazy untuk user pencari.
+- Di loop kandidat, ambil `match_quarantine_until` kandidat dari join `waiting_queue` yang sudah ada, lalu **lewati kandidat jika status karantina keduanya tidak sama** (karantina hanya cocok dengan karantina; normal hanya dengan normal).
+- Tambahkan ke objek `reputation` pada hasil JSON: `quarantined` (boolean) dan `quarantine_until`.
 
-## Catatan
-Jika setelah A–C beban masih menyentuh batas saat jam puncak, opsi berikutnya adalah menaikkan ukuran compute backend — tetapi optimasi di atas dikerjakan lebih dulu karena penyebab dominan jelas berasal dari query yang tidak efisien, bukan semata volume traffic.
+`find_and_pair_partner` diberi aturan pencocokan yang sama agar konsisten bila jalur itu terpakai.
+
+## Perubahan Edge Function `telegram-webhook`
+
+- **Pesan pencarian** (`sendSearchingMessage`): bila `reputation.quarantined` true, tambahkan baris keterangan, misalnya:
+  "⏳ Pencocokan mungkin memakan waktu lebih lama karena akun Anda terlalu sering menerima laporan negatif. Status ini berakhir otomatis pada <tanggal WIB>."
+  Berlaku untuk tombol Cari Partner maupun Next (keduanya lewat fungsi yang sama).
+- **Tombol 🚩 Laporkan** (`report_user_*`): ganti `editMessageReplyMarkup` menjadi `editMessageText` dengan teks himbauan, contoh:
+  "🚩 Pilih jenis laporan yang sesuai. Laporan palsu dapat menurunkan reputasi Anda sendiri."
+  Keyboard: baris 1 → 🚨 Spam / 🔞 Sange, baris 2 → 🔍 Cari Partner Baru (`search_partner`).
+  Sertakan fallback ke `editMessageReplyMarkup` bila editText gagal (pesan media/terlalu lama), agar tidak ada regresi.
+
+## Pertimbangan
+
+- **Biaya cloud**: tanpa tabel/cron baru; peluruhan lazy dan hanya menulis saat nilai berubah; filter karantina memakai kolom yang sudah ikut dalam join kandidat.
+- **Performa**: indeks parsial + tidak ada query tambahan per pencarian.
+- **Keamanan**: seluruh logika di RPC `SECURITY DEFINER`; klien Telegram tidak bisa memanipulasi status karantina; validasi partner terakhir & rate limit laporan yang ada tetap dipertahankan.
+- **Kompatibilitas**: alur rating (asik/baik), penalti, blokir 100 poin, promo, dan channel invite tidak diubah.
+
+## Verifikasi setelah implementasi
+
+- Simulasi 4 laporan dalam 12 jam pada user uji → cek `match_quarantine_until` terisi 3 hari.
+- Cek user karantina hanya berpasangan dengan sesama karantina.
+- Cek teks keterangan muncul pada Cari Partner dan Next.
+- Cek tombol Laporkan menampilkan teks himbauan + tombol Cari Partner Baru.
+- Deploy ulang `telegram-webhook` dan pantau log untuk error.
