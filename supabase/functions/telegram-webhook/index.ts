@@ -816,6 +816,100 @@ async function setBotSetting(supabase: any, key: string, value: string, updatedB
   return !error;
 }
 
+// ===== REFERRAL: Premium gratis 1 hari per 3 teman yang diundang =====
+let CACHED_BOT_USERNAME: string | null = null;
+
+async function getBotUsername(supabase: any, botToken: string): Promise<string | null> {
+  if (CACHED_BOT_USERNAME) return CACHED_BOT_USERNAME;
+  const stored = await getBotSetting(supabase, 'bot_username');
+  if (stored) { CACHED_BOT_USERNAME = stored; return stored; }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+    const json = await res.json();
+    const uname = json?.result?.username || null;
+    if (uname) {
+      CACHED_BOT_USERNAME = uname;
+      await setBotSetting(supabase, 'bot_username', uname, 0);
+    }
+    return uname;
+  } catch (_) {
+    return null;
+  }
+}
+
+function buildReferralButtonRow(): any[] {
+  return [{ text: '🎁 Premium Gratis 1 Hari (Ajak 3 Teman)', callback_data: 'referral_menu' }];
+}
+
+async function sendReferralMenu(
+  supabase: any, botToken: string, userId: number,
+  extraNote: string = '', editMessageId?: number
+): Promise<void> {
+  const [{ data: status }, username] = await Promise.all([
+    supabase.rpc('get_referral_status', { p_user_id: userId }),
+    getBotUsername(supabase, botToken)
+  ]);
+
+  const pending = status?.pending ?? 0;
+  const progress = status?.progress ?? 0;
+  const claimable = status?.claimable ?? 0;
+  const totalQualified = status?.total_qualified ?? 0;
+  const rewardsClaimed = status?.rewards_claimed ?? 0;
+
+  const link = username ? `https://t.me/${username}?start=ref_${userId}` : null;
+
+  const premiumText = status?.premium_until
+    ? `\n💎 Premium aktif sampai: <b>${formatDateTimeWIB(new Date(status.premium_until))}</b>`
+    : '';
+
+
+  const message = `🎁 <b>PREMIUM GRATIS 1 HARI</b>
+
+Ajak <b>3 teman</b> memakai bot ini dan dapatkan <b>1 hari Premium gratis</b>. Bisa diulang terus — setiap 3 teman = 1 hari lagi!
+
+📋 <b>Syarat teman dihitung sah:</b>
+Teman membuka bot lewat link kamu <b>dan</b> sudah pernah mendapat partner chat minimal 1 kali.
+
+📊 <b>Progres kamu:</b>
+• Teman sah belum ditukar: <b>${pending}</b> (${progress}/3 menuju hadiah berikutnya)
+• Total teman sah sepanjang waktu: <b>${totalQualified}</b>
+• Hadiah sudah diklaim: <b>${rewardsClaimed} hari</b>${premiumText}
+
+🔗 <b>Link undangan kamu:</b>
+${link ? `<code>${link}</code>` : '<i>Link belum tersedia, coba lagi sebentar lagi.</i>'}${extraNote ? `\n\n${extraNote}` : ''}`;
+
+  const shareText = encodeURIComponent('Yuk ngobrol seru sama orang baru di Fizatalk! 👋');
+  const rows: any[] = [];
+  if (link) {
+    rows.push([{ text: '📤 Bagikan ke Teman', url: `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${shareText}` }]);
+  }
+  rows.push([{ text: claimable > 0 ? `✅ Klaim ${claimable} Hari Premium` : '🎁 Klaim 1 Hari Premium', callback_data: 'referral_claim' }]);
+  rows.push([{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]);
+
+  const keyboard = { inline_keyboard: rows };
+
+  if (editMessageId) {
+    try {
+      const res = await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: userId,
+          message_id: editMessageId,
+          text: message,
+          parse_mode: 'HTML',
+          reply_markup: keyboard
+        })
+      });
+      if (res.ok) return;
+    } catch (_) { /* fallback ke kirim pesan baru */ }
+  }
+  await sendTelegramMessage(botToken, userId, message, keyboard);
+
+}
+
+
+
 // === QRIS MANUAL FALLBACK HELPER ===
 // Digunakan saat Sakurupiah gagal membuat invoice
 async function sendManualQRISPayment(
@@ -1968,7 +2062,9 @@ function buildPremiumNormalKeyboard(): any {
   return {
     inline_keyboard: [
       [{ text: `📦 ${PREMIUM_PACKAGES.normal['7'].label} - Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_7' }],
-      [{ text: `📦 ${PREMIUM_PACKAGES.normal['30'].label} - Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_30' }]
+      [{ text: `📦 ${PREMIUM_PACKAGES.normal['30'].label} - Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_30' }],
+      buildReferralButtonRow()
+
     ]
   };
 }
@@ -3537,6 +3633,8 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
       [{ text: '💎 35 Hari / Rp 30.000', callback_data: 'buy_premium_35' }],
       [{ text: '📅 3 Hari / Rp 10.000', callback_data: 'buy_premium_3' }],
       [{ text: '⚡ 1 Hari / Rp 5.000', callback_data: 'buy_premium_1' }],
+      buildReferralButtonRow(),
+
       [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
     ]
   };
@@ -3565,7 +3663,9 @@ Anda adalah 1 dari 50 pengguna yang berhak mendapatkan <b>PENAWARAN SPESIAL 1 KA
   const promoKeyboard = {
     inline_keyboard: [
       [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 15.000 (1x)', callback_data: 'special_buy_premium_30' }],
-      [{ text: '🔥 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 10.000 (1x)', callback_data: 'special_buy_premium_7' }]
+      [{ text: '🔥 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 10.000 (1x)', callback_data: 'special_buy_premium_7' }],
+      buildReferralButtonRow()
+
     ]
   };
 
@@ -4785,7 +4885,40 @@ Deno.serve(async (req) => {
       }
 
       // --- LOGIKA SHOW PREMIUM OFFER (DINAMIS DARI TOMBOL ANTI BANNED / STIKER / PERINGATAN) ---
+      // === REFERRAL: menu undangan & klaim hadiah ===
+      if (callbackData === 'referral_menu') {
+        answerCallbackQuery(botToken, query.id).catch(() => {});
+        await sendReferralMenu(supabase, botToken, userId);
+        return new Response('OK', { status: 200 });
+      }
+
+      if (callbackData === 'referral_claim') {
+        const { data: claim, error: claimError } = await supabase.rpc('claim_referral_reward', { p_user_id: userId });
+
+        if (claimError) {
+          await answerCallbackQuery(botToken, query.id, '⚠️ Gagal memproses klaim, coba lagi.', true);
+          return new Response('OK', { status: 200 });
+        }
+
+        if (claim?.success) {
+          await answerCallbackQuery(botToken, query.id, '🎉 Berhasil! Premium 1 hari ditambahkan.');
+          const untilText = claim.premium_until ? formatDateTimeWIB(new Date(claim.premium_until)) : '-';
+          await sendReferralMenu(
+            supabase, botToken, userId,
+            `🎉 <b>Selamat!</b> Kamu mendapat <b>1 hari Premium gratis</b>.\n💎 Premium aktif sampai <b>${untilText}</b>.`,
+            message?.message_id
+          );
+        } else if (claim?.error === 'concurrent_request') {
+          await answerCallbackQuery(botToken, query.id, '⏳ Sedang diproses, tunggu sebentar.');
+        } else {
+          const needed = claim?.needed ?? 3;
+          await answerCallbackQuery(botToken, query.id, `Belum cukup. Ajak ${needed} teman lagi ya!`, true);
+        }
+        return new Response('OK', { status: 200 });
+      }
+
       if (callbackData.startsWith('show_premium_offer')) {
+
         await answerCallbackQuery(botToken, query.id);
 
         let customTitle = '🔒 Fitur Khusus Premium!';
@@ -6447,7 +6580,11 @@ Deno.serve(async (req) => {
         await sendTelegramMessage(botToken, userId, '⚠️ <b>Fitur Gift hanya tersedia saat chatting!</b>\n\nSilakan cari partner terlebih dahulu:', startKeyboard);
       }
 
-      else if (text === '/start') {
+      else if (text === '/start' || text.startsWith('/start ')) {
+        // Payload deep-link undangan: /start ref_<referrer_id>
+        const startPayload = text.length > 7 ? text.slice(7).trim() : '';
+        const referrerId = startPayload.startsWith('ref_') ? parseInt(startPayload.slice(4), 10) : NaN;
+
         // Step 1: Cek apakah user sudah ada di database
         const { data: existingUser } = await supabase
           .from('telegram_users')
@@ -6464,6 +6601,12 @@ Deno.serve(async (req) => {
             state: 'idle',
             coins: 0
           });
+
+          // Catat undangan (hanya untuk user yang benar-benar baru)
+          if (Number.isFinite(referrerId) && referrerId !== userId) {
+            await supabase.rpc('register_referral', { p_new_user_id: userId, p_referrer_id: referrerId });
+          }
+
 
           // Tampilkan welcome + pilihan gender
           const genderKeyboard = {

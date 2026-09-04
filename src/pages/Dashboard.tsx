@@ -66,8 +66,15 @@ const fetchStats = async () => {
       sentToday: number;
       purchasedToday: number;
     };
+    referral: {
+      newToday: number;
+      qualifiedToday: number;
+      rewardsToday: number;
+      daily: { label: string; baru: number; sah: number; hadiah: number }[];
+    };
   };
 };
+
 
 const KPICard = ({
   title,
@@ -110,6 +117,9 @@ const Dashboard = () => {
   const reengageActivity = statsQ.data?.reengageActivity ?? [];
   const reengageDailyStats = statsQ.data?.reengageDailyStats ?? [];
   const transactions = statsQ.data?.transactions ?? [];
+  const referral = statsQ.data?.referral;
+  const referralDaily = referral?.daily ?? [];
+
 
   useEffect(() => {
     if (statsQ.error) {
@@ -483,7 +493,75 @@ const Dashboard = () => {
             )}
           </CardContent>
         </Card>
+
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <KPICard
+            title="User Baru dari Referal (Hari Ini)"
+            value={referral?.newToday ?? 0}
+            Icon={UserPlus}
+            loading={isLoading}
+            accent="bg-primary"
+          />
+          <KPICard
+            title="Referal Sah (Hari Ini)"
+            value={referral?.qualifiedToday ?? 0}
+            Icon={Activity}
+            loading={isLoading}
+            accent="bg-accent"
+          />
+          <KPICard
+            title="Hadiah Premium Referal (Hari Ini)"
+            value={referral?.rewardsToday ?? 0}
+            Icon={Smile}
+            loading={isLoading}
+            accent="bg-emerald-500"
+          />
+        </section>
+
+        <Card className="border-border/50 bg-card/60 backdrop-blur">
+          <CardHeader>
+            <CardTitle>User Baru dari Referal (30 Hari Terakhir)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-[320px] w-full" />
+            ) : (
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={referralDaily} margin={{ top: 20, right: 16, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "0.5rem",
+                        color: "hsl(var(--popover-foreground))",
+                      }}
+                      labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                      formatter={(value: number, name: string) => [value.toLocaleString("id-ID"), name]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 13 }} />
+                    <Bar dataKey="baru" name="User Baru dari Referal" fill="#06b6d4" radius={[4, 4, 0, 0]} barSize={14} />
+                    <Bar dataKey="sah" name="Referal Sah (Sudah Chat)" fill="#8b5cf6" radius={[4, 4, 0, 0]} barSize={14} />
+                    <Line
+                      type="monotone"
+                      dataKey="hadiah"
+                      name="Hadiah Premium Dibagikan"
+                      stroke="#10b981"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
+                      activeDot={{ r: 7, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
+
     </div>
   );
 };

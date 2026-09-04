@@ -502,6 +502,33 @@ export type Database = {
         }
         Relationships: []
       }
+      referrals: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          id: string
+          qualified_at: string | null
+          referred_id: number
+          referrer_id: number
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          id?: string
+          qualified_at?: string | null
+          referred_id: number
+          referrer_id: number
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          id?: string
+          qualified_at?: string | null
+          referred_id?: number
+          referrer_id?: number
+        }
+        Relationships: []
+      }
       sticker_packs: {
         Row: {
           added_at: string | null
@@ -561,6 +588,9 @@ export type Database = {
           partner_id: number | null
           penalty_points: number | null
           premium_until: string | null
+          referral_qualified_count: number
+          referral_rewards_claimed: number
+          referred_by: number | null
           reports_decay_at: string | null
           shadowban_until: string | null
           spam_warning_until: string | null
@@ -595,6 +625,9 @@ export type Database = {
           partner_id?: number | null
           penalty_points?: number | null
           premium_until?: string | null
+          referral_qualified_count?: number
+          referral_rewards_claimed?: number
+          referred_by?: number | null
           reports_decay_at?: string | null
           shadowban_until?: string | null
           spam_warning_until?: string | null
@@ -629,6 +662,9 @@ export type Database = {
           partner_id?: number | null
           penalty_points?: number | null
           premium_until?: string | null
+          referral_qualified_count?: number
+          referral_rewards_claimed?: number
+          referred_by?: number | null
           reports_decay_at?: string | null
           shadowban_until?: string | null
           spam_warning_until?: string | null
@@ -835,6 +871,7 @@ export type Database = {
         Args: { p_user_id: number }
         Returns: boolean
       }
+      claim_referral_reward: { Args: { p_user_id: number }; Returns: Json }
       cleanup_inactive_users: { Args: never; Returns: undefined }
       comprehensive_search_action: {
         Args: {
@@ -852,6 +889,8 @@ export type Database = {
       generate_unique_payment_code: { Args: never; Returns: number }
       get_admin_dashboard_stats: { Args: never; Returns: Json }
       get_partner_settings: { Args: { p_partner_id: number }; Returns: Json }
+      get_referral_stats: { Args: never; Returns: Json }
+      get_referral_status: { Args: { p_user_id: number }; Returns: Json }
       get_user_reputation: { Args: { p_user_id: number }; Returns: Json }
       handle_end_chat_promo_logic: {
         Args: { p_user_id: number }
@@ -886,6 +925,10 @@ export type Database = {
         Returns: Json
       }
       prune_bot_logs: { Args: never; Returns: Json }
+      register_referral: {
+        Args: { p_new_user_id: number; p_referrer_id: number }
+        Returns: Json
+      }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
       resolve_reconnect: {
         Args: { p_action: string; p_request_id: string }

@@ -15,8 +15,12 @@ Deno.serve(async (req) => {
     );
 
     // Semua agregasi dihitung di DB via RPC (hemat biaya cloud, akurat WIB)
-    const { data, error } = await supabase.rpc("get_admin_dashboard_stats");
+    const [{ data, error }, { data: referralRaw }] = await Promise.all([
+      supabase.rpc("get_admin_dashboard_stats"),
+      supabase.rpc("get_referral_stats"),
+    ]);
     if (error) throw error;
+
 
     const raw = data as {
       kpis: { newToday: number; activeToday: number; inactive30: number; churn: number; reengageReturns: number; revenueToday: number };
@@ -116,8 +120,30 @@ Deno.serve(async (req) => {
       };
     });
 
+    // Statistik referal (user baru dari undangan)
+    const refRaw = (referralRaw ?? {}) as {
+      newToday?: number; qualifiedToday?: number; rewardsToday?: number;
+      daily?: { date: string; baru: number; sah: number; hadiah: number }[];
+    };
+    const referral = {
+      newToday: refRaw.newToday ?? 0,
+      qualifiedToday: refRaw.qualifiedToday ?? 0,
+      rewardsToday: refRaw.rewardsToday ?? 0,
+      daily: (refRaw.daily ?? []).map((row) => ({
+        label: new Date(`${row.date}T00:00:00+07:00`).toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
+          timeZone: "Asia/Jakarta",
+        }),
+        baru: row.baru ?? 0,
+        sah: row.sah ?? 0,
+        hadiah: row.hadiah ?? 0,
+      })),
+    };
+
     return new Response(
-      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats, transactions, special_promo: raw.special_promo }),
+      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats, transactions, special_promo: raw.special_promo, referral }),
+
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
