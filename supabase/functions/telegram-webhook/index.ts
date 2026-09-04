@@ -2464,6 +2464,8 @@ interface ComprehensiveSearchResult {
     status: string;
     message: string | null;
     penalty_points: number;
+    shadowbanned?: boolean;
+    shadowban_until?: string | null;
   };
   should_send_channel_invite?: boolean;
 }
@@ -2489,18 +2491,28 @@ function buildSearchMessageWithReputation(
     filterText = `\n🎯Target Gender: <b>${gLabel}</b>\n📍Target Lokasi: <b>${locLabel}</b>`;
   }
 
+  // Keterangan shadowban: pencocokan bisa lebih lama (berlaku untuk semua user)
+  let shadowNote = '';
+  if (reputation?.shadowbanned) {
+    const untilText = reputation.shadowban_until
+      ? ` Status ini berakhir otomatis pada ${formatDateTimeWIB(new Date(reputation.shadowban_until))}.`
+      : '';
+    shadowNote = `\n\n⏳ <b>Pencocokan mungkin memakan waktu lebih lama</b> karena Anda terlalu sering mendapat laporan negatif.${untilText}`;
+  }
+
   // Jika tidak ada reputation atau penalty di bawah 40
   if (!reputation || reputation.penalty_points < 40) {
-    // Jika skipIfLowPenalty = true, tidak perlu kirim pesan
-    if (skipIfLowPenalty) {
+    // Jika skipIfLowPenalty = true, tidak perlu kirim pesan (kecuali sedang shadowban)
+    if (skipIfLowPenalty && !reputation?.shadowbanned) {
       return null;
     }
-    return `${baseAction}${filterText}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}`;
+    return `${baseAction}${filterText}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}${shadowNote}`;
   }
+
 
   // Penalty 40-69: Status Peringatan
   if (reputation.status === 'warning') {
-    return `${baseAction}${filterText}\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message || 'Anda mendapat beberapa laporan negatif dari pengguna lain.'} Harap perbaiki sikap atau akun berisiko dibatasi.\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.`;
+    return `${baseAction}${filterText}\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message || 'Anda mendapat beberapa laporan negatif dari pengguna lain.'} Harap perbaiki sikap atau akun berisiko dibatasi.\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.${shadowNote}`;
   }
 
   // Penalty 70-99: Status Kritis
@@ -2518,11 +2530,11 @@ function buildSearchMessageWithReputation(
 <b>Cara lepas dari peringatan dan menghindari blokir:</b>
 1️⃣  Hentikan semua perilaku di atas segera.
 2️⃣  Berinteraksi dengan partner secara sopan dan ramah.
-3️⃣  Dapatkan feedback positif dari partner.`;
+3️⃣  Dapatkan feedback positif dari partner.${shadowNote}`;
   }
 
   // Default fallback - masih tampilkan jika penalty >= 40 tapi status tidak dikenali
-  return `${baseAction}${filterText}\n\nMohon tunggu sebentar!`;
+  return `${baseAction}${filterText}\n\nMohon tunggu sebentar!${shadowNote}`;
 }
 
 // HELPER: Kirim pesan pencarian dengan reputasi (1 pesan gabungan)
@@ -5593,31 +5605,50 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
 
-        // Tampilkan pilihan rating: Spam, Sange
+        // Tampilkan pilihan rating: Spam, Sange + opsi cari partner baru
         const reportKeyboard = {
           inline_keyboard: [
             [
               { text: '🚨 Spam', callback_data: `rate_spam_${reportPartnerId}` },
               { text: '🔞 Sange', callback_data: `rate_sange_${reportPartnerId}` }
+            ],
+            [
+              { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
             ]
           ]
         };
+        const reportPromptText = `🚩 <b>Pilih jenis laporan yang sesuai</b>\n\n🚨 <b>Spam</b> — pesan berulang, promosi, iklan, atau link.\n🔞 <b>Sange</b> — ajakan seks, minta pap, atau pembahasan vulgar.\n\n<i>Laporan palsu dapat menurunkan reputasi akun Anda sendiri.</i>`;
         await answerCallbackQuery(botToken, query.id);
         try {
-          await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+          const editRes = await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: message?.chat.id,
               message_id: message?.message_id,
+              text: reportPromptText,
+              parse_mode: 'HTML',
               reply_markup: reportKeyboard
             })
           });
+          if (!editRes.ok) {
+            // Fallback: pesan tidak bisa diedit teksnya (mis. media/terlalu lama)
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message?.chat.id,
+                message_id: message?.message_id,
+                reply_markup: reportKeyboard
+              })
+            });
+          }
         } catch (e) {
           console.error('Failed to edit message for report options:', e);
         }
         return new Response('OK', { status: 200 });
       }
+
 
 
       if (callbackData.startsWith('rate_')) {

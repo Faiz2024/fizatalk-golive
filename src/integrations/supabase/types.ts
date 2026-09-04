@@ -551,14 +551,18 @@ export type Database = {
           is_tiktok_mode: boolean | null
           last_active: string
           last_channel_invite_sent_at: string | null
+          last_negative_report_at: string | null
           last_partners: number[] | null
           last_promo_sent_at: string | null
           last_reengagement_message_id: number | null
           last_reengagement_sent_at: string | null
           location: string | null
+          negative_reports_count: number
           partner_id: number | null
           penalty_points: number | null
           premium_until: string | null
+          reports_decay_at: string | null
+          shadowban_until: string | null
           spam_warning_until: string | null
           spam_warnings: number | null
           special_promo_purchased_at: string | null
@@ -581,14 +585,18 @@ export type Database = {
           is_tiktok_mode?: boolean | null
           last_active?: string
           last_channel_invite_sent_at?: string | null
+          last_negative_report_at?: string | null
           last_partners?: number[] | null
           last_promo_sent_at?: string | null
           last_reengagement_message_id?: number | null
           last_reengagement_sent_at?: string | null
           location?: string | null
+          negative_reports_count?: number
           partner_id?: number | null
           penalty_points?: number | null
           premium_until?: string | null
+          reports_decay_at?: string | null
+          shadowban_until?: string | null
           spam_warning_until?: string | null
           spam_warnings?: number | null
           special_promo_purchased_at?: string | null
@@ -611,14 +619,18 @@ export type Database = {
           is_tiktok_mode?: boolean | null
           last_active?: string
           last_channel_invite_sent_at?: string | null
+          last_negative_report_at?: string | null
           last_partners?: number[] | null
           last_promo_sent_at?: string | null
           last_reengagement_message_id?: number | null
           last_reengagement_sent_at?: string | null
           location?: string | null
+          negative_reports_count?: number
           partner_id?: number | null
           penalty_points?: number | null
           premium_until?: string | null
+          reports_decay_at?: string | null
+          shadowban_until?: string | null
           spam_warning_until?: string | null
           spam_warnings?: number | null
           special_promo_purchased_at?: string | null
@@ -834,6 +846,7 @@ export type Database = {
         }
         Returns: Json
       }
+      decay_negative_reports: { Args: { p_user_id: number }; Returns: number }
       end_chat_comprehensive: { Args: { p_user_id: number }; Returns: Json }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
