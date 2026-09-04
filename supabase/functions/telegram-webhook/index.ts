@@ -2512,7 +2512,7 @@ function buildSearchMessageWithReputation(
 
   // Penalty 40-69: Status Peringatan
   if (reputation.status === 'warning') {
-    return `${baseAction}${filterText}\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message || 'Anda mendapat beberapa laporan negatif dari pengguna lain.'} Harap perbaiki sikap atau akun berisiko dibatasi.\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.`;
+    return `${baseAction}${filterText}\n\n⚠️ <b>Status: Peringatan</b>\n\n${reputation.message || 'Anda mendapat beberapa laporan negatif dari pengguna lain.'} Harap perbaiki sikap atau akun berisiko dibatasi.\n\n<i>Anda akan lepas dari peringatan jika banyak partner yang suka berinteraksi dengan Anda</i>.${shadowNote}`;
   }
 
   // Penalty 70-99: Status Kritis
@@ -2530,11 +2530,11 @@ function buildSearchMessageWithReputation(
 <b>Cara lepas dari peringatan dan menghindari blokir:</b>
 1️⃣  Hentikan semua perilaku di atas segera.
 2️⃣  Berinteraksi dengan partner secara sopan dan ramah.
-3️⃣  Dapatkan feedback positif dari partner.`;
+3️⃣  Dapatkan feedback positif dari partner.${shadowNote}`;
   }
 
   // Default fallback - masih tampilkan jika penalty >= 40 tapi status tidak dikenali
-  return `${baseAction}${filterText}\n\nMohon tunggu sebentar!`;
+  return `${baseAction}${filterText}\n\nMohon tunggu sebentar!${shadowNote}`;
 }
 
 // HELPER: Kirim pesan pencarian dengan reputasi (1 pesan gabungan)
