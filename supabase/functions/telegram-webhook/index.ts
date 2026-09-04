@@ -5605,31 +5605,50 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
 
-        // Tampilkan pilihan rating: Spam, Sange
+        // Tampilkan pilihan rating: Spam, Sange + opsi cari partner baru
         const reportKeyboard = {
           inline_keyboard: [
             [
               { text: '🚨 Spam', callback_data: `rate_spam_${reportPartnerId}` },
               { text: '🔞 Sange', callback_data: `rate_sange_${reportPartnerId}` }
+            ],
+            [
+              { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
             ]
           ]
         };
+        const reportPromptText = `🚩 <b>Pilih jenis laporan yang sesuai</b>\n\n🚨 <b>Spam</b> — pesan berulang, promosi, iklan, atau link.\n🔞 <b>Sange</b> — ajakan seks, minta pap, atau pembahasan vulgar.\n\n<i>Laporan palsu dapat menurunkan reputasi akun Anda sendiri.</i>`;
         await answerCallbackQuery(botToken, query.id);
         try {
-          await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+          const editRes = await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: message?.chat.id,
               message_id: message?.message_id,
+              text: reportPromptText,
+              parse_mode: 'HTML',
               reply_markup: reportKeyboard
             })
           });
+          if (!editRes.ok) {
+            // Fallback: pesan tidak bisa diedit teksnya (mis. media/terlalu lama)
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message?.chat.id,
+                message_id: message?.message_id,
+                reply_markup: reportKeyboard
+              })
+            });
+          }
         } catch (e) {
           console.error('Failed to edit message for report options:', e);
         }
         return new Response('OK', { status: 200 });
       }
+
 
 
       if (callbackData.startsWith('rate_')) {
