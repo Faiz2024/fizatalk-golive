@@ -2464,6 +2464,8 @@ interface ComprehensiveSearchResult {
     status: string;
     message: string | null;
     penalty_points: number;
+    shadowbanned?: boolean;
+    shadowban_until?: string | null;
   };
   should_send_channel_invite?: boolean;
 }
