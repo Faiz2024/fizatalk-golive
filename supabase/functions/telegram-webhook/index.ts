@@ -277,6 +277,134 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
   }
 }
 
+// === PAKASIR PAYMENT GATEWAY (fallback otomatis saat Sakurupiah gagal) ===
+const PAKASIR_BASE = 'https://app.pakasir.com';
+
+interface PakasirInvoiceResult {
+  success: boolean;
+  orderId?: string;
+  qrString?: string;
+  totalPayment?: number;
+  payUrl?: string;
+  error?: string;
+}
+
+// UUID -> string ringkas tanpa tanda hubung (dipulihkan lagi di pakasir-callback)
+function pakasirOrderId(prefix: 'p_' | 't_' | 'f_', transactionId: string): string {
+  return `${prefix}${transactionId.replace(/-/g, '')}`;
+}
+
+async function createPakasirInvoice(orderId: string, amount: number): Promise<PakasirInvoiceResult> {
+  const apiKey = Deno.env.get('PAKASIR_API_KEY') || '';
+  const slug = Deno.env.get('PAKASIR_SLUG') || '';
+  if (!apiKey || !slug) {
+    console.error('[PAKASIR] Credentials not configured');
+    return { success: false, error: 'Pakasir not configured' };
+  }
+
+  try {
+    const resp = await fetch(`${PAKASIR_BASE}/api/transactioncreate/qris`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: slug, order_id: orderId, amount, api_key: apiKey }),
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok || !json?.payment?.payment_number) {
+      console.error(`[PAKASIR] Create failed [${resp.status}]:`, JSON.stringify(json).slice(0, 300));
+      return { success: false, error: `create_failed_${resp.status}` };
+    }
+    const pay = json.payment;
+    return {
+      success: true,
+      orderId,
+      qrString: pay.payment_number,
+      totalPayment: pay.total_payment || amount,
+      payUrl: `${PAKASIR_BASE}/pay/${slug}/${amount}?order_id=${encodeURIComponent(orderId)}&qris_only=1`,
+    };
+  } catch (e) {
+    console.error('[PAKASIR] Error:', e);
+    return { success: false, error: 'network_error' };
+  }
+}
+
+// Kirim pembayaran QRIS Pakasir ke user. Return false bila gagal (caller pakai QRIS manual).
+async function sendPakasirQRISPayment(
+  supabase: any, botToken: string, userId: number,
+  type: 'prem' | 'topup' | 'fine', transactionId: string,
+  amount: number, productLabel: string, cancelCallback: string,
+  method: string
+): Promise<boolean> {
+  const prefix = type === 'prem' ? 'p_' : type === 'topup' ? 't_' : 'f_';
+  const orderId = pakasirOrderId(prefix, transactionId);
+
+  const invoice = await createPakasirInvoice(orderId, amount);
+  if (!invoice.success || !invoice.qrString) return false;
+
+  const table = type === 'prem' ? 'premium_requests' : type === 'topup' ? 'topup_requests' : 'pending_transactions';
+  const updatePayload: any = { sakurupiah_trx_id: orderId, payment_method: 'PAKASIR_QRIS', status: 'pending' };
+  if (type === 'fine') {
+    delete updatePayload.payment_method; // pending_transactions tidak punya kolom payment_method
+    updatePayload.total_amount = invoice.totalPayment || amount;
+  }
+  await supabase.from(table).update(updatePayload).eq('id', transactionId);
+
+  const total = invoice.totalPayment || amount;
+  const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=16&data=${encodeURIComponent(invoice.qrString)}`;
+
+  const methodNote = method && method !== 'QRIS'
+    ? `\nℹ️  Pembayaran ${method} dialihkan ke QRIS — tetap bisa dibayar dari aplikasi ${method}.\n`
+    : '';
+
+  const caption = `💳  <b>${productLabel}</b>\n\n` +
+    `💰  Total: <b>Rp ${total.toLocaleString('id-ID')}</b>\n${methodNote}\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📱  <b>CARA BAYAR:</b>\n\n` +
+    `1️⃣  Screenshot QR di atas\n` +
+    `2️⃣  Buka E-Wallet/M-Banking favorit kamu\n` +
+    `3️⃣  Pilih Scan QR / Bayar dari Galeri\n` +
+    `4️⃣  Konfirmasi pembayaran\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
+    `⏰  Batas waktu: <b>60 menit</b>`;
+
+  const kb = {
+    inline_keyboard: [
+      [{ text: '🔗 Buka Halaman Pembayaran', url: invoice.payUrl! }],
+      [{ text: '🔙 Kembali', callback_data: cancelCallback }],
+    ]
+  };
+
+  try {
+    const resp = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: userId, photo: qrImage, caption, parse_mode: 'HTML', reply_markup: kb })
+    });
+    const rj = await resp.json();
+    if (rj.ok) {
+      if (type === 'prem' || type === 'topup') {
+        await supabase.from(table).update({ message_id: rj.result.message_id }).eq('id', transactionId);
+      }
+    } else {
+      console.error('[PAKASIR] sendPhoto failed:', JSON.stringify(rj));
+      await sendTelegramMessage(botToken, userId, `${caption}\n\n🔗 Klik tombol di bawah untuk membayar:`, kb);
+    }
+  } catch (e) {
+    console.error('[PAKASIR] send error:', e);
+    await sendTelegramMessage(botToken, userId, `${caption}\n\n🔗 Klik tombol di bawah untuk membayar:`, kb);
+  }
+
+  const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+  if (csChatId) {
+    await sendTelegramMessage(botToken, parseInt(csChatId),
+      `💳 <b>PEMBAYARAN VIA PAKASIR DIMULAI</b>\n\n🆔 User: <code>${userId}</code>\n📦 Produk: ${productLabel}\n💵 Total: Rp ${total.toLocaleString('id-ID')}\n🧾 Order: <code>${orderId}</code>\n\n⏳ Menunggu pembayaran (auto-verify)...`
+    );
+  }
+
+  return true;
+}
+
+
+
 // === PAYMENT METHOD SELECTION HELPER ===
 function buildPaymentMethodKeyboard(
   baseCallback: string,
