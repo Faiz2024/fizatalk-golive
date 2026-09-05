@@ -2,3 +2,6 @@ project_id = "chwopnsmykwzqflqozvf"
 
 [functions.db-bridge]
 verify_jwt = false
+
+[functions.pakasir-callback]
+verify_jwt = false
