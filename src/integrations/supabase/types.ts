@@ -568,6 +568,7 @@ export type Database = {
       telegram_users: {
         Row: {
           chat_end_count: number | null
+          chats_since_premium_shadow: number
           coins: number
           created_at: string
           first_name: string | null
@@ -605,6 +606,7 @@ export type Database = {
         }
         Insert: {
           chat_end_count?: number | null
+          chats_since_premium_shadow?: number
           coins?: number
           created_at?: string
           first_name?: string | null
@@ -642,6 +644,7 @@ export type Database = {
         }
         Update: {
           chat_end_count?: number | null
+          chats_since_premium_shadow?: number
           coins?: number
           created_at?: string
           first_name?: string | null
