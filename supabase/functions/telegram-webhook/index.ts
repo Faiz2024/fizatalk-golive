@@ -1896,11 +1896,17 @@ async function processSakurupiahTopupPayment(
   });
 
   if (!invoice.success) {
-    // Fallback ke QRIS Manual
-    console.log(`[TOPUP] Sakurupiah failed, fallback to QRIS Manual: ${invoice.error}`);
-    await sendManualQRISPayment(supabase, botToken, userId, 'topup', topupReq.id, totalPrice, `Top-up ${amount.toLocaleString('id-ID')} Koin`, `init_topup_${amount}`);
+    // Fallback 1: Pakasir (QRIS otomatis), Fallback 2: QRIS Manual
+    console.log(`[TOPUP] Sakurupiah failed, fallback to Pakasir: ${invoice.error}`);
+    const label = `Top-up ${amount.toLocaleString('id-ID')} Koin`;
+    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'topup', topupReq.id, totalPrice, label, `init_topup_${amount}`, method);
+    if (!pakasirOk) {
+      console.log('[TOPUP] Pakasir failed, fallback to QRIS Manual');
+      await sendManualQRISPayment(supabase, botToken, userId, 'topup', topupReq.id, totalPrice, label, `init_topup_${amount}`);
+    }
     return;
   }
+
 
   await supabase.from('topup_requests')
     .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', topupReq.id);
