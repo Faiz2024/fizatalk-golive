@@ -820,12 +820,17 @@ async function processSakurupiahPremiumPayment(
   });
 
   if (!invoice.success) {
-    // Fallback ke QRIS Manual
-    console.log(`[PREMIUM] Sakurupiah failed, fallback to QRIS Manual: ${invoice.error}`);
+    // Fallback 1: Pakasir (QRIS otomatis), Fallback 2: QRIS Manual
+    console.log(`[PREMIUM] Sakurupiah failed, fallback to Pakasir: ${invoice.error}`);
     const origCallback = Object.keys(BUY_PREMIUM_MAP).find(k => BUY_PREMIUM_MAP[k] === configKey) || 'cancel_premium';
-    await sendManualQRISPayment(supabase, botToken, userId, 'prem', premReq.id, config.price, config.label, origCallback);
+    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'prem', premReq.id, config.price, config.label, origCallback, method);
+    if (!pakasirOk) {
+      console.log('[PREMIUM] Pakasir failed, fallback to QRIS Manual');
+      await sendManualQRISPayment(supabase, botToken, userId, 'prem', premReq.id, config.price, config.label, origCallback);
+    }
     return;
   }
+
 
   await supabase.from('premium_requests')
     .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', premReq.id);
