@@ -2590,7 +2590,7 @@ function buildSearchMessageWithReputation(
 
   // Keterangan shadowban: pencocokan bisa lebih lama (berlaku untuk semua user)
   let shadowNote = '';
-  if (reputation?.shadowbanned) {
+  if (reputation?.shadowban_notice) {
     const untilText = reputation.shadowban_until
       ? ` Status ini berakhir otomatis pada ${formatDateTimeWIB(new Date(reputation.shadowban_until))}.`
       : '';
@@ -2599,8 +2599,8 @@ function buildSearchMessageWithReputation(
 
   // Jika tidak ada reputation atau penalty di bawah 40
   if (!reputation || reputation.penalty_points < 40) {
-    // Jika skipIfLowPenalty = true, tidak perlu kirim pesan (kecuali sedang shadowban)
-    if (skipIfLowPenalty && !reputation?.shadowbanned) {
+    // Jika skipIfLowPenalty = true, tidak perlu kirim pesan (kecuali sedang shadowban non-premium)
+    if (skipIfLowPenalty && !reputation?.shadowban_notice) {
       return null;
     }
     return `${baseAction}${filterText}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}${shadowNote}`;
