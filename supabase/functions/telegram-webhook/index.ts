@@ -2030,11 +2030,16 @@ async function processSakurupiahFinePayment(
   });
 
   if (!invoice.success) {
-    // Fallback ke QRIS Manual
-    console.log(`[FINE] Sakurupiah failed, fallback to QRIS Manual: ${invoice.error}`);
-    await sendManualQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Denda Buka Blokir', 'pay_fine');
+    // Fallback 1: Pakasir (QRIS otomatis), Fallback 2: QRIS Manual
+    console.log(`[FINE] Sakurupiah failed, fallback to Pakasir: ${invoice.error}`);
+    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Denda Buka Blokir', 'pay_fine', method);
+    if (!pakasirOk) {
+      console.log('[FINE] Pakasir failed, fallback to QRIS Manual');
+      await sendManualQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Denda Buka Blokir', 'pay_fine');
+    }
     return;
   }
+
 
   await supabase.from('pending_transactions')
     .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', fineReq.id);
