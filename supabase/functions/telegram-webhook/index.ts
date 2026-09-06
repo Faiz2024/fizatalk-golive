@@ -988,6 +988,23 @@ async function sendReferralMenu(
   const claimable = status?.claimable ?? 0;
   const totalQualified = status?.total_qualified ?? 0;
   const rewardsClaimed = status?.rewards_claimed ?? 0;
+  const cashoutTarget = status?.cashout_target ?? 100;
+  const cashoutStatus = status?.cashout_status ?? 'none';
+
+  let cashoutNote = '';
+  let cashoutButtonText = '💵 Tarik Bonus Rp20.000';
+  if (cashoutStatus === 'pending') {
+    cashoutNote = '\n• Status: <b>⏳ Menunggu proses admin</b> (maks. 1x24 jam)';
+    cashoutButtonText = '⏳ Bonus Sedang Diproses';
+  } else if (cashoutStatus === 'paid') {
+    cashoutNote = '\n• Status: <b>✅ Sudah dikirim</b>';
+    cashoutButtonText = '✅ Bonus Sudah Dikirim';
+  } else if (totalQualified >= cashoutTarget) {
+    cashoutNote = '\n• Status: <b>Siap ditarik!</b> Tekan tombol di bawah.';
+  } else {
+    cashoutNote = `\n• Kurang <b>${cashoutTarget - totalQualified}</b> teman sah lagi.`;
+  }
+
 
   const link = username ? `https://t.me/${username}?start=ref_${userId}` : null;
 
@@ -1008,6 +1025,9 @@ Teman membuka bot lewat link kamu <b>dan</b> sudah pernah mendapat partner chat 
 • Total teman sah sepanjang waktu: <b>${totalQualified}</b>
 • Hadiah sudah diklaim: <b>${rewardsClaimed} hari</b>${premiumText}
 
+💵 <b>Bonus Saldo E-Wallet Rp20.000</b> (1x seumur akun)
+• Progres: <b>${Math.min(totalQualified, cashoutTarget)}/${cashoutTarget}</b> teman sah${cashoutNote}
+
 🔗 <b>Link undangan kamu:</b>
 ${link ? `<code>${link}</code>` : '<i>Link belum tersedia, coba lagi sebentar lagi.</i>'}${extraNote ? `\n\n${extraNote}` : ''}`;
 
@@ -1017,7 +1037,9 @@ ${link ? `<code>${link}</code>` : '<i>Link belum tersedia, coba lagi sebentar la
     rows.push([{ text: '📤 Bagikan ke Teman', url: `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${shareText}` }]);
   }
   rows.push([{ text: claimable > 0 ? `✅ Klaim ${claimable} Hari Premium` : '🎁 Klaim 1 Hari Premium', callback_data: 'referral_claim' }]);
+  rows.push([{ text: cashoutButtonText, callback_data: 'cashout_start' }]);
   rows.push([{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]);
+
 
   const keyboard = { inline_keyboard: rows };
 
@@ -1041,6 +1063,40 @@ ${link ? `<code>${link}</code>` : '<i>Link belum tersedia, coba lagi sebentar la
 
 }
 
+// === BONUS SALDO E-WALLET (100 TEMAN SAH) ===
+const EWALLET_OPTIONS: Record<string, string> = {
+  dana: 'DANA',
+  ovo: 'OVO',
+  gopay: 'GoPay',
+  shopeepay: 'ShopeePay'
+};
+
+function buildCashoutTypeKeyboard(): any {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'DANA', callback_data: 'cashout_type_dana' },
+        { text: 'OVO', callback_data: 'cashout_type_ovo' }
+      ],
+      [
+        { text: 'GoPay', callback_data: 'cashout_type_gopay' },
+        { text: 'ShopeePay', callback_data: 'cashout_type_shopeepay' }
+      ],
+      [{ text: '⬅️ Kembali', callback_data: 'referral_menu' }]
+    ]
+  };
+}
+
+function parseCashoutInput(raw: string): { number: string; name: string } | null {
+  const cleaned = (raw || '').trim().replace(/\s+/g, ' ');
+  const match = cleaned.match(/^([0-9+\-\s]{9,20})\s+(.{3,60})$/);
+  if (!match) return null;
+  const number = match[1].replace(/[^0-9]/g, '');
+  const name = match[2].trim();
+  if (number.length < 9 || number.length > 15) return null;
+  if (name.length < 3) return null;
+  return { number, name };
+}
 
 
 // === QRIS MANUAL FALLBACK HELPER ===
@@ -5061,6 +5117,171 @@ Deno.serve(async (req) => {
         }
         return new Response('OK', { status: 200 });
       }
+
+      // === BONUS SALDO E-WALLET: pilih jenis e-wallet ===
+      if (callbackData === 'cashout_start') {
+        answerCallbackQuery(botToken, query.id).catch(() => {});
+        const { data: st } = await supabase.rpc('get_referral_status', { p_user_id: userId });
+        const total = st?.total_qualified ?? 0;
+        const target = st?.cashout_target ?? 100;
+        const cStatus = st?.cashout_status ?? 'none';
+
+        if (cStatus === 'pending') {
+          await sendTelegramMessage(botToken, userId, '⏳ Permintaan bonus kamu sedang diproses admin (maks. 1x24 jam).');
+          return new Response('OK', { status: 200 });
+        }
+        if (cStatus === 'paid') {
+          await sendTelegramMessage(botToken, userId, '✅ Bonus Rp20.000 kamu sudah pernah dikirim. Bonus ini hanya berlaku 1x seumur akun.');
+          return new Response('OK', { status: 200 });
+        }
+        if (total < target) {
+          await sendTelegramMessage(botToken, userId,
+            `💵 <b>Bonus Saldo Rp20.000</b>\n\nKamu baru punya <b>${total}</b> teman sah. Kurang <b>${target - total}</b> teman lagi untuk bisa menarik bonus.`);
+          return new Response('OK', { status: 200 });
+        }
+
+        await sendTelegramMessage(botToken, userId,
+          '💵 <b>Tarik Bonus Rp20.000</b>\n\nPilih e-wallet tujuan:',
+          buildCashoutTypeKeyboard());
+        return new Response('OK', { status: 200 });
+      }
+
+      if (callbackData.startsWith('cashout_type_')) {
+        const typeKey = callbackData.replace('cashout_type_', '');
+        const typeLabel = EWALLET_OPTIONS[typeKey];
+        if (!typeLabel) {
+          await answerCallbackQuery(botToken, query.id, '⚠️ Pilihan tidak valid.', true);
+          return new Response('OK', { status: 200 });
+        }
+
+        const { data: draftRes } = await supabase.rpc('set_referral_cashout_draft', {
+          p_user_id: userId,
+          p_draft: { type: typeLabel, step: 'await_details' }
+        });
+
+        if (!draftRes?.success) {
+          if (draftRes?.error === 'not_enough') {
+            await answerCallbackQuery(botToken, query.id, `Kurang ${draftRes.needed} teman sah lagi.`, true);
+          } else if (draftRes?.error === 'already_requested') {
+            await answerCallbackQuery(botToken, query.id, 'Kamu sudah pernah mengajukan bonus ini.', true);
+          } else {
+            await answerCallbackQuery(botToken, query.id, '⚠️ Gagal memproses, coba lagi.', true);
+          }
+          return new Response('OK', { status: 200 });
+        }
+
+        answerCallbackQuery(botToken, query.id).catch(() => {});
+        await sendTelegramMessage(botToken, userId,
+          `💵 <b>Data Penerima (${typeLabel})</b>\n\nKirim <b>satu pesan</b> berisi nomor ${typeLabel} dan nama pemilik.\n\nContoh:\n<code>081234567890 Budi Santoso</code>`,
+          { inline_keyboard: [[{ text: '⬅️ Kembali', callback_data: 'cashout_cancel' }]] });
+        return new Response('OK', { status: 200 });
+      }
+
+      if (callbackData === 'cashout_cancel') {
+        answerCallbackQuery(botToken, query.id).catch(() => {});
+        await supabase.from('telegram_users').update({ cashout_draft: null }).eq('id', userId);
+        await sendReferralMenu(supabase, botToken, userId);
+        return new Response('OK', { status: 200 });
+      }
+
+      if (callbackData === 'cashout_confirm') {
+        const { data: reqRes, error: reqErr } = await supabase.rpc('request_referral_cashout', { p_user_id: userId });
+
+        if (reqErr || !reqRes?.success) {
+          const err = reqRes?.error;
+          const msgErr = err === 'not_enough'
+            ? `Kurang ${reqRes?.needed ?? 0} teman sah lagi.`
+            : err === 'already_requested'
+              ? 'Kamu sudah pernah mengajukan bonus ini.'
+              : err === 'incomplete_draft'
+                ? 'Data belum lengkap, ulangi dari menu referal.'
+                : '⚠️ Gagal mengirim permintaan, coba lagi.';
+          await answerCallbackQuery(botToken, query.id, msgErr, true);
+          return new Response('OK', { status: 200 });
+        }
+
+        await answerCallbackQuery(botToken, query.id, '✅ Permintaan terkirim!');
+        await sendTelegramMessage(botToken, userId,
+          `✅ <b>Permintaan Bonus Terkirim</b>\n\n💵 Rp20.000 ke <b>${reqRes.type}</b>\n📱 ${reqRes.number}\n👤 ${escapeHtml(String(reqRes.name))}\n\nAdmin akan memproses maksimal <b>1x24 jam</b>. Kamu akan diberi tahu saat dana sudah dikirim.`);
+
+        const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+        if (adminChatId) {
+          const uname = query.from?.username ? `@${query.from.username}` : '-';
+          const adminMsg = `💵 <b>PERMINTAAN BONUS REFERAL</b>\n\n👤 User: <code>${userId}</code> (${uname})\n🤝 Teman sah: <b>${reqRes.total_qualified}</b>\n💰 Jumlah: <b>Rp20.000</b>\n🏦 E-wallet: <b>${reqRes.type}</b>\n📱 Nomor: <code>${reqRes.number}</code>\n👛 Nama: ${escapeHtml(String(reqRes.name))}\n🕒 ${formatDateTimeWIB(new Date())}`;
+          const adminKeyboard = {
+            inline_keyboard: [[
+              { text: '✅ Sudah Dikirim', callback_data: `admin_cashout_paid_${reqRes.id}` },
+              { text: '❌ Tolak', callback_data: `admin_cashout_reject_${reqRes.id}` }
+            ]]
+          };
+          try {
+            const res = await fetch(`${TELEGRAM_API}${botToken}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: parseInt(adminChatId), text: adminMsg, parse_mode: 'HTML', reply_markup: adminKeyboard })
+            });
+            const json = await res.json();
+            const mid = json?.result?.message_id;
+            if (mid) {
+              supabase.rpc('set_referral_cashout_admin_message', { p_request_id: reqRes.id, p_message_id: mid }).then(() => {}, () => {});
+            }
+          } catch (_) { /* abaikan */ }
+        }
+        return new Response('OK', { status: 200 });
+      }
+
+      // === ADMIN: proses bonus referal ===
+      if (callbackData.startsWith('admin_cashout_')) {
+        const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+        const fromChatId = message?.chat?.id?.toString();
+        if (!adminChatId || fromChatId !== adminChatId) {
+          await answerCallbackQuery(botToken, query.id, '⛔ Hanya admin.', true);
+          return new Response('OK', { status: 200 });
+        }
+
+        const isPaid = callbackData.startsWith('admin_cashout_paid_');
+        const requestId = callbackData.replace(isPaid ? 'admin_cashout_paid_' : 'admin_cashout_reject_', '');
+
+        const { data: proc, error: procErr } = await supabase.rpc('process_referral_cashout', {
+          p_request_id: requestId,
+          p_action: isPaid ? 'paid' : 'rejected',
+          p_admin_id: userId
+        });
+
+        if (procErr || !proc?.success) {
+          await answerCallbackQuery(botToken, query.id, proc?.error === 'already_processed' ? 'Sudah diproses sebelumnya.' : '⚠️ Gagal memproses.', true);
+          return new Response('OK', { status: 200 });
+        }
+
+        answerCallbackQuery(botToken, query.id, isPaid ? '✅ Ditandai sudah dikirim.' : '❌ Ditolak.').catch(() => {});
+
+        if (message?.message_id) {
+          const statusLine = isPaid
+            ? `\n\n✅ <b>SUDAH DIKIRIM</b> oleh <code>${userId}</code>\n🕒 ${formatDateTimeWIB(new Date())}`
+            : `\n\n❌ <b>DITOLAK</b> oleh <code>${userId}</code>\n🕒 ${formatDateTimeWIB(new Date())}`;
+          fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: message.chat.id,
+              message_id: message.message_id,
+              text: `${message.text || 'Permintaan bonus referal'}${statusLine}`,
+              parse_mode: 'HTML'
+            })
+          }).catch(() => {});
+        }
+
+        if (isPaid) {
+          await sendTelegramMessage(botToken, proc.user_id,
+            `🎉 <b>BONUS TERKIRIM!</b>\n\n💵 Rp20.000 sudah dikirim ke <b>${proc.type}</b> <code>${proc.number}</code>.\n\nTerima kasih sudah mengajak teman-temanmu! 🙌`);
+        } else {
+          await sendTelegramMessage(botToken, proc.user_id,
+            `⚠️ <b>Permintaan Bonus Ditolak</b>\n\nData penerima tidak valid atau tidak dapat diverifikasi. Kamu bisa mengajukan lagi dari menu referal dengan data yang benar.`);
+        }
+        return new Response('OK', { status: 200 });
+      }
+
+
 
       if (callbackData.startsWith('show_premium_offer')) {
 

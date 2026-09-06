@@ -1,0 +1,10 @@
+REVOKE ALL ON FUNCTION public.set_referral_cashout_draft(bigint, jsonb) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.request_referral_cashout(bigint) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.process_referral_cashout(uuid, text, bigint) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.set_referral_cashout_admin_message(uuid, integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.get_referral_status(bigint) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.set_referral_cashout_draft(bigint, jsonb) TO service_role;
+GRANT EXECUTE ON FUNCTION public.request_referral_cashout(bigint) TO service_role;
+GRANT EXECUTE ON FUNCTION public.process_referral_cashout(uuid, text, bigint) TO service_role;
+GRANT EXECUTE ON FUNCTION public.set_referral_cashout_admin_message(uuid, integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_referral_status(bigint) TO service_role;

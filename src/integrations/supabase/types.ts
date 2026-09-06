@@ -502,6 +502,57 @@ export type Database = {
         }
         Relationships: []
       }
+      referral_cashouts: {
+        Row: {
+          admin_message_id: number | null
+          admin_notes: string | null
+          amount: number
+          created_at: string
+          ewallet_name: string
+          ewallet_number: string
+          ewallet_type: string
+          id: string
+          processed_at: string | null
+          processed_by: number | null
+          qualified_at_request: number
+          status: string
+          updated_at: string
+          user_id: number
+        }
+        Insert: {
+          admin_message_id?: number | null
+          admin_notes?: string | null
+          amount?: number
+          created_at?: string
+          ewallet_name: string
+          ewallet_number: string
+          ewallet_type: string
+          id?: string
+          processed_at?: string | null
+          processed_by?: number | null
+          qualified_at_request?: number
+          status?: string
+          updated_at?: string
+          user_id: number
+        }
+        Update: {
+          admin_message_id?: number | null
+          admin_notes?: string | null
+          amount?: number
+          created_at?: string
+          ewallet_name?: string
+          ewallet_number?: string
+          ewallet_type?: string
+          id?: string
+          processed_at?: string | null
+          processed_by?: number | null
+          qualified_at_request?: number
+          status?: string
+          updated_at?: string
+          user_id?: number
+        }
+        Relationships: []
+      }
       referrals: {
         Row: {
           consumed_at: string | null
@@ -567,6 +618,7 @@ export type Database = {
       }
       telegram_users: {
         Row: {
+          cashout_draft: Json | null
           chat_end_count: number | null
           chats_since_premium_shadow: number
           coins: number
@@ -605,6 +657,7 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          cashout_draft?: Json | null
           chat_end_count?: number | null
           chats_since_premium_shadow?: number
           coins?: number
@@ -643,6 +696,7 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          cashout_draft?: Json | null
           chat_end_count?: number | null
           chats_since_premium_shadow?: number
           coins?: number
@@ -927,11 +981,16 @@ export type Database = {
         }
         Returns: Json
       }
+      process_referral_cashout: {
+        Args: { p_action: string; p_admin_id: number; p_request_id: string }
+        Returns: Json
+      }
       prune_bot_logs: { Args: never; Returns: Json }
       register_referral: {
         Args: { p_new_user_id: number; p_referrer_id: number }
         Returns: Json
       }
+      request_referral_cashout: { Args: { p_user_id: number }; Returns: Json }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
       resolve_reconnect: {
         Args: { p_action: string; p_request_id: string }
@@ -945,6 +1004,14 @@ export type Database = {
           p_user_id: number
           p_username?: string
         }
+        Returns: Json
+      }
+      set_referral_cashout_admin_message: {
+        Args: { p_message_id: number; p_request_id: string }
+        Returns: undefined
+      }
+      set_referral_cashout_draft: {
+        Args: { p_draft: Json; p_user_id: number }
         Returns: Json
       }
       set_user_payment_state: { Args: { p_user_id: number }; Returns: Json }
