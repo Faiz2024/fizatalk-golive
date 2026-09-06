@@ -1008,6 +1008,9 @@ Teman membuka bot lewat link kamu <b>dan</b> sudah pernah mendapat partner chat 
 • Total teman sah sepanjang waktu: <b>${totalQualified}</b>
 • Hadiah sudah diklaim: <b>${rewardsClaimed} hari</b>${premiumText}
 
+💵 <b>Bonus Saldo E-Wallet Rp20.000</b> (1x seumur akun)
+• Progres: <b>${Math.min(totalQualified, cashoutTarget)}/${cashoutTarget}</b> teman sah${cashoutNote}
+
 🔗 <b>Link undangan kamu:</b>
 ${link ? `<code>${link}</code>` : '<i>Link belum tersedia, coba lagi sebentar lagi.</i>'}${extraNote ? `\n\n${extraNote}` : ''}`;
 
@@ -1017,7 +1020,9 @@ ${link ? `<code>${link}</code>` : '<i>Link belum tersedia, coba lagi sebentar la
     rows.push([{ text: '📤 Bagikan ke Teman', url: `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${shareText}` }]);
   }
   rows.push([{ text: claimable > 0 ? `✅ Klaim ${claimable} Hari Premium` : '🎁 Klaim 1 Hari Premium', callback_data: 'referral_claim' }]);
+  rows.push([{ text: cashoutButtonText, callback_data: 'cashout_start' }]);
   rows.push([{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]);
+
 
   const keyboard = { inline_keyboard: rows };
 
