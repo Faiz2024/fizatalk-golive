@@ -1063,6 +1063,40 @@ ${link ? `<code>${link}</code>` : '<i>Link belum tersedia, coba lagi sebentar la
 
 }
 
+// === BONUS SALDO E-WALLET (100 TEMAN SAH) ===
+const EWALLET_OPTIONS: Record<string, string> = {
+  dana: 'DANA',
+  ovo: 'OVO',
+  gopay: 'GoPay',
+  shopeepay: 'ShopeePay'
+};
+
+function buildCashoutTypeKeyboard(): any {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'DANA', callback_data: 'cashout_type_dana' },
+        { text: 'OVO', callback_data: 'cashout_type_ovo' }
+      ],
+      [
+        { text: 'GoPay', callback_data: 'cashout_type_gopay' },
+        { text: 'ShopeePay', callback_data: 'cashout_type_shopeepay' }
+      ],
+      [{ text: '⬅️ Kembali', callback_data: 'referral_menu' }]
+    ]
+  };
+}
+
+function parseCashoutInput(raw: string): { number: string; name: string } | null {
+  const cleaned = (raw || '').trim().replace(/\s+/g, ' ');
+  const match = cleaned.match(/^([0-9+\-\s]{9,20})\s+(.{3,60})$/);
+  if (!match) return null;
+  const number = match[1].replace(/[^0-9]/g, '');
+  const name = match[2].trim();
+  if (number.length < 9 || number.length > 15) return null;
+  if (name.length < 3) return null;
+  return { number, name };
+}
 
 
 // === QRIS MANUAL FALLBACK HELPER ===
