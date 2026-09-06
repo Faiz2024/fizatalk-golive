@@ -988,6 +988,23 @@ async function sendReferralMenu(
   const claimable = status?.claimable ?? 0;
   const totalQualified = status?.total_qualified ?? 0;
   const rewardsClaimed = status?.rewards_claimed ?? 0;
+  const cashoutTarget = status?.cashout_target ?? 100;
+  const cashoutStatus = status?.cashout_status ?? 'none';
+
+  let cashoutNote = '';
+  let cashoutButtonText = '💵 Tarik Bonus Rp20.000';
+  if (cashoutStatus === 'pending') {
+    cashoutNote = '\n• Status: <b>⏳ Menunggu proses admin</b> (maks. 1x24 jam)';
+    cashoutButtonText = '⏳ Bonus Sedang Diproses';
+  } else if (cashoutStatus === 'paid') {
+    cashoutNote = '\n• Status: <b>✅ Sudah dikirim</b>';
+    cashoutButtonText = '✅ Bonus Sudah Dikirim';
+  } else if (totalQualified >= cashoutTarget) {
+    cashoutNote = '\n• Status: <b>Siap ditarik!</b> Tekan tombol di bawah.';
+  } else {
+    cashoutNote = `\n• Kurang <b>${cashoutTarget - totalQualified}</b> teman sah lagi.`;
+  }
+
 
   const link = username ? `https://t.me/${username}?start=ref_${userId}` : null;
 
