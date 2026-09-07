@@ -992,7 +992,7 @@ async function sendReferralMenu(
   const cashoutStatus = status?.cashout_status ?? 'none';
 
   let cashoutNote = '';
-  let cashoutButtonText = '💵 Tarik Bonus Rp20.000';
+  let cashoutButtonText = '💵 Tarik Bonus Rp50.000';
   if (cashoutStatus === 'pending') {
     cashoutNote = '\n• Status: <b>⏳ Menunggu proses admin</b> (maks. 1x24 jam)';
     cashoutButtonText = '⏳ Bonus Sedang Diproses';
@@ -1025,7 +1025,7 @@ Teman membuka bot lewat link kamu <b>dan</b> sudah pernah mendapat partner chat 
 • Total teman sah sepanjang waktu: <b>${totalQualified}</b>
 • Hadiah sudah diklaim: <b>${rewardsClaimed} hari</b>${premiumText}
 
-💵 <b>Bonus Saldo E-Wallet Rp20.000</b> (1x seumur akun)
+💵 <b>Bonus Saldo E-Wallet Rp50.000</b>
 • Progres: <b>${Math.min(totalQualified, cashoutTarget)}/${cashoutTarget}</b> teman sah${cashoutNote}
 
 🔗 <b>Link undangan kamu:</b>
@@ -5131,17 +5131,17 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
         if (cStatus === 'paid') {
-          await sendTelegramMessage(botToken, userId, '✅ Bonus Rp20.000 kamu sudah pernah dikirim. Bonus ini hanya berlaku 1x seumur akun.');
+          await sendTelegramMessage(botToken, userId, '✅ Bonus Rp50.000 kamu sudah pernah dikirim.');
           return new Response('OK', { status: 200 });
         }
         if (total < target) {
           await sendTelegramMessage(botToken, userId,
-            `💵 <b>Bonus Saldo Rp20.000</b>\n\nKamu baru punya <b>${total}</b> teman sah. Kurang <b>${target - total}</b> teman lagi untuk bisa menarik bonus.`);
+            `💵 <b>Bonus Saldo Rp50.000</b>\n\nKamu baru punya <b>${total}</b> teman sah. Kurang <b>${target - total}</b> teman lagi untuk bisa menarik bonus.`);
           return new Response('OK', { status: 200 });
         }
 
         await sendTelegramMessage(botToken, userId,
-          '💵 <b>Tarik Bonus Rp20.000</b>\n\nPilih e-wallet tujuan:',
+          '💵 <b>Tarik Bonus Rp50.000</b>\n\nPilih e-wallet tujuan:',
           buildCashoutTypeKeyboard());
         return new Response('OK', { status: 200 });
       }
@@ -5202,12 +5202,12 @@ Deno.serve(async (req) => {
 
         await answerCallbackQuery(botToken, query.id, '✅ Permintaan terkirim!');
         await sendTelegramMessage(botToken, userId,
-          `✅ <b>Permintaan Bonus Terkirim</b>\n\n💵 Rp20.000 ke <b>${reqRes.type}</b>\n📱 ${reqRes.number}\n👤 ${escapeHtml(String(reqRes.name))}\n\nAdmin akan memproses maksimal <b>1x24 jam</b>. Kamu akan diberi tahu saat dana sudah dikirim.`);
+          `✅ <b>Permintaan Bonus Terkirim</b>\n\n💵 Rp50.000 ke <b>${reqRes.type}</b>\n📱 ${reqRes.number}\n👤 ${escapeHtml(String(reqRes.name))}\n\nAdmin akan memproses maksimal <b>1x24 jam</b>. Kamu akan diberi tahu saat dana sudah dikirim.`);
 
         const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
         if (adminChatId) {
           const uname = query.from?.username ? `@${query.from.username}` : '-';
-          const adminMsg = `💵 <b>PERMINTAAN BONUS REFERAL</b>\n\n👤 User: <code>${userId}</code> (${uname})\n🤝 Teman sah: <b>${reqRes.total_qualified}</b>\n💰 Jumlah: <b>Rp20.000</b>\n🏦 E-wallet: <b>${reqRes.type}</b>\n📱 Nomor: <code>${reqRes.number}</code>\n👛 Nama: ${escapeHtml(String(reqRes.name))}\n🕒 ${formatDateTimeWIB(new Date())}`;
+          const adminMsg = `💵 <b>PERMINTAAN BONUS REFERAL</b>\n\n👤 User: <code>${userId}</code> (${uname})\n🤝 Teman sah: <b>${reqRes.total_qualified}</b>\n💰 Jumlah: <b>Rp50.000</b>\n🏦 E-wallet: <b>${reqRes.type}</b>\n📱 Nomor: <code>${reqRes.number}</code>\n👛 Nama: ${escapeHtml(String(reqRes.name))}\n🕒 ${formatDateTimeWIB(new Date())}`;
           const adminKeyboard = {
             inline_keyboard: [[
               { text: '✅ Sudah Dikirim', callback_data: `admin_cashout_paid_${reqRes.id}` },
@@ -5273,7 +5273,7 @@ Deno.serve(async (req) => {
 
         if (isPaid) {
           await sendTelegramMessage(botToken, proc.user_id,
-            `🎉 <b>BONUS TERKIRIM!</b>\n\n💵 Rp20.000 sudah dikirim ke <b>${proc.type}</b> <code>${proc.number}</code>.\n\nTerima kasih sudah mengajak teman-temanmu! 🙌`);
+            `🎉 <b>BONUS TERKIRIM!</b>\n\n💵 Rp50.000 sudah dikirim ke <b>${proc.type}</b> <code>${proc.number}</code>.\n\nTerima kasih sudah mengajak teman-temanmu! 🙌`);
         } else {
           await sendTelegramMessage(botToken, proc.user_id,
             `⚠️ <b>Permintaan Bonus Ditolak</b>\n\nData penerima tidak valid atau tidak dapat diverifikasi. Kamu bisa mengajukan lagi dari menu referal dengan data yang benar.`);
@@ -6470,7 +6470,7 @@ Deno.serve(async (req) => {
       }
 
       await sendTelegramMessage(botToken, userId,
-        `💵 <b>Konfirmasi Penarikan Bonus</b>\n\n💰 Jumlah: <b>Rp20.000</b>\n🏦 E-wallet: <b>${draftType}</b>\n📱 Nomor: <code>${parsed.number}</code>\n👤 Nama: <b>${escapeHtml(parsed.name)}</b>\n\nPastikan data sudah benar. Bonus ini hanya bisa ditarik <b>1x seumur akun</b>.`,
+        `💵 <b>Konfirmasi Penarikan Bonus</b>\n\n💰 Jumlah: <b>Rp50.000</b>\n🏦 E-wallet: <b>${draftType}</b>\n📱 Nomor: <code>${parsed.number}</code>\n👤 Nama: <b>${escapeHtml(parsed.name)}</b>`,
         {
           inline_keyboard: [
             [{ text: '✅ Kirim Permintaan', callback_data: 'cashout_confirm' }],
