@@ -6428,12 +6428,12 @@ Deno.serve(async (req) => {
 
     // ... kode sebelumnya (setelah const text = message.text) ...
 
-    let currentUser: { state: string; partner_id: number | null } | null = null;
+    let currentUser: { state: string; partner_id: number | null; cashout_draft?: any } | null = null;
 
     // UBAH BAGIAN INI: Tambahkan retry sederhana atau error blocking
     const { data: dbUser, error: dbError } = await supabase
       .from('telegram_users')
-      .select('state, partner_id, premium_until')
+      .select('state, partner_id, premium_until, cashout_draft')
       .eq('id', userId)
       .maybeSingle();
 
@@ -6447,6 +6447,40 @@ Deno.serve(async (req) => {
     if (dbUser) {
       currentUser = dbUser;
     }
+
+    // === HANDLER ISIAN DATA E-WALLET (BONUS REFERAL) ===
+    if (dbUser?.cashout_draft?.type && text && !text.startsWith('/')) {
+      const parsed = parseCashoutInput(text);
+      if (!parsed) {
+        await sendTelegramMessage(botToken, userId,
+          `⚠️ Format belum benar.\n\nKirim <b>nomor</b> dan <b>nama pemilik</b> dalam satu pesan.\nContoh:\n<code>081234567890 Budi Santoso</code>`,
+          { inline_keyboard: [[{ text: '⬅️ Kembali', callback_data: 'cashout_cancel' }]] });
+        return new Response('OK', { status: 200 });
+      }
+
+      const draftType = dbUser.cashout_draft.type;
+      const { data: saved } = await supabase.rpc('set_referral_cashout_draft', {
+        p_user_id: userId,
+        p_draft: { type: draftType, number: parsed.number, name: parsed.name, step: 'confirm' }
+      });
+
+      if (!saved?.success) {
+        await sendTelegramMessage(botToken, userId, '⚠️ Gagal menyimpan data, coba lagi dari menu referal.');
+        return new Response('OK', { status: 200 });
+      }
+
+      await sendTelegramMessage(botToken, userId,
+        `💵 <b>Konfirmasi Penarikan Bonus</b>\n\n💰 Jumlah: <b>Rp20.000</b>\n🏦 E-wallet: <b>${draftType}</b>\n📱 Nomor: <code>${parsed.number}</code>\n👤 Nama: <b>${escapeHtml(parsed.name)}</b>\n\nPastikan data sudah benar. Bonus ini hanya bisa ditarik <b>1x seumur akun</b>.`,
+        {
+          inline_keyboard: [
+            [{ text: '✅ Kirim Permintaan', callback_data: 'cashout_confirm' }],
+            [{ text: '⬅️ Kembali', callback_data: 'cashout_cancel' }]
+          ]
+        });
+      return new Response('OK', { status: 200 });
+    }
+
+
 
 
     // === HANDLER BUKTI PEMBAYARAN QRIS MANUAL ===
