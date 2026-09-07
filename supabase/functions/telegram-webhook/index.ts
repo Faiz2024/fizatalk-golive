@@ -1025,7 +1025,7 @@ Teman membuka bot lewat link kamu <b>dan</b> sudah pernah mendapat partner chat 
 • Total teman sah sepanjang waktu: <b>${totalQualified}</b>
 • Hadiah sudah diklaim: <b>${rewardsClaimed} hari</b>${premiumText}
 
-💵 <b>Bonus Saldo E-Wallet Rp20.000</b> (1x seumur akun)
+💵 <b>Bonus Saldo E-Wallet Rp20.000</b>
 • Progres: <b>${Math.min(totalQualified, cashoutTarget)}/${cashoutTarget}</b> teman sah${cashoutNote}
 
 🔗 <b>Link undangan kamu:</b>
@@ -5131,7 +5131,7 @@ Deno.serve(async (req) => {
           return new Response('OK', { status: 200 });
         }
         if (cStatus === 'paid') {
-          await sendTelegramMessage(botToken, userId, '✅ Bonus Rp20.000 kamu sudah pernah dikirim. Bonus ini hanya berlaku 1x seumur akun.');
+          await sendTelegramMessage(botToken, userId, '✅ Bonus Rp20.000 kamu sudah pernah dikirim.');
           return new Response('OK', { status: 200 });
         }
         if (total < target) {
@@ -6470,7 +6470,7 @@ Deno.serve(async (req) => {
       }
 
       await sendTelegramMessage(botToken, userId,
-        `💵 <b>Konfirmasi Penarikan Bonus</b>\n\n💰 Jumlah: <b>Rp20.000</b>\n🏦 E-wallet: <b>${draftType}</b>\n📱 Nomor: <code>${parsed.number}</code>\n👤 Nama: <b>${escapeHtml(parsed.name)}</b>\n\nPastikan data sudah benar. Bonus ini hanya bisa ditarik <b>1x seumur akun</b>.`,
+        `💵 <b>Konfirmasi Penarikan Bonus</b>\n\n💰 Jumlah: <b>Rp20.000</b>\n🏦 E-wallet: <b>${draftType}</b>\n📱 Nomor: <code>${parsed.number}</code>\n👤 Nama: <b>${escapeHtml(parsed.name)}</b>`,
         {
           inline_keyboard: [
             [{ text: '✅ Kirim Permintaan', callback_data: 'cashout_confirm' }],
