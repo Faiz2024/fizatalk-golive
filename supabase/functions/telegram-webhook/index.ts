@@ -6649,6 +6649,11 @@ Deno.serve(async (req) => {
           isCommand = true;
           // ... kode sebelumnya ...
         }
+        // COMMAND /REFERRAL - Buka menu referal saat chatting
+        else if (text === '/referral' || text === '/referal') {
+          await sendReferralMenu(supabase, botToken, userId);
+          isCommand = true;
+        }
         // COMMAND /LOKASI - Ubah lokasi (tidak memerlukan premium)
         else if (text === '/lokasi') {
           // Buat keyboard lokasi 
@@ -6965,6 +6970,10 @@ Deno.serve(async (req) => {
 
         const coins = userData?.coins || 0;
         await sendTelegramMessage(botToken, userId, `💰 Saldo Koin Kamu: ${coins} koin`);
+      }
+
+      else if (text === '/referral' || text === '/referal') {
+        await sendReferralMenu(supabase, botToken, userId);
       }
 
       else if (text === '/gift') {
