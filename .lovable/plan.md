@@ -52,6 +52,7 @@ Dengan tombol **🚀 Mulai Ajak Teman** menuju `https://t.me/FizaTalkBot?start=r
 **Bot (`supabase/functions/telegram-webhook/index.ts`)**
 - Tangani `/setbonus` (dan alias `/setnominal`) di cabang non-chatting dan chatting, dicek terhadap `TELEGRAM_CS_CHAT_ID`, tidak diteruskan ke partner.
 - Ganti semua teks nominal yang masih hardcode `Rp50.000` agar memakai nilai dari `get_referral_status` / hasil RPC, diformat `Rp{n}` gaya Indonesia.
+- Tambah `postBonusChangeToChannel(botToken, oldAmount, newAmount)` mengikuti pola `postCashoutToChannel` yang sudah ada (HTML, `disable_web_page_preview`, tombol ajakan, `formatDateTimeWIB`), dipanggil setelah RPC `set_referral_cashout_amount` sukses dan hanya bila nominal berubah.
 
 **Web (`src/pages/Dashboard.tsx`)**
 - Tambah satu kartu distribusi referal memakai komponen chart yang sudah dipakai.
