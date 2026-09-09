@@ -6631,7 +6631,7 @@ Deno.serve(async (req) => {
       }
 
       await sendTelegramMessage(botToken, userId,
-        `💵 <b>Konfirmasi Penarikan Bonus</b>\n\n💰 Jumlah: <b>Rp50.000</b>\n🏦 E-wallet: <b>${draftType}</b>\n📱 Nomor: <code>${parsed.number}</code>\n👤 Nama: <b>${escapeHtml(parsed.name)}</b>`,
+        `💵 <b>Konfirmasi Penarikan Bonus</b>\n\n💰 Jumlah: <b>${formatRupiah(saved?.cashout_amount)}</b>\n🏦 E-wallet: <b>${draftType}</b>\n📱 Nomor: <code>${parsed.number}</code>\n👤 Nama: <b>${escapeHtml(parsed.name)}</b>`,
         {
           inline_keyboard: [
             [{ text: '✅ Kirim Permintaan', callback_data: 'cashout_confirm' }],
@@ -6819,6 +6819,11 @@ Deno.serve(async (req) => {
         // COMMAND /REFERRAL - Buka menu referal saat chatting
         else if (text === '/referral' || text === '/referal') {
           await sendReferralMenu(supabase, botToken, userId);
+          isCommand = true;
+        }
+        // COMMAND /SETBONUS - Khusus admin, ubah nominal tarik bonus referal
+        else if (text === '/setbonus' || text.startsWith('/setbonus ') || text === '/setnominal' || text.startsWith('/setnominal ')) {
+          await handleSetBonusCommand(supabase, botToken, userId, text);
           isCommand = true;
         }
         // COMMAND /LOKASI - Ubah lokasi (tidak memerlukan premium)
@@ -7141,6 +7146,10 @@ Deno.serve(async (req) => {
 
       else if (text === '/referral' || text === '/referal') {
         await sendReferralMenu(supabase, botToken, userId);
+      }
+
+      else if (text === '/setbonus' || text.startsWith('/setbonus ') || text === '/setnominal' || text.startsWith('/setnominal ')) {
+        await handleSetBonusCommand(supabase, botToken, userId, text);
       }
 
       else if (text === '/gift') {
