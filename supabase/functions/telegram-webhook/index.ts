@@ -6584,20 +6584,26 @@ Deno.serve(async (req) => {
           await executeChatStop(supabase, botToken, userId, null, partnerId.toString());
           isCommand = true;
 
-        } else if (text === '/start') {
-          const chattingKeyboard = {
-            inline_keyboard: [
-              [
-                { text: '🛑 Stop', callback_data: 'chat_stop' },
-                { text: '⏭️ Next', callback_data: 'chat_next' }
-              ],
-              [
-                { text: '🎯 Filter Gender', callback_data: 'change_target' },
-                { text: '📍 Filter Lokasi', callback_data: 'change_location' }
+        } else if (text === '/start' || text.startsWith('/start ')) {
+          const startPayload = text.length > 7 ? text.slice(7).trim() : '';
+          if (startPayload === 'referral') {
+            // Deep-link dari tombol channel: buka menu referal (pesan tidak diteruskan ke partner)
+            await sendReferralMenu(supabase, botToken, userId);
+          } else {
+            const chattingKeyboard = {
+              inline_keyboard: [
+                [
+                  { text: '🛑 Stop', callback_data: 'chat_stop' },
+                  { text: '⏭️ Next', callback_data: 'chat_next' }
+                ],
+                [
+                  { text: '🎯 Filter Gender', callback_data: 'change_target' },
+                  { text: '📍 Filter Lokasi', callback_data: 'change_location' }
+                ]
               ]
-            ]
-          };
-          await sendTelegramMessage(botToken, userId, '⚠️ Kamu sedang dalam chat.\n\nPilih aksi:', chattingKeyboard);
+            };
+            await sendTelegramMessage(botToken, userId, '⚠️ Kamu sedang dalam chat.\n\nPilih aksi:', chattingKeyboard);
+          }
           isCommand = true;
         } else if (text === '/filter_lokasi') {
           // Cek apakah user premium
