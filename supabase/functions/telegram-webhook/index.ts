@@ -2976,6 +2976,69 @@ function getActionTypeFromCallback(callbackData: string): string {
   return 'default';
 }
 
+// HELPER: Samarkan identitas untuk pengumuman publik
+function maskIdentity(username?: string | null, firstName?: string | null): string {
+  const raw = (username || firstName || '').trim();
+  if (!raw) return 'Pengguna FizaTalk';
+  const prefix = username ? '@' : '';
+  if (raw.length <= 4) return `${prefix}${raw.slice(0, 1)}***`;
+  return `${prefix}${raw.slice(0, 3)}***${raw.slice(-1)}`;
+}
+
+function maskNumber(num?: string | null): string {
+  const raw = (num || '').replace(/\D/g, '');
+  if (raw.length <= 7) return raw ? `${raw.slice(0, 2)}****` : '****';
+  return `${raw.slice(0, 4)}****${raw.slice(-3)}`;
+}
+
+// HELPER: Auto-post pengumuman bonus referal cair ke channel resmi (fire-and-forget)
+async function postCashoutToChannel(botToken: string, data: {
+  username?: string | null;
+  firstName?: string | null;
+  amount?: number | null;
+  type?: string | null;
+  number?: string | null;
+  qualified?: number | null;
+}): Promise<void> {
+  try {
+    const amount = Number(data.amount || 50000);
+    const amountText = `Rp${amount.toLocaleString('id-ID')}`;
+    const ewallet = (data.type || '').toUpperCase() || 'E-WALLET';
+    const qualified = Number(data.qualified || 0);
+    const botUsername = Deno.env.get('BOT_USERNAME') || 'FizaTalkBot';
+
+    const text = `💸 <b>BONUS REFERAL CAIR!</b>\n\n` +
+      `👤 Penerima : <b>${maskIdentity(data.username, data.firstName)}</b>\n` +
+      `💰 Nominal  : <b>${amountText}</b>\n` +
+      `🏦 Metode   : <b>${ewallet}</b> (${maskNumber(data.number)})\n` +
+      (qualified > 0 ? `👥 Teman sah: <b>${qualified} orang</b>\n` : '') +
+      `🕒 ${formatDateTimeWIB(new Date())}\n\n` +
+      `Ajak temanmu ke FizaTalk, kumpulkan 100 teman sah, dan tarik bonus ${amountText} ke e-wallet-mu!`;
+
+    const res = await fetch(`${TELEGRAM_API}${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: '@FizaTalkCh',
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [[{ text: '🚀 Mulai Ajak Teman', url: `https://t.me/${botUsername}?start=referral` }]]
+        }
+      })
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      console.error('[CASHOUT CHANNEL] Gagal posting:', JSON.stringify(errJson));
+    }
+  } catch (error) {
+    console.error('[CASHOUT CHANNEL] System Exception:', error);
+  }
+}
+
+
 // HELPER: Auto-post stiker preview ke Channel resmi
 async function postStickerToChannel(botToken: string, packName: string, previewStickerId: string): Promise<void> {
   const channelUsername = '@FizaStick';
