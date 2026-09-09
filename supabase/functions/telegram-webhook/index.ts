@@ -5338,6 +5338,12 @@ Deno.serve(async (req) => {
               parse_mode: 'HTML'
             })
           }).catch(() => {});
+          // Lepas sematan setelah admin memproses
+          fetch(`${TELEGRAM_API}${botToken}/unpinChatMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: message.chat.id, message_id: message.message_id })
+          }).catch(() => {});
         }
 
         if (isPaid) {
