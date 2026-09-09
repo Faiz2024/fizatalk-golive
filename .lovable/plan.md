@@ -20,6 +20,21 @@ Satu kartu berisi grafik batang horizontal (atau daftar angka) dengan lima kelom
 - `/setbonus` → balas: "Nominal bonus saat ini: Rp50.000. Ubah dengan /setbonus 75000".
 - `/setbonus 75000` → validasi angka (10.000–1.000.000, kelipatan 1.000), simpan, balas konfirmasi dengan nominal baru dan waktu WIB.
 - Nominal baru langsung dipakai di menu referal, pesan konfirmasi penarikan, pesan ke admin, notifikasi ke pengguna, dan pengumuman channel. Permintaan yang sudah masuk tetap memakai nominal saat diajukan (tersimpan di barisnya).
+- Setelah nominal berhasil diubah, bot otomatis memposting **pengumuman penyesuaian** ke channel @FizaTalkCh:
+
+```text
+📢 PENYESUAIAN BONUS REFERAL
+
+Mulai sekarang, bonus penarikan referal menjadi
+💰 Rp75.000 (sebelumnya Rp50.000)
+
+Syarat tetap: kumpulkan 100 teman sah,
+lalu tarik bonus ke e-wallet-mu.
+
+🕒 09 Sep 2026, 20.45 WIB
+```
+
+Dengan tombol **🚀 Mulai Ajak Teman** menuju `https://t.me/FizaTalkBot?start=referral`. Kalimat "sebelumnya" hanya muncul bila nominal memang berubah; bila nominal sama dengan sebelumnya, tidak ada postingan. Posting bersifat fire-and-forget — gagal posting tidak membatalkan perubahan nominal, hanya tercatat di log, dan admin diberi tahu bila gagal.
 
 ## Detail teknis
 
@@ -37,6 +52,7 @@ Satu kartu berisi grafik batang horizontal (atau daftar angka) dengan lima kelom
 **Bot (`supabase/functions/telegram-webhook/index.ts`)**
 - Tangani `/setbonus` (dan alias `/setnominal`) di cabang non-chatting dan chatting, dicek terhadap `TELEGRAM_CS_CHAT_ID`, tidak diteruskan ke partner.
 - Ganti semua teks nominal yang masih hardcode `Rp50.000` agar memakai nilai dari `get_referral_status` / hasil RPC, diformat `Rp{n}` gaya Indonesia.
+- Tambah `postBonusChangeToChannel(botToken, oldAmount, newAmount)` mengikuti pola `postCashoutToChannel` yang sudah ada (HTML, `disable_web_page_preview`, tombol ajakan, `formatDateTimeWIB`), dipanggil setelah RPC `set_referral_cashout_amount` sukses dan hanya bila nominal berubah.
 
 **Web (`src/pages/Dashboard.tsx`)**
 - Tambah satu kartu distribusi referal memakai komponen chart yang sudah dipakai.
