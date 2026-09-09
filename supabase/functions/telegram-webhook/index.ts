@@ -990,9 +990,10 @@ async function sendReferralMenu(
   const rewardsClaimed = status?.rewards_claimed ?? 0;
   const cashoutTarget = status?.cashout_target ?? 100;
   const cashoutStatus = status?.cashout_status ?? 'none';
+  const cashoutAmountText = formatRupiah(status?.cashout_amount);
 
   let cashoutNote = '';
-  let cashoutButtonText = '💵 Tarik Bonus Rp50.000';
+  let cashoutButtonText = `💵 Tarik Bonus ${cashoutAmountText}`;
   if (cashoutStatus === 'pending') {
     cashoutNote = '\n• Status: <b>⏳ Menunggu proses admin</b> (maks. 1x24 jam)';
     cashoutButtonText = '⏳ Bonus Sedang Diproses';
@@ -1025,7 +1026,7 @@ Teman membuka bot lewat link kamu <b>dan</b> sudah pernah mendapat partner chat 
 • Total teman sah sepanjang waktu: <b>${totalQualified}</b>
 • Hadiah sudah diklaim: <b>${rewardsClaimed} hari</b>${premiumText}
 
-💵 <b>Bonus Saldo E-Wallet Rp50.000</b>
+💵 <b>Bonus Saldo E-Wallet ${cashoutAmountText}</b>
 • Progres: <b>${Math.min(totalQualified, cashoutTarget)}/${cashoutTarget}</b> teman sah${cashoutNote}
 
 🔗 <b>Link undangan kamu:</b>
@@ -3035,6 +3036,79 @@ async function postCashoutToChannel(botToken: string, data: {
     }
   } catch (error) {
     console.error('[CASHOUT CHANNEL] System Exception:', error);
+  }
+}
+
+// HELPER: Format nominal rupiah gaya Indonesia
+function formatRupiah(amount: unknown): string {
+  const n = Number(amount);
+  return `Rp${(Number.isFinite(n) && n > 0 ? n : 50000).toLocaleString('id-ID')}`;
+}
+
+// HELPER: Pengumuman penyesuaian nominal bonus ke channel resmi (fire-and-forget)
+async function postBonusChangeToChannel(botToken: string, oldAmount: number, newAmount: number): Promise<void> {
+  try {
+    const botUsername = Deno.env.get('BOT_USERNAME') || 'FizaTalkBot';
+    const text = `📢 <b>PENYESUAIAN BONUS REFERAL</b>\n\n` +
+      `Mulai sekarang, bonus penarikan referal menjadi\n` +
+      `💰 <b>${formatRupiah(newAmount)}</b> (sebelumnya ${formatRupiah(oldAmount)})\n\n` +
+      `Syarat tetap: kumpulkan <b>100 teman sah</b>, lalu tarik bonus ke e-wallet-mu.\n\n` +
+      `🕒 ${formatDateTimeWIB(new Date())}`;
+
+    const res = await fetch(`${TELEGRAM_API}${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: '@FizaTalkCh',
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [[{ text: '🚀 Mulai Ajak Teman', url: `https://t.me/${botUsername}?start=referral` }]]
+        }
+      })
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      console.error('[BONUS CHANGE CHANNEL] Gagal posting:', JSON.stringify(errJson));
+      throw new Error('post_failed');
+    }
+  } catch (error) {
+    console.error('[BONUS CHANGE CHANNEL] System Exception:', error);
+    throw error;
+  }
+}
+
+// HELPER: Command admin /setbonus untuk mengubah nominal tarik bonus referal
+async function handleSetBonusCommand(supabase: any, botToken: string, userId: number, text: string): Promise<void> {
+  const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+  if (!adminChatId || String(userId) !== String(adminChatId)) return;
+
+  const arg = text.replace(/^\/set(bonus|nominal)(@\S+)?/i, '').replace(/[^0-9]/g, '').trim();
+
+  if (!arg) {
+    const { data: current } = await supabase.rpc('get_referral_status', { p_user_id: userId });
+    await sendTelegramMessage(botToken, userId,
+      `💰 <b>Nominal Bonus Referal</b>\n\nSaat ini: <b>${formatRupiah(current?.cashout_amount)}</b>\n\nUbah dengan: <code>/setbonus 75000</code>\n(kelipatan 1.000, antara Rp10.000 dan Rp1.000.000)`);
+    return;
+  }
+
+  const amount = parseInt(arg, 10);
+  const { data: res, error } = await supabase.rpc('set_referral_cashout_amount', { p_amount: amount, p_admin_id: userId });
+
+  if (error || !res?.success) {
+    await sendTelegramMessage(botToken, userId,
+      '⚠️ Nominal tidak valid. Gunakan kelipatan 1.000 antara Rp10.000 dan Rp1.000.000.\nContoh: <code>/setbonus 75000</code>');
+    return;
+  }
+
+  await sendTelegramMessage(botToken, userId,
+    `✅ <b>Nominal Bonus Diperbarui</b>\n\n💰 Baru: <b>${formatRupiah(res.new_amount)}</b>\n📉 Sebelumnya: ${formatRupiah(res.old_amount)}\n🕒 ${formatDateTimeWIB(new Date())}`);
+
+  if (res.changed) {
+    postBonusChangeToChannel(botToken, Number(res.old_amount), Number(res.new_amount))
+      .catch(() => sendTelegramMessage(botToken, userId, '⚠️ Nominal sudah tersimpan, tapi pengumuman ke channel gagal dikirim.').catch(() => {}));
   }
 }
 
@@ -5193,18 +5267,19 @@ Deno.serve(async (req) => {
           await sendTelegramMessage(botToken, userId, '⏳ Permintaan bonus kamu sedang diproses admin (maks. 1x24 jam).');
           return new Response('OK', { status: 200 });
         }
+        const amountText = formatRupiah(st?.cashout_amount);
         if (cStatus === 'paid') {
-          await sendTelegramMessage(botToken, userId, '✅ Bonus Rp50.000 kamu sudah pernah dikirim.');
+          await sendTelegramMessage(botToken, userId, `✅ Bonus ${amountText} kamu sudah pernah dikirim.`);
           return new Response('OK', { status: 200 });
         }
         if (total < target) {
           await sendTelegramMessage(botToken, userId,
-            `💵 <b>Bonus Saldo Rp50.000</b>\n\nKamu baru punya <b>${total}</b> teman sah. Kurang <b>${target - total}</b> teman lagi untuk bisa menarik bonus.`);
+            `💵 <b>Bonus Saldo ${amountText}</b>\n\nKamu baru punya <b>${total}</b> teman sah. Kurang <b>${target - total}</b> teman lagi untuk bisa menarik bonus.`);
           return new Response('OK', { status: 200 });
         }
 
         await sendTelegramMessage(botToken, userId,
-          '💵 <b>Tarik Bonus Rp50.000</b>\n\nPilih e-wallet tujuan:',
+          `💵 <b>Tarik Bonus ${amountText}</b>\n\nPilih e-wallet tujuan:`,
           buildCashoutTypeKeyboard());
         return new Response('OK', { status: 200 });
       }
@@ -5264,13 +5339,14 @@ Deno.serve(async (req) => {
         }
 
         await answerCallbackQuery(botToken, query.id, '✅ Permintaan terkirim!');
+        const reqAmountText = formatRupiah(reqRes.amount);
         await sendTelegramMessage(botToken, userId,
-          `✅ <b>Permintaan Bonus Terkirim</b>\n\n💵 Rp50.000 ke <b>${reqRes.type}</b>\n📱 ${reqRes.number}\n👤 ${escapeHtml(String(reqRes.name))}\n\nAdmin akan memproses maksimal <b>1x24 jam</b>. Kamu akan diberi tahu saat dana sudah dikirim.`);
+          `✅ <b>Permintaan Bonus Terkirim</b>\n\n💵 ${reqAmountText} ke <b>${reqRes.type}</b>\n📱 ${reqRes.number}\n👤 ${escapeHtml(String(reqRes.name))}\n\nAdmin akan memproses maksimal <b>1x24 jam</b>. Kamu akan diberi tahu saat dana sudah dikirim.`);
 
         const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
         if (adminChatId) {
           const uname = query.from?.username ? `@${query.from.username}` : '-';
-          const adminMsg = `💵 <b>PERMINTAAN BONUS REFERAL</b>\n\n👤 User: <code>${userId}</code> (${uname})\n🤝 Teman sah: <b>${reqRes.total_qualified}</b>\n💰 Jumlah: <b>Rp50.000</b>\n🏦 E-wallet: <b>${reqRes.type}</b>\n📱 Nomor: <code>${reqRes.number}</code>\n👛 Nama: ${escapeHtml(String(reqRes.name))}\n🕒 ${formatDateTimeWIB(new Date())}`;
+          const adminMsg = `💵 <b>PERMINTAAN BONUS REFERAL</b>\n\n👤 User: <code>${userId}</code> (${uname})\n🤝 Teman sah: <b>${reqRes.total_qualified}</b>\n💰 Jumlah: <b>${reqAmountText}</b>\n🏦 E-wallet: <b>${reqRes.type}</b>\n📱 Nomor: <code>${reqRes.number}</code>\n👛 Nama: ${escapeHtml(String(reqRes.name))}\n🕒 ${formatDateTimeWIB(new Date())}`;
           const adminKeyboard = {
             inline_keyboard: [[
               { text: '✅ Sudah Dikirim', callback_data: `admin_cashout_paid_${reqRes.id}` },
@@ -5348,7 +5424,7 @@ Deno.serve(async (req) => {
 
         if (isPaid) {
           await sendTelegramMessage(botToken, proc.user_id,
-            `🎉 <b>BONUS TERKIRIM!</b>\n\n💵 Rp50.000 sudah dikirim ke <b>${proc.type}</b> <code>${proc.number}</code>.\n\nTerima kasih sudah mengajak teman-temanmu! 🙌`);
+            `🎉 <b>BONUS TERKIRIM!</b>\n\n💵 ${formatRupiah(proc.amount)} sudah dikirim ke <b>${proc.type}</b> <code>${proc.number}</code>.\n\nTerima kasih sudah mengajak teman-temanmu! 🙌`);
 
           // Pengumuman publik ke channel (fire-and-forget, identitas disamarkan)
           postCashoutToChannel(botToken, {
@@ -6555,7 +6631,7 @@ Deno.serve(async (req) => {
       }
 
       await sendTelegramMessage(botToken, userId,
-        `💵 <b>Konfirmasi Penarikan Bonus</b>\n\n💰 Jumlah: <b>Rp50.000</b>\n🏦 E-wallet: <b>${draftType}</b>\n📱 Nomor: <code>${parsed.number}</code>\n👤 Nama: <b>${escapeHtml(parsed.name)}</b>`,
+        `💵 <b>Konfirmasi Penarikan Bonus</b>\n\n💰 Jumlah: <b>${formatRupiah(saved?.cashout_amount)}</b>\n🏦 E-wallet: <b>${draftType}</b>\n📱 Nomor: <code>${parsed.number}</code>\n👤 Nama: <b>${escapeHtml(parsed.name)}</b>`,
         {
           inline_keyboard: [
             [{ text: '✅ Kirim Permintaan', callback_data: 'cashout_confirm' }],
@@ -6743,6 +6819,11 @@ Deno.serve(async (req) => {
         // COMMAND /REFERRAL - Buka menu referal saat chatting
         else if (text === '/referral' || text === '/referal') {
           await sendReferralMenu(supabase, botToken, userId);
+          isCommand = true;
+        }
+        // COMMAND /SETBONUS - Khusus admin, ubah nominal tarik bonus referal
+        else if (text === '/setbonus' || text.startsWith('/setbonus ') || text === '/setnominal' || text.startsWith('/setnominal ')) {
+          await handleSetBonusCommand(supabase, botToken, userId, text);
           isCommand = true;
         }
         // COMMAND /LOKASI - Ubah lokasi (tidak memerlukan premium)
@@ -7065,6 +7146,10 @@ Deno.serve(async (req) => {
 
       else if (text === '/referral' || text === '/referal') {
         await sendReferralMenu(supabase, botToken, userId);
+      }
+
+      else if (text === '/setbonus' || text.startsWith('/setbonus ') || text === '/setnominal' || text.startsWith('/setnominal ')) {
+        await handleSetBonusCommand(supabase, botToken, userId, text);
       }
 
       else if (text === '/gift') {

@@ -70,6 +70,9 @@ const fetchStats = async () => {
       newToday: number;
       qualifiedToday: number;
       rewardsToday: number;
+      cashoutAmount?: number;
+      distribution?: { label: string; jumlah: number }[];
+      distributionTotal?: number;
       daily: { label: string; baru: number; sah: number; hadiah: number }[];
     };
   };
@@ -554,6 +557,48 @@ const Dashboard = () => {
                       dot={{ r: 4, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
                       activeDot={{ r: 7, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
                     />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="mt-6 border-border/50 bg-card/60 backdrop-blur">
+          <CardHeader>
+            <CardTitle>Sebaran User Berdasarkan Total Teman Sah</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Total user dengan minimal 1 teman sah: {(referral?.distributionTotal ?? 0).toLocaleString("id-ID")}
+              {referral?.cashoutAmount
+                ? ` • Nominal bonus saat ini: Rp${referral.cashoutAmount.toLocaleString("id-ID")}`
+                : ""}
+            </p>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-[320px] w-full" />
+            ) : (
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    layout="vertical"
+                    data={referral?.distribution ?? []}
+                    margin={{ top: 10, right: 24, left: 40, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
+                    <YAxis type="category" dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} width={120} />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "0.5rem",
+                        color: "hsl(var(--popover-foreground))",
+                      }}
+                      labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                      formatter={(value: number) => [value.toLocaleString("id-ID"), "Jumlah User"]}
+                    />
+                    <Bar dataKey="jumlah" name="Jumlah User" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={22} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>

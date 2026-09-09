@@ -946,6 +946,7 @@ export type Database = {
       generate_unique_payment_code: { Args: never; Returns: number }
       get_admin_dashboard_stats: { Args: never; Returns: Json }
       get_partner_settings: { Args: { p_partner_id: number }; Returns: Json }
+      get_referral_cashout_amount: { Args: never; Returns: number }
       get_referral_stats: { Args: never; Returns: Json }
       get_referral_status: { Args: { p_user_id: number }; Returns: Json }
       get_user_reputation: { Args: { p_user_id: number }; Returns: Json }
@@ -1009,6 +1010,10 @@ export type Database = {
       set_referral_cashout_admin_message: {
         Args: { p_message_id: number; p_request_id: string }
         Returns: undefined
+      }
+      set_referral_cashout_amount: {
+        Args: { p_admin_id: number; p_amount: number }
+        Returns: Json
       }
       set_referral_cashout_draft: {
         Args: { p_draft: Json; p_user_id: number }
