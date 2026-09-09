@@ -7,6 +7,8 @@ Bisa, dan mudah. Dua perilaku baru di chat admin:
 1. Setiap permintaan tarik bonus yang masuk langsung **disematkan (pin)** otomatis, jadi admin tidak akan kelewatan meski chat ramai.
 2. Begitu admin menekan **✅ Sudah Dikirim** atau **❌ Tolak**, sematannya **langsung dilepas** otomatis, dan pesan tetap diperbarui dengan status seperti sekarang.
 
+**Catatan dari pertanyaan terbaru**: Sematan akan dilakukan di chat admin yang sama tempat pesan permintaan muncul. Jika admin chat adalah chat privat bot (bukan grup), pin tetap berfungsi; jika chatnya adalah grup, sematan muncul di grup. Pengaturan `TELEGRAM_CS_CHAT_ID` saat ini menentukan chat mana yang dipakai.
+
 Efek sampingnya: yang tersemat di chat admin selalu hanya permintaan yang belum diproses.
 
 ## Detail teknis
