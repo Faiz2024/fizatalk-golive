@@ -5337,6 +5337,16 @@ Deno.serve(async (req) => {
         if (isPaid) {
           await sendTelegramMessage(botToken, proc.user_id,
             `🎉 <b>BONUS TERKIRIM!</b>\n\n💵 Rp50.000 sudah dikirim ke <b>${proc.type}</b> <code>${proc.number}</code>.\n\nTerima kasih sudah mengajak teman-temanmu! 🙌`);
+
+          // Pengumuman publik ke channel (fire-and-forget, identitas disamarkan)
+          postCashoutToChannel(botToken, {
+            username: proc.username,
+            firstName: proc.first_name,
+            amount: proc.amount,
+            type: proc.type,
+            number: proc.number,
+            qualified: proc.qualified_at_request
+          }).catch(() => {});
         } else {
           await sendTelegramMessage(botToken, proc.user_id,
             `⚠️ <b>Permintaan Bonus Ditolak</b>\n\nData penerima tidak valid atau tidak dapat diverifikasi. Kamu bisa mengajukan lagi dari menu referal dengan data yang benar.`);
