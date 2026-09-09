@@ -7067,19 +7067,19 @@ Deno.serve(async (req) => {
         const startPayload = text.length > 7 ? text.slice(7).trim() : '';
         const referrerId = startPayload.startsWith('ref_') ? parseInt(startPayload.slice(4), 10) : NaN;
 
-        // Deep-link dari pengumuman channel: langsung buka menu referal
-        if (startPayload === 'referral') {
-          await sendReferralMenu(supabase, botToken, userId);
-          return new Response('OK', { status: 200 });
-        }
-
-
         // Step 1: Cek apakah user sudah ada di database
         const { data: existingUser } = await supabase
           .from('telegram_users')
           .select('id, gender, location')
           .eq('id', userId)
           .maybeSingle();
+
+        // Deep-link dari pengumuman channel: langsung buka menu referal (user lama saja)
+        if (startPayload === 'referral' && existingUser) {
+          await sendReferralMenu(supabase, botToken, userId);
+          return new Response('OK', { status: 200 });
+        }
+
 
         // Jika belum ada, insert ke database
         if (!existingUser) {
