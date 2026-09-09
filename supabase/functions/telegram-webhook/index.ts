@@ -5287,6 +5287,12 @@ Deno.serve(async (req) => {
             const mid = json?.result?.message_id;
             if (mid) {
               supabase.rpc('set_referral_cashout_admin_message', { p_request_id: reqRes.id, p_message_id: mid }).then(() => {}, () => {});
+              // Sematkan pesan permintaan agar admin tidak kelewatan
+              fetch(`${TELEGRAM_API}${botToken}/pinChatMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: parseInt(adminChatId), message_id: mid, disable_notification: false })
+              }).catch(() => {});
             }
           } catch (_) { /* abaikan */ }
         }
