@@ -123,12 +123,27 @@ Deno.serve(async (req) => {
     // Statistik referal (user baru dari undangan)
     const refRaw = (referralRaw ?? {}) as {
       newToday?: number; qualifiedToday?: number; rewardsToday?: number;
+      cashoutAmount?: number;
+      distribution?: {
+        r1_50?: number; r51_80?: number; r81_99?: number;
+        r100_no_cashout?: number; r100_cashout?: number; total?: number;
+      };
       daily?: { date: string; baru: number; sah: number; hadiah: number }[];
     };
+    const dist = refRaw.distribution ?? {};
     const referral = {
       newToday: refRaw.newToday ?? 0,
       qualifiedToday: refRaw.qualifiedToday ?? 0,
       rewardsToday: refRaw.rewardsToday ?? 0,
+      cashoutAmount: refRaw.cashoutAmount ?? 50000,
+      distribution: [
+        { label: "1–50 teman", jumlah: dist.r1_50 ?? 0 },
+        { label: "51–80 teman", jumlah: dist.r51_80 ?? 0 },
+        { label: "81–99 teman", jumlah: dist.r81_99 ?? 0 },
+        { label: "100+ belum tarik", jumlah: dist.r100_no_cashout ?? 0 },
+        { label: "100+ sudah tarik", jumlah: dist.r100_cashout ?? 0 },
+      ],
+      distributionTotal: dist.total ?? 0,
       daily: (refRaw.daily ?? []).map((row) => ({
         label: new Date(`${row.date}T00:00:00+07:00`).toLocaleDateString("id-ID", {
           day: "numeric",
