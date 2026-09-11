@@ -33,8 +33,12 @@ import {
 import { useEffect } from "react";
 import { PromoStatsChart } from "@/components/PromoStatsChart";
 
+let forceNextFetch = false;
+
 const fetchStats = async () => {
-  const { data, error } = await supabase.functions.invoke("admin-stats");
+  const body = forceNextFetch ? { force: true } : undefined;
+  forceNextFetch = false;
+  const { data, error } = await supabase.functions.invoke("admin-stats", body ? { body } : undefined);
   if (error) throw error;
   if ((data as any)?.error) throw new Error((data as any).error);
   return data as {
