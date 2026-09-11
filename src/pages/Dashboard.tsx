@@ -33,8 +33,12 @@ import {
 import { useEffect } from "react";
 import { PromoStatsChart } from "@/components/PromoStatsChart";
 
+let forceNextFetch = false;
+
 const fetchStats = async () => {
-  const { data, error } = await supabase.functions.invoke("admin-stats");
+  const body = forceNextFetch ? { force: true } : undefined;
+  forceNextFetch = false;
+  const { data, error } = await supabase.functions.invoke("admin-stats", body ? { body } : undefined);
   if (error) throw error;
   if ((data as any)?.error) throw new Error((data as any).error);
   return data as {
@@ -131,9 +135,11 @@ const Dashboard = () => {
   }, [statsQ.error]);
 
   const handleRefresh = () => {
+    forceNextFetch = true;
     statsQ.refetch();
     toast.success("Data sedang disegarkan");
   };
+
 
   const isLoading = statsQ.isLoading;
 
@@ -166,6 +172,17 @@ const Dashboard = () => {
         {isLoading && (
           <p className="text-sm text-muted-foreground">Memuat data...</p>
         )}
+        {statsQ.error && !isLoading && (
+          <div className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm">
+              Data gagal dimuat. Perhitungan di database mungkin sedang sibuk.
+            </p>
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
+              Coba lagi
+            </Button>
+          </div>
+        )}
+
         {statsQ.data?.special_promo && (
           <PromoStatsChart 
             stats={statsQ.data.special_promo} 

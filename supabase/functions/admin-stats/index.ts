@@ -14,9 +14,16 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Opsi paksa hitung ulang (lewati cache 5 menit)
+    let force = false;
+    try {
+      const body = await req.json();
+      force = body?.force === true;
+    } catch (_) { /* tanpa body */ }
+
     // Semua agregasi dihitung di DB via RPC (hemat biaya cloud, akurat WIB)
     const [{ data, error }, { data: referralRaw }] = await Promise.all([
-      supabase.rpc("get_admin_dashboard_stats"),
+      supabase.rpc("get_admin_dashboard_stats", { p_force: force }),
       supabase.rpc("get_referral_stats"),
     ]);
     if (error) throw error;
