@@ -135,9 +135,11 @@ const Dashboard = () => {
   }, [statsQ.error]);
 
   const handleRefresh = () => {
+    forceNextFetch = true;
     statsQ.refetch();
     toast.success("Data sedang disegarkan");
   };
+
 
   const isLoading = statsQ.isLoading;
 
