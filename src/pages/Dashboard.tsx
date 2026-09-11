@@ -172,6 +172,17 @@ const Dashboard = () => {
         {isLoading && (
           <p className="text-sm text-muted-foreground">Memuat data...</p>
         )}
+        {statsQ.error && !isLoading && (
+          <div className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm">
+              Data gagal dimuat. Perhitungan di database mungkin sedang sibuk.
+            </p>
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
+              Coba lagi
+            </Button>
+          </div>
+        )}
+
         {statsQ.data?.special_promo && (
           <PromoStatsChart 
             stats={statsQ.data.special_promo} 
