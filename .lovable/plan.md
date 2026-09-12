@@ -11,7 +11,7 @@ Saat admin menekan **❌ Tolak**, bot tidak langsung menolak. Pesan yang sama me
 
 2. **🚫 Teman Tidak Valid/Tidak Organik**
    - Permintaan ditandai ditolak karena referral tidak organik.
-   - Jika pengguna **non-Premium**, pengguna diblokir dari bot dan menerima keterangan blokir yang sudah dipakai saat ini, lengkap dengan tombol **Bayar Denda Rp10.000** dan **Upgrade Premium (Anti-Banned)**.
+   - Jika pengguna **non-Premium**, pengguna diblokir dari bot dan menerima pesan yang secara jelas menyebut: penarikan ditolak karena referral tidak organik, seluruh akun hasil undangannya telah dihapus, serta akses bot diblokir. Pesan tetap dilengkapi tombol **Bayar Denda Rp10.000** dan **Upgrade Premium (Anti-Banned)**.
    - Jika pengguna masih **Premium aktif**, pengguna tidak diblokir; pengguna hanya menerima keterangan bahwa penarikan ditolak karena teman tidak valid/tidak organik.
    - Semua akun yang terdaftar sebagai hasil undangan langsung pengguna tersebut dihapus sepenuhnya dari `telegram_users`, sesuai pilihan Anda.
    - Pesan admin diperbarui dengan alasan penolakan, jumlah akun yang dihapus, admin pemroses, dan waktu WIB; sematan kemudian dilepas.
@@ -56,14 +56,14 @@ Tombol **Kembali** mengembalikan pesan ke tombol **Sudah Dikirim / Tolak** tanpa
 - Tambahkan callback alasan dengan ID permintaan, tetap dibatasi hanya untuk chat admin yang terdaftar.
 - Panggil satu RPC untuk setiap keputusan admin.
 - Tampilkan hasil ringkas ke admin dan kirim notifikasi yang sesuai kepada pengguna.
-- Untuk pengguna non-Premium, notifikasi blokir memakai tampilan blokir yang sudah ada beserta tombol bayar denda dan beli Premium; untuk pengguna Premium, kirim keterangan penolakan tanpa tombol pemulihan karena akun tidak diblokir.
+- Untuk pengguna non-Premium, notifikasi blokir memakai tampilan blokir yang sudah ada, menyebut alasan penolakan dan penghapusan seluruh akun undangan, serta menyediakan tombol bayar denda dan beli Premium; untuk pengguna Premium, kirim keterangan penolakan tanpa tombol pemulihan karena akun tidak diblokir.
 - Bila akun undangan sedang memiliki partner aktif, kirim pemberitahuan singkat kepada partner yang terdampak setelah RPC sukses.
 - Callback dijaga dari klik ganda; kegagalan database mengembalikan HTTP 500 agar webhook Telegram mencoba ulang.
 
 ## Verifikasi
 
 - **Salah input:** status menjadi ditolak, pengguna dapat mengajukan ulang, tidak ada akun/referral terhapus.
-- **Tidak organik, non-Premium:** pelaku masuk daftar blokir aktif, menerima opsi bayar denda dan beli Premium, semua akun undangan langsung hilang dari `telegram_users`, dan tidak ada relasi yatim atau partner tersangkut.
+- **Tidak organik, non-Premium:** pelaku masuk daftar blokir aktif; pesannya menyebut penolakan dan penghapusan akun undangan, menyediakan opsi bayar denda dan beli Premium, semua akun undangan langsung hilang dari `telegram_users`, dan tidak ada relasi yatim atau partner tersangkut.
 - **Tidak organik, Premium aktif:** pelaku tidak diblokir dan hanya menerima keterangan penolakan; semua akun undangan langsung tetap dihapus.
 - Akun generasi berikutnya tidak ikut terhapus, tetapi hubungan ke akun yang sudah dihapus dibersihkan.
 - Klik alasan dua kali tidak menjalankan penghapusan ulang.
