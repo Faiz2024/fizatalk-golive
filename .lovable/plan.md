@@ -1,69 +1,66 @@
-# Dashboard Masih Gagal: Penyebab Sebenarnya Ada di Beban Database
+# Dua Alasan Penolakan Penarikan Bonus Referral
 
-## Apa yang saya ukur barusan
+## Perubahan di bot admin
 
-- Memuat data dashboard: gagal lagi, HTTP 500 "statement timeout", baik dengan
-  maupun tanpa hitung ulang paksa (±57–59 detik).
-- Menghitung dua angka sederhana dari tabel pengguna butuh **34 detik**, padahal
-  seluruh datanya (±70 MB) sudah berada di memori. Artinya bukan indeks yang
-  kurang — mesin databasenya yang kehabisan tenaga.
-- Ukuran mesin saat ini: **Mini**. Memori terpakai 81%.
-- Beban terbesar yang sedang menekan mesin:
-  - Pengecekan pengguna untuk pesan re-engagement: 674 panggilan, rata-rata
-    686 ms, puncak 7,7 detik per panggilan (jalan tiap 5 menit).
-  - Bot melakukan ±1,6 juta + 560 ribu + 346 ribu pembacaan kecil ke tabel
-    pengguna — masing-masing cepat, tapi jumlahnya menghabiskan CPU.
+Saat admin menekan **❌ Tolak**, bot tidak langsung menolak. Pesan yang sama menampilkan dua pilihan:
 
-Jadi perbaikan sebelumnya (indeks + cache) benar arahnya, tapi tidak cukup:
-selama CPU habis, hitungan apa pun ikut melambat sampai kena batas waktu.
+1. **✏️ Salah Input Data**
+   - Permintaan ditandai ditolak.
+   - Pengguna menerima pesan seperti sekarang: data penerima tidak valid dan dapat mengajukan ulang dengan data yang benar.
+   - Akun serta hasil referral pengguna tidak diubah.
 
-## Rencana perbaikan
+2. **🚫 Teman Tidak Valid/Tidak Organik**
+   - Permintaan ditandai ditolak karena referral tidak organik.
+   - Pengguna yang mengajukan penarikan diblokir permanen dari bot.
+   - Semua akun yang terdaftar sebagai hasil undangan langsung pengguna tersebut dihapus sepenuhnya dari `telegram_users`, sesuai pilihan Anda.
+   - Pesan admin diperbarui dengan alasan penolakan, jumlah akun yang dihapus, admin pemroses, dan waktu WIB; sematan kemudian dilepas.
 
-### 1. Naikkan ukuran mesin database (langkah pertama, langsung terasa)
+Tombol **Kembali** mengembalikan pesan ke tombol **Sudah Dikirim / Tolak** tanpa mengubah data.
 
-Naik dari Mini ke ukuran berikutnya. Ini menghentikan pembatasan CPU yang
-membuat semuanya melambat, termasuk bot yang kadang berhenti merespons.
-Biaya bulanan naik — saya minta persetujuan sebelum menerapkannya.
+## Keamanan dan konsistensi data
 
-### 2. Dashboard tidak lagi menghitung saat halaman dibuka
-
-- Halaman hanya membaca hasil yang sudah tersimpan, jadi selalu tampil cepat
-  dan tidak pernah kena batas waktu.
-- Hitungan dilakukan otomatis di latar belakang setiap 15 menit lewat penjadwal.
-- Tombol "Segarkan Data" memicu hitung ulang latar belakang, lalu halaman
-  menampilkan hasilnya begitu siap, dengan keterangan "diperbarui pukul ... WIB".
-
-### 3. Ringankan pengecekan re-engagement
-
-Query pencarian pengguna untuk pesan re-engagement dirapikan dan dibatasi agar
-tidak memindai seluruh tabel tiap 5 menit, plus indeks pendukung sesuai
-kondisi yang dipakai view-nya.
-
-### 4. Kurangi pembacaan kecil dari bot
-
-Beberapa titik di bot membaca kolom pengguna dua–tiga kali dalam satu kejadian.
-Digabung jadi satu pembacaan per kejadian, sehingga jutaan panggilan berkurang
-signifikan dan biaya cloud ikut turun.
+- Aksi “tidak organik” dijalankan melalui satu RPC atomik agar blokir, penolakan, dan penghapusan berhasil seluruhnya atau dibatalkan seluruhnya jika ada kegagalan.
+- RPC mengunci permintaan dan pengguna untuk mencegah klik ganda atau bentrok dengan proses pembayaran/referral lain.
+- Sebelum akun undangan dihapus, relasi chat aktif dan antrean mereka dibereskan agar partner tidak tertinggal dalam status chatting.
+- Data yang merujuk akun undangan dibersihkan secara terkontrol, termasuk referral mereka, transaksi/permintaan terkait, laporan, klik re-engagement, dan referensi `approved_by` yang dapat menghalangi penghapusan.
+- Hubungan referral turunan dari akun yang dihapus dibatalkan tanpa ikut menghapus akun generasi berikutnya; hanya akun undangan langsung milik pelaku yang dihapus.
+- Catatan `blocked_users` untuk pelaku disimpan dengan alasan khusus `referral_fraud_non_organic`, sehingga blokir tetap dapat dikenali bot dan diaudit.
+- Catatan penarikan pelaku tetap disimpan sebagai bukti, dengan status ditolak dan alasan penolakan pada `admin_notes`.
+- RPC mengembalikan ringkasan jumlah akun dan data yang dibersihkan dalam satu respons, tanpa pembacaan berulang dari fungsi bot.
 
 ## Detail teknis
 
-- `get_admin_dashboard_stats`: pisah jadi `refresh_admin_dashboard_stats()`
-  (menulis cache ke `bot_settings`) dan pembacaan cache murni untuk edge
-  function; tambahkan `cached_at` di payload.
-- Jadwalkan `refresh_admin_dashboard_stats()` via `pg_cron` tiap 15 menit.
-- `admin-stats`: hanya membaca cache; `force` memicu refresh async, bukan
-  menunggu hitungan selesai. `get_referral_stats` ikut masuk cache yang sama.
-- `v_eligible_reengagement_users`: periksa definisinya, ganti filter berbasis
-  ekspresi waktu dengan perbandingan rentang, tambahkan indeks parsial yang
-  cocok, dan pastikan pemanggilnya memakai `LIMIT` kecil.
-- `src/pages/Dashboard.tsx`: tampilkan waktu data terakhir dihitung; tombol
-  segarkan memakai polling singkat.
-- Resize compute lewat tool Cloud setelah Anda setuju.
+### Database
+
+- Perluas pemrosesan penarikan dengan alasan `invalid_input` dan `non_organic`.
+- Tambahkan RPC `reject_referral_cashout(p_request_id, p_reason, p_admin_id)` sebagai `SECURITY DEFINER` dengan validasi alasan, advisory lock, dan transaksi atomik.
+- Untuk `invalid_input`, hanya ubah status permintaan serta simpan alasan.
+- Untuk `non_organic`:
+  - ambil dan kunci pemilik permintaan;
+  - masukkan/aktifkan blokir permanen;
+  - lepaskan chat aktif pelaku dan akun undangan;
+  - kumpulkan akun undangan langsung dari `referrals.referrer_id` dan `telegram_users.referred_by`;
+  - bersihkan referensi yang tidak memiliki cascade atau foreign key;
+  - hapus akun undangan dari `telegram_users`;
+  - nolkan hitungan referral pelaku agar tidak dapat dipakai kembali;
+  - tandai permintaan sebagai ditolak dengan alasan audit.
+- Pertahankan GRANT hanya untuk `service_role`; tidak ada akses publik baru.
+- Semua waktu audit menggunakan WIB.
+
+### Fungsi bot Telegram
+
+- Tombol Tolak membuka submenu alasan memakai `editMessageText`.
+- Tambahkan callback alasan dengan ID permintaan, tetap dibatasi hanya untuk chat admin yang terdaftar.
+- Panggil satu RPC untuk setiap keputusan admin.
+- Tampilkan hasil ringkas ke admin dan kirim notifikasi yang sesuai kepada pengguna.
+- Bila akun undangan sedang memiliki partner aktif, kirim pemberitahuan singkat kepada partner yang terdampak setelah RPC sukses.
+- Callback dijaga dari klik ganda; kegagalan database mengembalikan HTTP 500 agar webhook Telegram mencoba ulang.
 
 ## Verifikasi
 
-- Muat dashboard: HTTP 200 di bawah 1 detik, semua kartu terisi.
-- Ulangi pengukuran "hitung dua angka" tadi: harus turun dari 34 detik ke
-  hitungan milidetik.
-- Pantau bot beberapa jam, terutama sekitar pukul 02.00 WIB, memastikan tidak
-  ada lagi jeda berhenti merespons.
+- **Salah input:** status menjadi ditolak, pengguna dapat mengajukan ulang, tidak ada akun/referral terhapus.
+- **Tidak organik:** pelaku masuk daftar blokir aktif, semua akun undangan langsung hilang dari `telegram_users`, dan tidak ada relasi yatim atau partner tersangkut.
+- Akun generasi berikutnya tidak ikut terhapus, tetapi hubungan ke akun yang sudah dihapus dibersihkan.
+- Klik alasan dua kali tidak menjalankan penghapusan ulang.
+- Tombol Kembali tidak mengubah status.
+- Pesan admin menampilkan alasan dan jumlah akun terhapus, sematan terlepas, dan seluruh cap waktu tampil dalam WIB.
