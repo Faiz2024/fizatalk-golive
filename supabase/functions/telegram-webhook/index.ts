@@ -67,13 +67,7 @@ interface CallbackQuery {
     first_name: string;
     username?: string;
   };
-  message?: {
-    message_id: number;
-    text?: string;
-    chat: {
-      id: number;
-    };
-  };
+  message?: TelegramMessage;
   data?: string;
 }
 
