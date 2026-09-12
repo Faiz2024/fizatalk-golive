@@ -67,12 +67,7 @@ interface CallbackQuery {
     first_name: string;
     username?: string;
   };
-  message?: {
-    message_id: number;
-    chat: {
-      id: number;
-    };
-  };
+  message?: TelegramMessage;
   data?: string;
 }
 
@@ -5385,25 +5380,92 @@ Deno.serve(async (req) => {
         }
 
         const isPaid = callbackData.startsWith('admin_cashout_paid_');
-        const requestId = callbackData.replace(isPaid ? 'admin_cashout_paid_' : 'admin_cashout_reject_', '');
+        const isRejectMenu = callbackData.startsWith('admin_cashout_reject_');
+        const isInvalidInput = callbackData.startsWith('admin_cashout_bad_');
+        const isNonOrganic = callbackData.startsWith('admin_cashout_fraud_');
+        const isBack = callbackData.startsWith('admin_cashout_back_');
+        const requestId = callbackData.replace(
+          isPaid ? 'admin_cashout_paid_'
+            : isRejectMenu ? 'admin_cashout_reject_'
+              : isInvalidInput ? 'admin_cashout_bad_'
+                : isNonOrganic ? 'admin_cashout_fraud_'
+                  : 'admin_cashout_back_',
+          ''
+        );
 
-        const { data: proc, error: procErr } = await supabase.rpc('process_referral_cashout', {
-          p_request_id: requestId,
-          p_action: isPaid ? 'paid' : 'rejected',
-          p_admin_id: userId
-        });
-
-        if (procErr || !proc?.success) {
-          await answerCallbackQuery(botToken, query.id, proc?.error === 'already_processed' ? 'Sudah diproses sebelumnya.' : '⚠️ Gagal memproses.', true);
+        if (!requestId || (!isPaid && !isRejectMenu && !isInvalidInput && !isNonOrganic && !isBack)) {
+          await answerCallbackQuery(botToken, query.id, '⚠️ Pilihan tidak valid.', true);
           return new Response('OK', { status: 200 });
         }
 
-        answerCallbackQuery(botToken, query.id, isPaid ? '✅ Ditandai sudah dikirim.' : '❌ Ditolak.').catch(() => {});
+        if (isRejectMenu || isBack) {
+          answerCallbackQuery(botToken, query.id).catch(() => {});
+          if (message?.message_id) {
+            const keyboard = isRejectMenu
+              ? {
+                  inline_keyboard: [
+                    [{ text: '✏️ Salah Input Data', callback_data: `admin_cashout_bad_${requestId}` }],
+                    [{ text: '🚫 Teman Tidak Valid/Tidak Organik', callback_data: `admin_cashout_fraud_${requestId}` }],
+                    [{ text: '⬅️ Kembali', callback_data: `admin_cashout_back_${requestId}` }]
+                  ]
+                }
+              : {
+                  inline_keyboard: [[
+                    { text: '✅ Sudah Dikirim', callback_data: `admin_cashout_paid_${requestId}` },
+                    { text: '❌ Tolak', callback_data: `admin_cashout_reject_${requestId}` }
+                  ]]
+                };
+
+            await fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: message.chat.id,
+                message_id: message.message_id,
+                text: message.text || 'Permintaan bonus referal',
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+              })
+            });
+          }
+          return new Response('OK', { status: 200 });
+        }
+
+        const { data: proc, error: procErr } = isPaid
+          ? await supabase.rpc('process_referral_cashout', {
+              p_request_id: requestId,
+              p_action: 'paid',
+              p_admin_id: userId
+            })
+          : await supabase.rpc('reject_referral_cashout', {
+              p_request_id: requestId,
+              p_reason: isNonOrganic ? 'non_organic' : 'invalid_input',
+              p_admin_id: userId
+            });
+
+        if (procErr || !proc?.success) {
+          await answerCallbackQuery(botToken, query.id, proc?.error === 'already_processed' ? 'Sudah diproses sebelumnya.' : '⚠️ Gagal memproses.', true);
+          if (procErr) {
+            console.error('Referral cashout processing failed:', procErr);
+            return new Response('Database error', { status: 500 });
+          }
+          return new Response('OK', { status: 200 });
+        }
+
+        answerCallbackQuery(
+          botToken,
+          query.id,
+          isPaid ? '✅ Ditandai sudah dikirim.'
+            : isNonOrganic ? `❌ Ditolak. ${proc.deleted_count ?? 0} akun dihapus.`
+              : '❌ Ditolak karena salah input.'
+        ).catch(() => {});
 
         if (message?.message_id) {
           const statusLine = isPaid
             ? `\n\n✅ <b>SUDAH DIKIRIM</b> oleh <code>${userId}</code>\n🕒 ${formatDateTimeWIB(new Date())}`
-            : `\n\n❌ <b>DITOLAK</b> oleh <code>${userId}</code>\n🕒 ${formatDateTimeWIB(new Date())}`;
+            : isNonOrganic
+              ? `\n\n❌ <b>DITOLAK — TEMAN TIDAK ORGANIK</b>\n🗑 Akun undangan dihapus: <b>${proc.deleted_count ?? 0}</b>\n👮 Admin: <code>${userId}</code>\n🕒 ${formatDateTimeWIB(new Date())}`
+              : `\n\n❌ <b>DITOLAK — SALAH INPUT DATA</b>\n👮 Admin: <code>${userId}</code>\n🕒 ${formatDateTimeWIB(new Date())}`;
           fetch(`${TELEGRAM_API}${botToken}/editMessageText`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -5435,9 +5497,29 @@ Deno.serve(async (req) => {
             number: proc.number,
             qualified: proc.qualified_at_request
           }).catch(() => {});
+        } else if (isNonOrganic && !proc.is_premium) {
+          const blockedKeyboard = {
+            inline_keyboard: [
+              [{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }],
+              [{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }]
+            ]
+          };
+          await sendTelegramMessage(botToken, proc.user_id,
+            `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n❌ Penarikan bonus ditolak karena teman yang diundang terdeteksi <b>tidak valid/tidak organik</b>.\n\n🗑 Seluruh akun hasil undangan langsung Anda telah dihapus. Akses bot Anda diblokir untuk menjaga keamanan program referal.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ Bayar denda pelanggaran sebesar <b>Rp 10.000</b>.\n2️⃣ Upgrade ke <b>Premium (Anti-Banned)</b>.`,
+            blockedKeyboard);
+        } else if (isNonOrganic) {
+          await sendTelegramMessage(botToken, proc.user_id,
+            `⚠️ <b>Permintaan Bonus Ditolak</b>\n\nPenarikan bonus ditolak karena teman yang diundang terdeteksi <b>tidak valid/tidak organik</b>. Seluruh akun hasil undangan langsung Anda telah dihapus.\n\nKarena Premium Anda masih aktif, akun Anda tidak diblokir.`);
         } else {
           await sendTelegramMessage(botToken, proc.user_id,
             `⚠️ <b>Permintaan Bonus Ditolak</b>\n\nData penerima tidak valid atau tidak dapat diverifikasi. Kamu bisa mengajukan lagi dari menu referal dengan data yang benar.`);
+        }
+
+        if (isNonOrganic && Array.isArray(proc.affected_partner_ids)) {
+          await Promise.allSettled(proc.affected_partner_ids.map((partnerId: number) =>
+            sendTelegramMessage(botToken, partnerId,
+              '⚠️ Partner Anda tidak lagi tersedia. Silakan tekan Cari Partner untuk menemukan partner baru.')
+          ));
         }
         return new Response('OK', { status: 200 });
       }

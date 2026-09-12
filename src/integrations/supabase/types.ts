@@ -991,6 +991,10 @@ export type Database = {
         Args: { p_new_user_id: number; p_referrer_id: number }
         Returns: Json
       }
+      reject_referral_cashout: {
+        Args: { p_admin_id: number; p_reason: string; p_request_id: string }
+        Returns: Json
+      }
       request_referral_cashout: { Args: { p_user_id: number }; Returns: Json }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
       resolve_reconnect: {

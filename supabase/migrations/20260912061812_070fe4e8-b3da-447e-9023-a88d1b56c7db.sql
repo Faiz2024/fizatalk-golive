@@ -1,0 +1,2 @@
+REVOKE ALL ON FUNCTION public.reject_referral_cashout(uuid, text, bigint) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.reject_referral_cashout(uuid, text, bigint) TO service_role;
