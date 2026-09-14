@@ -18,6 +18,22 @@
 - Bukti cashout dipublikasikan ke channel dalam bentuk tersamarkan, tetapi belum ada persetujuan publikasi yang eksplisit.
 - RPC `bridge_exec_sql` dapat menjalankan SQL dinamis dengan hak tinggi dan memperbesar dampak bila kredensial server disalahgunakan.
 
+## Contoh risiko nyata yang menjadi dasar perbaikan
+
+- Pengguna di bawah 18 tahun menerima atau mengirim konten seksual melalui bot.
+- Laporan tentang konten anak, ancaman, atau pemerasan tidak segera menghentikan akses pelaku.
+- Nomor e-wallet, bukti pembayaran, identitas, atau isi laporan bocor atau dipublikasikan tanpa persetujuan khusus.
+- Data dikumpulkan tanpa persetujuan yang jelas, disimpan tanpa batas, atau tidak dihapus setelah permintaan pengguna.
+- Pembayaran berhasil tetapi Premium/saldo tidak aktif, transaksi tergandakan, atau promo ditolak tanpa mekanisme refund dan sengketa.
+- Orang yang bukan admin dapat menyetujui bukti pembayaran atau tindakan finansial.
+- Klaim referral, harga coret, atau batas waktu promo memberi kesan penghasilan/keterbatasan yang tidak sesuai keadaan sebenarnya.
+- Akun undangan yang sah terhapus karena keputusan referral tidak organik tanpa pemberitahuan, bukti memadai, atau jalur banding.
+- Pelanggaran keselamatan serius dapat dipulihkan hanya dengan membayar denda atau membeli Premium.
+- Request palsu ke webhook memicu pesan, laporan, saldo, atau tindakan admin akibat autentikasi yang lemah.
+- Layanan publik tidak memenuhi kewajiban PSE/takedown yang berlaku atau model dananya masuk kegiatan pembayaran berizin.
+
+Setiap kasus dapat memicu kombinasi sengketa konsumen, tuntutan ganti rugi, pemeriksaan pidana, sanksi administratif, atau pemutusan akses bergantung pada fakta. Untuk pelanggaran tertentu, UU PDP memungkinkan denda administratif hingga 2% pendapatan tahunan; angka dan penerapannya harus dikonfirmasi advokat berdasarkan kasus nyata.
+
 ## 1. Gerbang 18+, wilayah, dan persetujuan wajib
 
 - Sebelum fitur apa pun dapat dipakai, tampilkan ringkasan yang jelas: khusus 18+, Indonesia, anonymous chat memiliki risiko, larangan konten, pemrosesan data, mekanisme laporan, serta tautan/perintah untuk dokumen lengkap.
