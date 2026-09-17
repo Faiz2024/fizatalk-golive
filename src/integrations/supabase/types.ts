@@ -114,7 +114,9 @@ export type Database = {
           id: string
           join_token: string | null
           recipient_id: number
+          recipient_redeemed_at: string | null
           requester_id: number
+          requester_redeemed_at: string | null
           resolved_at: string | null
           status: string
         }
@@ -124,7 +126,9 @@ export type Database = {
           id?: string
           join_token?: string | null
           recipient_id: number
+          recipient_redeemed_at?: string | null
           requester_id: number
+          requester_redeemed_at?: string | null
           resolved_at?: string | null
           status?: string
         }
@@ -134,7 +138,9 @@ export type Database = {
           id?: string
           join_token?: string | null
           recipient_id?: number
+          recipient_redeemed_at?: string | null
           requester_id?: number
+          requester_redeemed_at?: string | null
           resolved_at?: string | null
           status?: string
         }
@@ -1008,6 +1014,10 @@ export type Database = {
       }
       decay_negative_reports: { Args: { p_user_id: number }; Returns: number }
       end_chat_comprehensive: { Args: { p_user_id: number }; Returns: Json }
+      exchange_chat_call_invite: {
+        Args: { p_join_token: string; p_user_id: number }
+        Returns: Json
+      }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
       generate_unique_payment_code: { Args: never; Returns: number }
       get_admin_dashboard_stats: { Args: { p_force?: boolean }; Returns: Json }
