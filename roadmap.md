@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Ubah bonus referal menjadi pilihan 3 teman untuk 1 jam atau 10 teman untuk 1 hari Premium.
+
 - [x] Tambahkan RPC atomik untuk dua alasan penolakan cashout referral.
 - [x] Tambahkan submenu alasan penolakan pada bot admin.
 - [x] Terapkan blokir non-Premium dengan opsi denda/Premium dan pengecualian Premium.
