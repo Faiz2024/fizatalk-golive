@@ -1,144 +1,118 @@
-# Perlindungan Hukum, Privasi, dan Keselamatan FizaTalk
+# Bot Voice Call Terpisah dan Integrasi `/call`
 
-## Sasaran dan batasan
+## Hasil akhir
 
-- Berlaku untuk **seluruh bot Telegram FizaTalk**, bukan fitur voice call.
-- Layanan dibatasi untuk pengguna **berusia 18 tahun ke atas** dan berada di **Indonesia**.
-- Tidak ada implementasi yang dapat menjamin bebas tuntutan, sanksi, atau denda. Tujuannya adalah mengurangi risiko secara nyata, membangun bukti kepatuhan, dan menghentikan penggunaan berisiko sedini mungkin.
-- Teks hukum final, status badan usaha, pendaftaran PSE, perpajakan, dan model pembayaran tetap harus diperiksa advokat Indonesia serta konsultan terkait sebelum peluncuran.
+Membuat ekosistem voice call yang terpisah dari FizaTalk lama:
 
-## Temuan yang harus ditutup
+```text
+Bot FizaTalk lama                      Proyek Voice Call baru
+/chat partner aktif                   Bot Telegram baru
+        |                              Database baru
+        +-- /call --> undangan ------> Mini App panggilan suara
+                                       Antrean voice terpisah
+                                       Premium terpisah
+```
 
-- Alur `/start` saat ini belum meminta deklarasi usia 18+ atau persetujuan Ketentuan dan Kebijakan Privasi.
-- Bot belum menyediakan penghapusan akun/data secara mandiri.
-- Webhook saat ini belum memakai secret token Telegram untuk membuktikan update benar-benar berasal dari Telegram.
-- Foto, video, dokumen, dan media lain dapat diteruskan ke orang asing tanpa pemeriksaan media otomatis.
-- Retensi beberapa log, laporan, bukti pembayaran, dan draft e-wallet belum dibatasi secara menyeluruh.
-- Pembayaran denda saat ini dapat membuka blokir; pelanggaran keselamatan serius tidak boleh dipulihkan hanya dengan pembayaran.
-- Bukti cashout dipublikasikan ke channel dalam bentuk tersamarkan, tetapi belum ada persetujuan publikasi yang eksplisit.
-- RPC `bridge_exec_sql` dapat menjalankan SQL dinamis dengan hak tinggi dan memperbesar dampak bila kredensial server disalahgunakan.
+Panggilan berlangsung sebagai audio WebRTC di Mini App yang dibuka dari Telegram, bukan panggilan suara native Telegram. Koneksi memakai P2P sebagai jalur utama dan TURN hanya ketika koneksi langsung gagal.
 
-## Contoh risiko nyata yang menjadi dasar perbaikan
+## 1. Proyek, bot, dan database baru
 
-- Pengguna di bawah 18 tahun menerima atau mengirim konten seksual melalui bot.
-- Laporan tentang konten anak, ancaman, atau pemerasan tidak segera menghentikan akses pelaku.
-- Nomor e-wallet, bukti pembayaran, identitas, atau isi laporan bocor atau dipublikasikan tanpa persetujuan khusus.
-- Data dikumpulkan tanpa persetujuan yang jelas, disimpan tanpa batas, atau tidak dihapus setelah permintaan pengguna.
-- Pembayaran berhasil tetapi Premium/saldo tidak aktif, transaksi tergandakan, atau promo ditolak tanpa mekanisme refund dan sengketa.
-- Orang yang bukan admin dapat menyetujui bukti pembayaran atau tindakan finansial.
-- Klaim referral, harga coret, atau batas waktu promo memberi kesan penghasilan/keterbatasan yang tidak sesuai keadaan sebenarnya.
-- Akun undangan yang sah terhapus karena keputusan referral tidak organik tanpa pemberitahuan, bukti memadai, atau jalur banding.
-- Pelanggaran keselamatan serius dapat dipulihkan hanya dengan membayar denda atau membeli Premium.
-- Request palsu ke webhook memicu pesan, laporan, saldo, atau tindakan admin akibat autentikasi yang lemah.
-- Layanan publik tidak memenuhi kewajiban PSE/takedown yang berlaku atau model dananya masuk kegiatan pembayaran berizin.
+- Buat proyek Lovable Cloud baru khusus voice call, tanpa berbagi tabel atau kredensial dengan proyek lama.
+- Hubungkan bot Telegram baru menggunakan token bot baru dan webhook dengan secret token Telegram.
+- Buat Mini App audio untuk ruang tunggu, izin mikrofon, status koneksi, durasi, mute, keluar, lapor, dan blokir.
+- Semua waktu aplikasi, audit, masa berlaku, dan tampilan menggunakan `Asia/Jakarta` (WIB).
+- Siapkan konfigurasi TURN melalui secret; kredensial TURN bersifat singkat dan diterbitkan server hanya saat dibutuhkan.
 
-Setiap kasus dapat memicu kombinasi sengketa konsumen, tuntutan ganti rugi, pemeriksaan pidana, sanksi administratif, atau pemutusan akses bergantung pada fakta. Untuk pelanggaran tertentu, UU PDP memungkinkan denda administratif hingga 2% pendapatan tahunan; angka dan penerapannya harus dikonfirmasi advokat berdasarkan kasus nyata.
+## 2. Identitas dan pendaftaran
 
-## 1. Gerbang 18+, wilayah, dan persetujuan wajib
+- Identitas utama adalah Telegram user ID yang diverifikasi dari data autentik Mini App; klien tidak boleh mengaku sebagai user ID lain.
+- Pengguna baru wajib menyatakan usia 18+, berada di Indonesia, serta menyetujui Ketentuan dan Kebijakan Privasi versi aktif sebelum masuk antrean atau panggilan.
+- Profil voice menyimpan data minimum: Telegram ID, nama tampilan minimum, gender, lokasi pilihan, status Premium voice, status moderasi, dan waktu WIB.
+- Status Premium bot lama tidak disalin. Pembelian, masa aktif, dan manfaat Premium voice dikelola hanya di proyek baru.
 
-- Sebelum fitur apa pun dapat dipakai, tampilkan ringkasan yang jelas: khusus 18+, Indonesia, anonymous chat memiliki risiko, larangan konten, pemrosesan data, mekanisme laporan, serta tautan/perintah untuk dokumen lengkap.
-- Minta empat persetujuan eksplisit melalui tombol terpisah atau konfirmasi berurutan:
-  1. berusia minimal 18 tahun;
-  2. berada di Indonesia;
-  3. menyetujui Ketentuan Penggunaan dan Kebijakan Privasi;
-  4. memahami bahwa pengguna lain tetap dapat menyalahgunakan atau merekam percakapan di perangkatnya.
-- Jangan cukup mengandalkan tanggal lahir yang diketik. Simpan deklarasi usia, versi dokumen, waktu persetujuan WIB, Telegram user ID, dan sumber alur persetujuan.
-- Semua pengguna lama wajib menyetujui versi aktif sebelum dapat mencari partner, mengirim pesan/media, membeli, menerima hadiah, atau memakai referral.
-- Bila dokumen berubah secara material, paksa persetujuan ulang. Perubahan minor dicatat tanpa mengganggu pengguna.
-- Tambahkan `/ketentuan`, `/privasi`, `/keamanan`, `/bantuan`, dan `/hapusakun`, tersedia baik saat idle maupun chatting dan tidak pernah diteruskan ke partner.
+## 3. Antrean voice terpisah
 
-## 2. Dokumen dan informasi yang tampil di bot
+- Pengguna gratis dapat mencari partner acak tanpa filter gender/lokasi.
+- Pengguna Premium voice dapat memilih filter gender dan/atau lokasi seperti bot lama.
+- Satu RPC atomik menangani masuk antrean, keluar antrean, pencarian, pencocokan, timeout, anti-double-click, blokir, anti-repeat, dan pembatasan satu sesi aktif per pengguna.
+- Kehadiran memakai masa berlaku singkat, bukan heartbeat database yang sering; pembaruan hanya saat ada perubahan penting.
+- Jika belum mendapat pasangan, bot memperbarui pesan pencarian yang sama agar chat tidak dipenuhi pesan baru.
 
-- Sediakan Ketentuan Penggunaan berbahasa Indonesia yang mencakup: kelayakan 18+, wilayah Indonesia, aturan anonymous chat, konten terlarang, sanksi, penghentian akun, laporan/banding, transaksi, referral, hak kekayaan intelektual, batas tanggung jawab yang wajar, perubahan layanan, hukum Indonesia, dan saluran pengaduan.
-- Sediakan Kebijakan Privasi yang menyebut data yang dikumpulkan, tujuan dan dasar pemrosesan, penerima data, lokasi/pihak pemroses, retensi, keamanan, hak pengguna, penghapusan, insiden data, serta kontak operator.
-- Sediakan Kebijakan Transaksi dan Pengembalian Dana: harga/biaya total sebelum bayar, isi Premium/top-up, masa berlaku, kondisi gagal bayar/duplikat, kanal komplain, waktu respons, serta evaluasi refund yang tidak menghapus hak konsumen menurut hukum.
-- Tampilkan identitas operator, alamat/kedudukan usaha, dan kontak pengaduan yang nyata. Nilai ini menjadi pengaturan admin dan tidak boleh diisi dengan identitas rekaan.
-- Disclaimer tidak boleh menyatakan FizaTalk bebas dari seluruh tanggung jawab atau menghilangkan hak konsumen yang diwajibkan hukum.
+## 4. Undangan `/call` dari bot lama
 
-## 3. Keselamatan chat dan moderasi
+- Tambahkan `/call` pada bot lama hanya ketika pengguna sedang memiliki partner chat aktif.
+- Bot lama meminta persetujuan partner melalui tombol **Terima** dan **Tolak**; command dan callback tidak pernah diteruskan sebagai isi chat biasa.
+- Saat diterima, server lama membuat satu token undangan acak, sekali pakai, berumur singkat, dan terikat pada kedua Telegram user ID.
+- Kedua pengguna menerima tombol **Gabung Panggilan** yang membuka bot baru melalui deep-link unik.
+- Bot baru memvalidasi token melalui pertukaran antarfungsi yang ditandatangani. Data database lama tidak disalin dan database baru tidak diberi akses umum ke database lama.
+- Token kedaluwarsa setelah dipakai, ditolak, partner chat berubah/berakhir, atau batas waktunya habis. Menekan tautan orang lain tidak dapat masuk ke ruang tersebut.
+- Undangan dari bot lama tidak mensyaratkan Premium voice; Premium hanya mengatur filter pada antrean terpisah.
 
-- Pisahkan kategori laporan: seksual tanpa persetujuan, dugaan melibatkan anak, ancaman/kekerasan, pemerasan/penipuan, penyebaran data pribadi, narkoba/judi, spam, dan lainnya.
-- Kategori kritis langsung menghentikan chat, membekukan akun untuk pemeriksaan, mencegah pencocokan ulang, dan memberi petunjuk bantuan/darurat yang sesuai. Jangan menunggu empat laporan untuk dugaan konten anak, ancaman nyata, atau pemerasan.
-- Terapkan pemeriksaan media sebelum diteruskan. Sampai layanan pemeriksaan media yang memenuhi kebutuhan privasi dan penanganan konten ilegal tersedia, **nonaktifkan pengiriman foto, video, animasi, video note, dan dokumen antarpartner**; voice note dapat dipertahankan hanya setelah evaluasi risiko khusus.
-- Jangan menyimpan atau mengunduh materi yang diduga ilegal lebih lama dari kebutuhan penanganan. Simpan ID pesan/file Telegram dan jejak tindakan minimum; prosedur eskalasi serta preservasi bukti harus disahkan penasihat hukum.
-- Berikan proses banding gratis. Pelanggaran serius tidak dapat dihapus hanya dengan membayar denda atau membeli Premium.
-- Premium tidak mendapat pengecualian dari aturan keselamatan, laporan, shadowban, blokir, atau pemeriksaan konten.
-- Revisi bahasa filter agar istilah identitas/disabilitas tidak diperlakukan sebagai hinaan secara otomatis tanpa konteks.
-- Tambahkan tombol blokir permanen pasangan dan pastikan pasangan yang saling memblokir tidak pernah dicocokkan lagi di semua mode.
+## 5. Sesi panggilan WebRTC
 
-## 4. Privasi, hak pengguna, dan penghapusan otomatis
+- Signaling menawarkan jawaban WebRTC dan kandidat ICE hanya kepada dua anggota sesi yang tervalidasi.
+- Gunakan audio-only Opus dengan bitrate adaptif; tidak ada video, rekaman, transkripsi, atau penyimpanan isi suara.
+- Coba P2P terlebih dahulu. Jika gagal, gunakan TURN relay sebagai cadangan dan catat hanya metrik teknis minimum tanpa isi audio.
+- Mini App menampilkan status menghubungkan, tersambung, mencoba relay, koneksi terputus, dan berakhir.
+- Tangani pengguna menolak mikrofon, berpindah jaringan, menutup Mini App, putus sepihak, membuka beberapa tab, serta mencoba bergabung ulang.
+- Sesi dan kredensial signaling memiliki TTL; proses pembersihan batch menutup sesi yatim secara otomatis.
 
-- Tambahkan `/datasaya` untuk menampilkan ringkasan data dan menyediakan ekspor yang aman melalui chat privat pengguna, bukan grup/channel.
-- Tambahkan `/hapusakun` dengan dua kali konfirmasi, pemberitahuan akibat penghapusan, dan masa tunggu singkat untuk pembatalan. Selama masa tunggu, akun tidak dapat mencari partner.
-- Jalankan penghapusan melalui satu RPC atomik dan idempoten. Hapus profil, antrean, pasangan, referral yang dapat dihapus, draft e-wallet, log yang tidak wajib disimpan, serta media/bukti terkait.
-- Data yang masih wajib dipertahankan untuk sengketa transaksi, pencegahan penipuan, atau kewajiban hukum dipisahkan, diminimalkan, dikunci dari penggunaan produk, diberi alasan serta tanggal hapus otomatis. Jangan menjanjikan penghapusan absolut bila ada kewajiban penyimpanan yang sah.
-- Retensi awal yang diusulkan untuk ditinjau advokat:
-  - log operasional biasa: 7 hari;
-  - log error/keamanan: 30 hari;
-  - laporan dan bukti moderasi minimum: 90 hari;
-  - draft e-wallet yang tidak selesai: 7 hari;
-  - bukti pembayaran: masa sengketa yang diwajibkan hukum/penyedia pembayaran, lalu dihapus atau dianonimkan;
-  - statistik: agregat tanpa identitas, dapat disimpan lebih lama.
-- Jadwalkan pembersihan melalui satu job harian WIB yang memanggil RPC housekeeping agar hemat biaya; tidak menggunakan polling per pengguna.
-- Redaksi isi `bot_logs.context`; jangan simpan teks chat penuh, nomor pembayaran penuh, token, URL bukti, atau payload Telegram mentah.
-- Hentikan publikasi bukti cashout ke channel secara default. Tambahkan persetujuan terpisah dan opsional; tanpa persetujuan, hanya publikasikan statistik agregat tanpa identitas atau potongan nomor.
+## 6. Moderasi dan keselamatan
 
-## 5. Keamanan teknis
+- Tombol lapor/blokir dapat mengakhiri panggilan seketika dan mencegah pencocokan ulang.
+- Laporan memiliki kategori terpisah, termasuk seksual tanpa persetujuan, dugaan melibatkan anak, ancaman, pemerasan/penipuan, penyebaran data pribadi, spam, dan lainnya.
+- Laporan kritis membekukan akses voice untuk pemeriksaan; Premium tidak mengecualikan pengguna dari moderasi.
+- Karena tidak ada rekaman, jelaskan bahwa pemeriksaan laporan mengandalkan metadata minimum dan keterangan pelapor; jangan menjanjikan pembuktian isi percakapan.
+- Batasi spam undangan `/call`, percobaan bergabung, dan pergantian antrean melalui RPC serta rate limit server.
 
-- Buat secret token acak khusus webhook, pasang melalui `setWebhook`, dan tolak setiap request yang header Telegram-nya tidak cocok sebelum membaca atau menulis database.
-- Terapkan deduplikasi `update_id` agar retry Telegram tidak menggandakan transaksi, laporan, hadiah, atau tindakan admin.
-- Validasi bentuk dan batas panjang seluruh input callback, command, caption, data referral, data e-wallet, dan ID transaksi.
-- Pertahankan keputusan sensitif di RPC atomik dengan advisory/row lock: pembayaran, saldo koin, Premium, denda, referral, laporan, blokir, dan penghapusan akun.
-- Ganti pemrosesan pembayaran bersama yang masih terdiri dari beberapa read/update/insert menjadi RPC idempoten berdasarkan ID transaksi penyedia; callback ganda harus mengembalikan hasil lama tanpa kredit ganda.
-- Nonaktifkan Sakurupiah tetap dipertahankan. Gunakan hanya Telegram Stars dan QRIS manual sesuai keputusan proyek, dengan rekonsiliasi dan audit.
-- Hapus `bridge_exec_sql` dari produksi bila tidak mutlak diperlukan. Jika sementara masih diperlukan, batasi ke mode pemeliharaan, whitelist operasi, secret terpisah, audit setiap panggilan, dan jangan menerima SQL bebas dari klien.
-- Hapus endpoint pihak ketiga yang tidak dipakai dari kode. Setiap pihak pemroses data yang dipakai harus tercantum dalam Kebijakan Privasi dan perjanjian pemrosesan data.
-- Seluruh timestamp disimpan konsisten dan waktu yang ditampilkan/audit menggunakan `Asia/Jakarta` (WIB).
+## 7. Premium voice dan pembayaran
 
-## 6. Perlindungan transaksi dan referral
+- Buat produk Premium terpisah untuk membuka filter gender/lokasi; pengguna gratis tetap dapat menelepon tanpa filter.
+- Gunakan Telegram Stars dan QRIS manual sesuai standar proyek, dengan transaksi idempoten dan audit WIB.
+- Status Premium selalu diverifikasi di server/database, bukan dari tombol, payload deep-link, atau penyimpanan perangkat.
+- Tampilkan harga, durasi, manfaat, dan aturan refund sebelum pembayaran; callback ganda tidak boleh menggandakan masa Premium.
 
-- Sebelum invoice dibuat, tampilkan produk, manfaat, durasi, harga, biaya tambahan, metode bayar, masa berlaku invoice, kebijakan pembatalan/refund, dan tombol persetujuan bayar.
-- Kirim tanda terima setelah pembayaran dengan ID referensi, jumlah, waktu WIB, produk, dan kanal komplain tanpa menampilkan rahasia pembayaran.
-- Tambahkan alur sengketa pembayaran, transaksi duplikat, saldo tidak masuk, dan Premium gagal aktif; admin dapat menelusuri audit tanpa melihat data berlebih.
-- Denda hanya boleh tersedia untuk pelanggaran ringan yang terdefinisi. Dugaan konten anak, eksploitasi, ancaman, pemerasan, penipuan, atau pelanggaran berulang tidak dapat dibuka melalui pembayaran.
-- Jelaskan bahwa referral bukan investasi, tidak memerlukan pembelian, bukan pendapatan pasti, hanya satu tingkat, serta hadiah bergantung pada validasi pengguna sah. Dilarang membuat klaim penghasilan yang menyesatkan.
-- Penolakan referral tetap memiliki alasan dan banding. Penghapusan akun undangan karena dugaan tidak organik harus didahului bukti/audit dan tidak boleh hanya berdasarkan keputusan otomatis yang tidak dapat ditinjau.
+## 8. Database dan keamanan teknis
 
-## 7. Database hemat biaya
+- Buat tabel minimum untuk profil voice, persetujuan, antrean, sesi, anggota sesi, token undangan, blokir, laporan, Premium, transaksi, dan audit teknis.
+- Setiap tabel publik mendapat GRANT yang tepat, RLS aktif, dan akses pengguna dibatasi pada datanya sendiri; fungsi bot memakai service role.
+- Gunakan RPC `SECURITY DEFINER` yang sempit dan tervalidasi untuk matchmaking, penerimaan undangan, pembuatan/penutupan sesi, laporan/blokir, dan pembayaran.
+- Tidak membuat SQL bridge atau endpoint SQL dinamis pada proyek baru.
+- Deduplikasi Telegram `update_id`, validasi seluruh callback/deep-link, advisory lock untuk tindakan bersamaan, dan respons HTTP 500 pada kegagalan database agar webhook dapat dicoba ulang.
+- Log tidak menyimpan token, payload Telegram mentah, SDP penuh, kandidat ICE, alamat IP, atau isi audio.
 
-- Tambahkan tabel versi dokumen/persetujuan dan permintaan hak data dengan RLS, GRANT hanya `service_role`, serta indeks pada user, status, dan jatuh tempo.
-- Tambahkan RPC untuk: memeriksa/mencatat persetujuan, meminta/membatalkan/menyelesaikan penghapusan, membuat ekspor, menjalankan retensi, serta memproses transaksi idempoten.
-- Hindari duplikasi nama/username pada tabel blokir baru; simpan hanya data yang diperlukan untuk fungsi dan audit.
-- Jalankan retensi secara batch dengan batas baris agar tidak memicu lonjakan beban sekitar jadwal malam. Catat hanya jumlah baris yang dibersihkan, bukan isi datanya.
-- Tidak ada heartbeat, polling database, atau penulisan log untuk setiap pesan normal.
+## 9. Penghematan biaya cloud dan TURN
 
-## 8. Kesiapan operasional di luar kode
+- P2P menjadi jalur utama sehingga mayoritas menit panggilan tidak melewati server media.
+- TURN hanya cadangan; tidak ada SFU, mixer, rekaman, transkripsi, atau polling database per detik.
+- Gunakan TTL, indeks antrean/sesi aktif, RPC gabungan, perubahan pesan Telegram, serta housekeeping batch harian WIB.
+- Catat durasi dan byte relay secara agregat untuk memantau biaya, lalu tetapkan plafon bulanan dan peringatan sebelum batas tercapai.
+- Sediakan adapter konfigurasi TURN agar penyedia dapat diganti tanpa mengubah alur bot dan database.
 
-- Verifikasi dan selesaikan pendaftaran PSE Lingkup Privat serta legalitas usaha yang relevan melalui jalur resmi.
-- Minta advokat Indonesia meninjau dokumen, alur anonymous chat, penghapusan data, konten terlarang, penanganan laporan, referral, denda, dan pembatasan tanggung jawab.
-- Pastikan model pembayaran tidak membuat FizaTalk bertindak sebagai penyedia jasa pembayaran tanpa izin; gunakan penyedia resmi dan jangan menampung dana pihak lain.
-- Tetapkan petugas/kontak privasi, prosedur permintaan aparat, prosedur konten anak, register insiden, serta pemberitahuan insiden data sesuai tenggat hukum yang berlaku.
-- Siapkan kanal pengaduan aktif dan target waktu respons; simpan jejak keputusan admin yang minimum tetapi dapat diaudit.
-- Lakukan penilaian dampak perlindungan data sebelum peluncuran ulang karena pencocokan anonim, preferensi gender/lokasi, moderasi, dan pembayaran memiliki risiko tinggi.
+## 10. Implementasi bertahap
 
-## Tahapan implementasi
-
-1. **Penguncian risiko langsung:** secret webhook, deduplikasi update, gate 18+/Indonesia/persetujuan, command hukum, dan pembatasan media berisiko.
-2. **Hak pengguna dan retensi:** `/datasaya`, `/hapusakun`, RPC atomik, masa tunggu, job pembersihan WIB, redaksi log, dan consent publikasi cashout.
-3. **Moderasi aman:** kategori kritis, pembekuan, banding, blokir pasangan, audit admin, dan pemisahan denda dari pelanggaran serius.
-4. **Transaksi:** disclosure sebelum bayar, tanda terima, kebijakan sengketa/refund, serta RPC pembayaran idempoten.
-5. **Hardening:** hapus SQL bridge bebas, endpoint tidak terpakai, audit akses, uji retry/concurrency, dan pemindaian keamanan.
-6. **Peluncuran terkendali:** paksa persetujuan semua pengguna lama, uji dua akun dan callback ganda, verifikasi cron/retensi, lalu aktifkan bertahap setelah dokumen dan langkah operasional disetujui penasihat hukum.
+1. Buat proyek/database baru, skema dasar, RPC, RLS, webhook, dan bot Telegram baru.
+2. Bangun Mini App audio dan signaling dengan validasi Telegram serta P2P/TURN fallback.
+3. Bangun antrean acak gratis dan filter Premium gender/lokasi.
+4. Tambahkan Premium voice dan transaksi terpisah.
+5. Tambahkan `/call`, Terima/Tolak, dan token lintas proyek pada bot lama.
+6. Tambahkan blokir, laporan, retensi, penghapusan akun, serta kontrol biaya.
+7. Uji dengan dua akun Telegram pada jaringan berbeda sebelum peluncuran bertahap.
 
 ## Verifikasi penerimaan
 
-- Pengguna baru/lama tidak dapat memakai fitur sebelum menyatakan 18+, Indonesia, dan menyetujui versi dokumen aktif.
-- Update webhook tanpa secret benar ditolak dan tidak menulis data.
-- Percobaan callback/payment/update berulang tidak menggandakan hasil.
-- Media berisiko tidak diteruskan sebelum pemeriksaan yang disetujui tersedia.
-- Pengguna dapat melihat data dan meminta penghapusan otomatis; pembatalan, pengecualian retensi sah, serta penghapusan akhir bekerja atomik.
-- Log, draft, laporan, dan bukti kedaluwarsa dibersihkan sesuai jadwal WIB tanpa lonjakan beban.
-- Laporan kritis menghentikan chat dan tidak dapat dipulihkan dengan pembayaran/Premium.
-- Harga, manfaat, biaya, masa berlaku, refund/sengketa, dan kontak pengaduan terlihat sebelum pembayaran.
-- Tidak ada data cashout pengguna yang dipublikasikan tanpa persetujuan khusus.
-- Seluruh jalur utama—start, search, next, stop, report, block, Premium, top-up, denda, referral, admin, edited message, dan retry Telegram—lulus pengujian regresi.
+- Data, transaksi, Premium, antrean, dan sesi voice tidak masuk ke database bot lama.
+- `/call` hanya bekerja saat partner chat aktif; Terima/Tolak dan tautan kedaluwarsa bekerja tanpa kebocoran sesi.
+- Antrean voice baru dapat dipakai gratis tanpa filter; filter gender/lokasi hanya aktif untuk Premium voice.
+- Dua pengguna dapat tersambung P2P, beralih ke TURN saat P2P gagal, mute, keluar, melapor, dan memblokir.
+- Tidak ada audio yang direkam atau disimpan, dan log tidak mengekspos data koneksi sensitif.
+- Retry webhook, double-click, dua tab, callback ganda, reconnect, serta sesi yatim tidak membuat pasangan atau transaksi ganda.
+- Penggunaan relay dan biaya dapat dipantau serta dibatasi tanpa mematikan fungsi bot chat lama.
+
+## Kebutuhan sebelum aktivasi produksi
+
+- Token bot Telegram baru dan username bot baru.
+- Username Mini App serta domain proyek voice yang diizinkan melalui BotFather.
+- Kredensial penyedia TURN yang dipilih.
+- Nama produk, harga, dan durasi Premium voice.
+- Dokumen Ketentuan, Privasi, serta identitas/kontak operator yang telah diperiksa untuk layanan Indonesia 18+.
