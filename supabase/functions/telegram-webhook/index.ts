@@ -966,7 +966,7 @@ async function getBotUsername(supabase: any, botToken: string): Promise<string |
 }
 
 function buildReferralButtonRow(): any[] {
-  return [{ text: '🎁 Premium Gratis 1 Hari (Ajak 3 Teman)', callback_data: 'referral_menu' }];
+  return [{ text: '🎁 Premium Gratis dari Ajak Teman', callback_data: 'referral_menu' }];
 }
 
 async function sendReferralMenu(
@@ -979,10 +979,14 @@ async function sendReferralMenu(
   ]);
 
   const pending = status?.pending ?? 0;
-  const progress = status?.progress ?? 0;
-  const claimable = status?.claimable ?? 0;
+  const hourProgress = status?.hour_progress ?? Math.min(pending, 3);
+  const hourClaimable = status?.hour_claimable ?? Math.floor(pending / 3);
+  const dayProgress = status?.day_progress ?? Math.min(pending, 10);
+  const dayClaimable = status?.day_claimable ?? Math.floor(pending / 10);
   const totalQualified = status?.total_qualified ?? 0;
-  const rewardsClaimed = status?.rewards_claimed ?? 0;
+  const legacyClaimedDays = status?.legacy_claimed_days ?? 0;
+  const claimedDays = status?.claimed_days ?? 0;
+  const claimedHours = status?.claimed_hours ?? 0;
   const cashoutTarget = status?.cashout_target ?? 100;
   const cashoutStatus = status?.cashout_status ?? 'none';
   const cashoutAmountText = formatRupiah(status?.cashout_amount);
@@ -1009,17 +1013,28 @@ async function sendReferralMenu(
     : '';
 
 
-  const message = `🎁 <b>PREMIUM GRATIS 1 HARI</b>
+  const claimedSummary = [
+    legacyClaimedDays + claimedDays > 0 ? `${legacyClaimedDays + claimedDays} hari` : '',
+    claimedHours > 0 ? `${claimedHours} jam` : ''
+  ].filter(Boolean).join(' + ') || 'Belum ada';
 
-Ajak <b>3 teman</b> memakai bot ini dan dapatkan <b>1 hari Premium gratis</b>. Bisa diulang terus — setiap 3 teman = 1 hari lagi!
+  const message = `🎁 <b>PREMIUM GRATIS DARI REFERAL</b>
+
+Ajak teman memakai bot ini dan pilih hadiahmu:
+• <b>3 teman sah = 1 jam Premium</b>
+• <b>10 teman sah = 1 hari Premium</b>
+
+Teman yang sudah ditukar untuk satu hadiah tidak bisa dipakai lagi untuk hadiah lainnya.
 
 📋 <b>Syarat teman dihitung sah:</b>
 Teman membuka bot lewat link kamu <b>dan</b> sudah pernah mendapat partner chat minimal 1 kali.
 
 📊 <b>Progres kamu:</b>
-• Teman sah belum ditukar: <b>${pending}</b> (${progress}/3 menuju hadiah berikutnya)
+• Teman sah belum ditukar: <b>${pending}</b>
+• Bonus 1 jam: <b>${hourProgress}/3</b>${hourClaimable > 0 ? ` — bisa klaim ${hourClaimable}x` : ''}
+• Bonus 1 hari: <b>${dayProgress}/10</b>${dayClaimable > 0 ? ` — bisa klaim ${dayClaimable}x` : ''}
 • Total teman sah sepanjang waktu: <b>${totalQualified}</b>
-• Hadiah sudah diklaim: <b>${rewardsClaimed} hari</b>${premiumText}
+• Hadiah sudah diklaim: <b>${claimedSummary}</b>${premiumText}
 
 💵 <b>Bonus Saldo E-Wallet ${cashoutAmountText}</b>
 • Progres: <b>${Math.min(totalQualified, cashoutTarget)}/${cashoutTarget}</b> teman sah${cashoutNote}
@@ -1032,7 +1047,10 @@ ${link ? `<code>${link}</code>` : '<i>Link belum tersedia, coba lagi sebentar la
   if (link) {
     rows.push([{ text: '📤 Bagikan ke Teman', url: `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${shareText}` }]);
   }
-  rows.push([{ text: claimable > 0 ? `✅ Klaim ${claimable} Hari Premium` : '🎁 Klaim 1 Hari Premium', callback_data: 'referral_claim' }]);
+  rows.push([
+    { text: hourClaimable > 0 ? '✅ Klaim 1 Jam' : `🎁 1 Jam (${hourProgress}/3)`, callback_data: 'referral_claim_hour' },
+    { text: dayClaimable > 0 ? '✅ Klaim 1 Hari' : `🎁 1 Hari (${dayProgress}/10)`, callback_data: 'referral_claim_day' }
+  ]);
   rows.push([{ text: cashoutButtonText, callback_data: 'cashout_start' }]);
   rows.push([{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]);
 
@@ -2941,6 +2959,7 @@ const BUTTON_COOLDOWNS: Record<string, number> = {
   'chat_next': 5000,         // 5 detik - next partner (operasi berat)
   'chat_stop': 3000,         // 3 detik - stop chat
   'call_invite': 3000,       // 3 detik - undangan voice call
+  'referral_claim': 3000,    // 3 detik - klaim bonus referal
   'send_gift': 3000,         // 3 detik - kirim gift
   'init_topup': 4000,        // 4 detik - init topup
   'buy_premium': 4000,       // 4 detik - beli premium
@@ -3008,6 +3027,7 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('chat_next')) return 'chat_next';
   if (callbackData.startsWith('chat_stop')) return 'chat_stop';
   if (callbackData.startsWith('call_accept_') || callbackData.startsWith('call_reject_')) return 'call_invite';
+  if (callbackData.startsWith('referral_claim')) return 'referral_claim';
   if (callbackData === 'channel_later_next') return 'channel_later_next';
   if (callbackData === 'channel_later_stop') return 'channel_later_stop';
   if (callbackData.startsWith('send_gift_')) return 'send_gift';
@@ -5361,7 +5381,18 @@ Deno.serve(async (req) => {
       }
 
       if (callbackData === 'referral_claim') {
-        const { data: claim, error: claimError } = await supabase.rpc('claim_referral_reward', { p_user_id: userId });
+        answerCallbackQuery(botToken, query.id, 'Pilihan hadiah sudah diperbarui.', true).catch(() => {});
+        await sendReferralMenu(supabase, botToken, userId, '', message?.message_id);
+        return new Response('OK', { status: 200 });
+      }
+
+      if (callbackData === 'referral_claim_hour' || callbackData === 'referral_claim_day') {
+        const rewardType = callbackData === 'referral_claim_hour' ? 'hour' : 'day';
+        const rewardLabel = rewardType === 'hour' ? '1 jam' : '1 hari';
+        const { data: claim, error: claimError } = await supabase.rpc('claim_referral_reward', {
+          p_user_id: userId,
+          p_reward_type: rewardType
+        });
 
         if (claimError) {
           await answerCallbackQuery(botToken, query.id, '⚠️ Gagal memproses klaim, coba lagi.', true);
@@ -5369,17 +5400,17 @@ Deno.serve(async (req) => {
         }
 
         if (claim?.success) {
-          await answerCallbackQuery(botToken, query.id, '🎉 Berhasil! Premium 1 hari ditambahkan.');
+          await answerCallbackQuery(botToken, query.id, `🎉 Berhasil! Premium ${rewardLabel} ditambahkan.`);
           const untilText = claim.premium_until ? formatDateTimeWIB(new Date(claim.premium_until)) : '-';
           await sendReferralMenu(
             supabase, botToken, userId,
-            `🎉 <b>Selamat!</b> Kamu mendapat <b>1 hari Premium gratis</b>.\n💎 Premium aktif sampai <b>${untilText}</b>.`,
+            `🎉 <b>Selamat!</b> Kamu mendapat <b>${rewardLabel} Premium gratis</b>.\n💎 Premium aktif sampai <b>${untilText}</b>.`,
             message?.message_id
           );
         } else if (claim?.error === 'concurrent_request') {
           await answerCallbackQuery(botToken, query.id, '⏳ Sedang diproses, tunggu sebentar.');
         } else {
-          const needed = claim?.needed ?? 3;
+          const needed = claim?.needed ?? (rewardType === 'hour' ? 3 : 10);
           await answerCallbackQuery(botToken, query.id, `Belum cukup. Ajak ${needed} teman lagi ya!`, true);
         }
         return new Response('OK', { status: 200 });
