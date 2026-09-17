@@ -2959,6 +2959,7 @@ const BUTTON_COOLDOWNS: Record<string, number> = {
   'chat_next': 5000,         // 5 detik - next partner (operasi berat)
   'chat_stop': 3000,         // 3 detik - stop chat
   'call_invite': 3000,       // 3 detik - undangan voice call
+  'referral_claim': 3000,    // 3 detik - klaim bonus referal
   'send_gift': 3000,         // 3 detik - kirim gift
   'init_topup': 4000,        // 4 detik - init topup
   'buy_premium': 4000,       // 4 detik - beli premium
@@ -3026,6 +3027,7 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('chat_next')) return 'chat_next';
   if (callbackData.startsWith('chat_stop')) return 'chat_stop';
   if (callbackData.startsWith('call_accept_') || callbackData.startsWith('call_reject_')) return 'call_invite';
+  if (callbackData.startsWith('referral_claim')) return 'referral_claim';
   if (callbackData === 'channel_later_next') return 'channel_later_next';
   if (callbackData === 'channel_later_stop') return 'channel_later_stop';
   if (callbackData.startsWith('send_gift_')) return 'send_gift';
