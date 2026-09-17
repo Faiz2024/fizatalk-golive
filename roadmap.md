@@ -10,6 +10,7 @@
 
 - [x] Tambahkan fondasi undangan `/call` atomik pada database bot lama.
 - [x] Tambahkan alur Terima/Tolak dan tautan gabung bot voice baru.
+- [x] Tambahkan endpoint pertukaran undangan yang ditandatangani untuk FizaVoice.
 - [ ] Buat proyek Lovable Cloud dan database voice baru — menunggu proyek baru dibuat.
 - [ ] Hubungkan bot Telegram voice baru — menunggu token dan username bot baru.
 - [ ] Aktifkan Mini App WebRTC dan TURN cadangan — menunggu proyek baru dan kredensial TURN.
