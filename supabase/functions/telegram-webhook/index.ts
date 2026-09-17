@@ -2575,6 +2575,69 @@ async function answerCallbackQuery(botToken: string, callbackQueryId: string, te
   });
 }
 
+function getVoiceBotUsername(): string | null {
+  const configured = (Deno.env.get('VOICE_BOT_USERNAME') || '').trim().replace(/^@/, '');
+  return /^[A-Za-z0-9_]{5,32}$/.test(configured) ? configured : null;
+}
+
+async function requestVoiceCallInvite(supabase: any, botToken: string, userId: number): Promise<void> {
+  if (!getVoiceBotUsername()) {
+    await sendTelegramMessage(botToken, userId, '⚠️ Bot voice call sedang disiapkan. Coba lagi nanti.');
+    return;
+  }
+
+  const { data, error } = await supabase.rpc('create_chat_call_invite', {
+    p_requester_id: userId
+  });
+
+  if (error) {
+    console.error('[CALL_INVITE] create failed:', error.message);
+    throw error;
+  }
+
+  if (!data?.success) {
+    const message = data?.error === 'rate_limited'
+      ? '⏳ Tunggu sebentar sebelum mengirim undangan panggilan lagi.'
+      : '⚠️ Undangan tidak dapat dibuat karena kamu sudah tidak terhubung dengan partner.';
+    await sendTelegramMessage(botToken, userId, message);
+    return;
+  }
+
+  const inviteId = String(data.invite_id || '');
+  const recipientId = Number(data.recipient_id);
+  if (!/^[0-9a-f-]{36}$/i.test(inviteId) || !Number.isSafeInteger(recipientId)) {
+    throw new Error('Invalid call invitation result');
+  }
+
+  const inviteKeyboard = {
+    inline_keyboard: [[
+      { text: '✅ Terima', callback_data: `call_accept_${inviteId}` },
+      { text: '❌ Tolak', callback_data: `call_reject_${inviteId}` }
+    ]]
+  };
+
+  const delivered = await sendTelegramMessage(
+    botToken,
+    recipientId,
+    '📞 <b>Partner mengajak voice call</b>\n\nPanggilan berlangsung melalui bot voice call terpisah. Undangan berlaku selama 5 menit.',
+    inviteKeyboard
+  );
+
+  if (!delivered) {
+    console.error(`[CALL_INVITE] delivery failed: invite=${inviteId} recipient=${recipientId}`);
+    await sendTelegramMessage(botToken, userId, '⚠️ Undangan gagal dikirim ke partner. Coba lagi nanti.');
+    return;
+  }
+
+  await sendTelegramMessage(
+    botToken,
+    userId,
+    data.reused
+      ? '📞 Undangan voice call sebelumnya masih menunggu jawaban partner.'
+      : '📞 Undangan voice call telah dikirim. Menunggu jawaban partner selama 5 menit.'
+  );
+}
+
 // FUNGSI BARU: Menggunakan copyMessage untuk meneruskan SEMUA JENIS PESAN tanpa tag "diteruskan oleh"
 async function copyTelegramMessage(botToken: string, chatId: number, fromChatId: number, messageId: number, replyMarkup?: any) {
   const url = `${TELEGRAM_API}${botToken}/copyMessage`;
@@ -2877,6 +2940,7 @@ const BUTTON_COOLDOWNS: Record<string, number> = {
   'search_partner': 5000,    // 5 detik - mencari partner (operasi berat)
   'chat_next': 5000,         // 5 detik - next partner (operasi berat)
   'chat_stop': 3000,         // 3 detik - stop chat
+  'call_invite': 3000,       // 3 detik - undangan voice call
   'send_gift': 3000,         // 3 detik - kirim gift
   'init_topup': 4000,        // 4 detik - init topup
   'buy_premium': 4000,       // 4 detik - beli premium
@@ -2943,6 +3007,7 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData === 'search_partner' || callbackData.startsWith('search_partner:')) return 'search_partner';
   if (callbackData.startsWith('chat_next')) return 'chat_next';
   if (callbackData.startsWith('chat_stop')) return 'chat_stop';
+  if (callbackData.startsWith('call_accept_') || callbackData.startsWith('call_reject_')) return 'call_invite';
   if (callbackData === 'channel_later_next') return 'channel_later_next';
   if (callbackData === 'channel_later_stop') return 'channel_later_stop';
   if (callbackData.startsWith('send_gift_')) return 'send_gift';
@@ -4486,6 +4551,76 @@ Deno.serve(async (req) => {
       if (isButtonOnCooldown(userId, actionType)) {
         // Langsung jawab callback dan return - NO DATABASE OPERATIONS
         await answerCallbackQuery(botToken, query.id, '⏳ Mohon tunggu sebentar...', false);
+        return new Response('OK', { status: 200 });
+      }
+
+      // --- UNDANGAN VOICE CALL DARI PARTNER CHAT ---
+      if (callbackData.startsWith('call_accept_') || callbackData.startsWith('call_reject_')) {
+        const isAccept = callbackData.startsWith('call_accept_');
+        const inviteId = callbackData.replace(isAccept ? 'call_accept_' : 'call_reject_', '');
+
+        if (!/^[0-9a-f-]{36}$/i.test(inviteId)) {
+          await answerCallbackQuery(botToken, query.id, 'Undangan tidak valid.', true);
+          return new Response('OK', { status: 200 });
+        }
+
+        const voiceBotUsername = getVoiceBotUsername();
+        if (isAccept && !voiceBotUsername) {
+          await answerCallbackQuery(botToken, query.id, 'Bot voice call sedang disiapkan.', true);
+          return new Response('OK', { status: 200 });
+        }
+
+        const { data: resolved, error: resolveError } = await supabase.rpc('resolve_chat_call_invite', {
+          p_invite_id: inviteId,
+          p_actor_id: userId,
+          p_action: isAccept ? 'accept' : 'reject'
+        });
+
+        if (resolveError) {
+          console.error('[CALL_INVITE] resolve failed:', resolveError.message);
+          return new Response('Database Error', { status: 500 });
+        }
+
+        if (!resolved?.success) {
+          const reason = resolved?.error === 'expired'
+            ? 'Undangan sudah kedaluwarsa.'
+            : resolved?.error === 'partner_changed'
+              ? 'Chat dengan partner sudah berakhir.'
+              : 'Undangan sudah diproses atau tidak berlaku.';
+          await answerCallbackQuery(botToken, query.id, reason, true);
+          return new Response('OK', { status: 200 });
+        }
+
+        const requesterId = Number(resolved.requester_id);
+        if (resolved.status === 'rejected') {
+          await answerCallbackQuery(botToken, query.id, 'Undangan ditolak.');
+          await sendTelegramMessage(botToken, userId, '❌ Kamu menolak undangan voice call.');
+          if (Number.isSafeInteger(requesterId)) {
+            await sendTelegramMessage(botToken, requesterId, '❌ Partner menolak undangan voice call.');
+          }
+          return new Response('OK', { status: 200 });
+        }
+
+        const joinToken = String(resolved.join_token || '');
+        if (!voiceBotUsername || !/^[0-9a-f-]{36}$/i.test(joinToken)) {
+          console.error('[CALL_INVITE] invalid accepted result');
+          return new Response('Database Error', { status: 500 });
+        }
+
+        const joinUrl = `https://t.me/${voiceBotUsername}?start=call_${joinToken}`;
+        const joinKeyboard = { inline_keyboard: [[{ text: '🎙️ Gabung Panggilan', url: joinUrl }]] };
+        const joinText = '✅ <b>Undangan voice call diterima</b>\n\nBuka bot voice call melalui tombol berikut. Tautan hanya berlaku untuk kalian dan kedaluwarsa dalam 5 menit.';
+
+        await answerCallbackQuery(botToken, query.id, 'Undangan diterima.');
+        const deliveries = await Promise.all([
+          sendTelegramMessage(botToken, userId, joinText, joinKeyboard),
+          Number.isSafeInteger(requesterId)
+            ? sendTelegramMessage(botToken, requesterId, joinText, joinKeyboard)
+            : Promise.resolve(false)
+        ]);
+        if (deliveries.some(delivered => !delivered)) {
+          console.error(`[CALL_INVITE] join link delivery incomplete: invite=${inviteId}`);
+        }
         return new Response('OK', { status: 200 });
       }
 
@@ -6754,6 +6889,10 @@ Deno.serve(async (req) => {
           await executeChatStop(supabase, botToken, userId, null, partnerId.toString());
           isCommand = true;
 
+        } else if (text === '/call' || text.startsWith('/call@')) {
+          await requestVoiceCallInvite(supabase, botToken, userId);
+          isCommand = true;
+
         } else if (text === '/start' || text.startsWith('/start ')) {
           const startPayload = text.length > 7 ? text.slice(7).trim() : '';
           if (startPayload === 'referral') {
@@ -7245,6 +7384,10 @@ Deno.serve(async (req) => {
           ]
         };
         await sendTelegramMessage(botToken, userId, '⚠️ <b>Fitur Gift hanya tersedia saat chatting!</b>\n\nSilakan cari partner terlebih dahulu:', startKeyboard);
+      }
+
+      else if (text === '/call' || text.startsWith('/call@')) {
+        await sendTelegramMessage(botToken, userId, '⚠️ <b>Voice call hanya dapat diajakkan kepada partner chat aktif.</b>\n\nCari partner terlebih dahulu, lalu kirim /call.');
       }
 
       else if (text === '/start' || text.startsWith('/start ')) {
