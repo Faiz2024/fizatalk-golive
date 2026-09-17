@@ -621,6 +621,33 @@ export type Database = {
         }
         Relationships: []
       }
+      referral_reward_claims: {
+        Row: {
+          created_at: string
+          id: string
+          premium_seconds: number
+          referrals_consumed: number
+          reward_type: string
+          user_id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          premium_seconds: number
+          referrals_consumed: number
+          reward_type: string
+          user_id: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          premium_seconds?: number
+          referrals_consumed?: number
+          reward_type?: string
+          user_id?: number
+        }
+        Relationships: []
+      }
       referrals: {
         Row: {
           consumed_at: string | null
@@ -996,7 +1023,10 @@ export type Database = {
         Args: { p_user_id: number }
         Returns: boolean
       }
-      claim_referral_reward: { Args: { p_user_id: number }; Returns: Json }
+      claim_referral_reward: {
+        Args: { p_reward_type: string; p_user_id: number }
+        Returns: Json
+      }
       cleanup_inactive_users: { Args: never; Returns: undefined }
       comprehensive_search_action: {
         Args: {
