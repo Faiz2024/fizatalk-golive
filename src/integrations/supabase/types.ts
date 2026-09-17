@@ -107,6 +107,68 @@ export type Database = {
         }
         Relationships: []
       }
+      call_invitations: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          join_token: string | null
+          recipient_id: number
+          requester_id: number
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          join_token?: string | null
+          recipient_id: number
+          requester_id: number
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          join_token?: string | null
+          recipient_id?: number
+          requester_id?: number
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_invitations_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_invitations_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "v_eligible_reengagement_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_invitations_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_invitations_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "v_eligible_reengagement_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coin_transactions: {
         Row: {
           amount: number
@@ -940,6 +1002,10 @@ export type Database = {
         }
         Returns: Json
       }
+      create_chat_call_invite: {
+        Args: { p_requester_id: number }
+        Returns: Json
+      }
       decay_negative_reports: { Args: { p_user_id: number }; Returns: number }
       end_chat_comprehensive: { Args: { p_user_id: number }; Returns: Json }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
@@ -997,6 +1063,10 @@ export type Database = {
       }
       request_referral_cashout: { Args: { p_user_id: number }; Returns: Json }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
+      resolve_chat_call_invite: {
+        Args: { p_action: string; p_actor_id: number; p_invite_id: string }
+        Returns: Json
+      }
       resolve_reconnect: {
         Args: { p_action: string; p_request_id: string }
         Returns: Json
