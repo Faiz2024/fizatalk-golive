@@ -2798,10 +2798,10 @@ async function sendChannelInviteMessage(botToken: string, userId: number, source
 function buildEndChatKeyboard(partnerId: number): any {
   const voiceBotUsername = getVoiceBotUsername();
   const newPartnerActions = [
-    { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' },
     ...(voiceBotUsername
       ? [{ text: '🎙️ Call Acak', url: `https://t.me/${voiceBotUsername}` }]
-      : [])
+      : []),
+    { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
   ];
 
   return {
