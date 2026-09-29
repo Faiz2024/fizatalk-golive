@@ -2960,6 +2960,7 @@ const stickerPackCache = new Map<string, StickerPackData>();
 const buttonClickCache = new Map<string, number>();
 
 // Cooldown per action type (dalam milidetik) - DIPERBESAR untuk mencegah double-click
+const PREMIUM_MEDIA_CACHE = new Map<number, { premium: boolean; at: number }>();
 const BUTTON_COOLDOWNS: Record<string, number> = {
   'search_partner': 5000,    // 5 detik - mencari partner (operasi berat)
   'chat_next': 5000,         // 5 detik - next partner (operasi berat)
