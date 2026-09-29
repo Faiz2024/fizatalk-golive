@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
         .lt("last_active", sevenDaysAgo)
         .or(`last_reengagement_sent_at.is.null,last_reengagement_sent_at.lt.${sevenDaysAgo}`)
         .order("last_active", { ascending: false }) // prioritize recently inactive users (descending)
-        .limit(150); // reduced batch limit to 150 for 5-minute intervals and throttling
+        .limit(800); // cron tiap 2 jam (09.00–21.00 WIB), batch lebih besar per run
 
       if (usersError) throw usersError;
       users = normalUsers ?? [];

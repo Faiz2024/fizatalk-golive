@@ -7319,8 +7319,17 @@ Deno.serve(async (req) => {
             finalCaption = finalCaption.substring(0, 997) + "...";
           }
 
-          const { data: senderData } = await supabase.from('telegram_users').select('premium_until').eq('id', userId).single();
-          const isPremiumSender = senderData?.premium_until && new Date(senderData.premium_until) > new Date();
+          // Cache premium status 5 menit agar kirim media tidak query DB setiap kali
+          let isPremiumSender: boolean;
+          const cachedPrem = PREMIUM_MEDIA_CACHE.get(userId);
+          if (cachedPrem && Date.now() - cachedPrem.at < 300000) {
+            isPremiumSender = cachedPrem.premium;
+          } else {
+            const { data: senderData } = await supabase.from('telegram_users').select('premium_until').eq('id', userId).single();
+            isPremiumSender = !!(senderData?.premium_until && new Date(senderData.premium_until) > new Date());
+            if (PREMIUM_MEDIA_CACHE.size > 2000) PREMIUM_MEDIA_CACHE.clear();
+            PREMIUM_MEDIA_CACHE.set(userId, { premium: isPremiumSender, at: Date.now() });
+          }
 
           const reportMarkup = isPremiumSender
             ? { inline_keyboard: [] }
