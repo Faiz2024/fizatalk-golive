@@ -6849,7 +6849,7 @@ Deno.serve(async (req) => {
     // UBAH BAGIAN INI: Tambahkan retry sederhana atau error blocking
     const { data: dbUser, error: dbError } = await supabase
       .from('telegram_users')
-      .select('state, partner_id, premium_until, cashout_draft')
+      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location')
       .eq('id', userId)
       .maybeSingle();
 
