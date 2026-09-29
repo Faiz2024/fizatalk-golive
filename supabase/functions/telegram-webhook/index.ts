@@ -6998,12 +6998,8 @@ Deno.serve(async (req) => {
             locationKeyboard
           );
         } else if (text === '/target') {
-          // Cek apakah user premium
-          const { data: userData } = await supabase
-            .from('telegram_users')
-            .select('premium_until, target_gender')
-            .eq('id', userId)
-            .single();
+          // Pakai data user yang sudah diambil di awal (hemat 1 query DB)
+          const userData = dbUser;
 
           const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
@@ -7046,14 +7042,8 @@ Deno.serve(async (req) => {
             ]
           };
 
-          // Get current gender
-          const { data: userData } = await supabase
-            .from('telegram_users')
-            .select('gender')
-            .eq('id', userId)
-            .single();
-
-          const currentGender = userData?.gender ? (userData.gender === 'cowok' ? 'Cowok 👦' : 'Cewek 👧') : 'Belum diset';
+          // Pakai data user yang sudah diambil di awal (hemat 1 query DB)
+          const currentGender = dbUser?.gender ? (dbUser.gender === 'cowok' ? 'Cowok 👦' : 'Cewek 👧') : 'Belum diset';
 
           await sendTelegramMessage(
             botToken,
@@ -7063,14 +7053,8 @@ Deno.serve(async (req) => {
           );
           isCommand = true;
         } else if (text === '/coins') {
-          // Logika /coins saat chatting
-          const { data: userData } = await supabase
-            .from('telegram_users')
-            .select('coins')
-            .eq('id', userId)
-            .single();
-
-          const coins = userData?.coins || 0;
+          // Pakai data user yang sudah diambil di awal (hemat 1 query DB)
+          const coins = dbUser?.coins || 0;
           await sendTelegramMessage(botToken, userId, `💰 Saldo Koin Kamu: ${coins} koin`);
           isCommand = true;
           // ... kode sebelumnya ...
