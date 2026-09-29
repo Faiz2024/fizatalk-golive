@@ -7082,14 +7082,8 @@ Deno.serve(async (req) => {
             inline_keyboard: locationButtons
           };
 
-          // Get current location
-          const { data: userData } = await supabase
-            .from('telegram_users')
-            .select('location')
-            .eq('id', userId)
-            .single();
-
-          const currentLocation = userData?.location ? `📍 ${userData.location}` : 'Belum diset';
+          // Pakai data user yang sudah diambil di awal (hemat 1 query DB)
+          const currentLocation = dbUser?.location ? `📍 ${dbUser.location}` : 'Belum diset';
 
           await sendTelegramMessage(
             botToken,
