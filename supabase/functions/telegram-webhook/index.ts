@@ -7645,12 +7645,8 @@ Deno.serve(async (req) => {
       }
       // COMMAND /FILTER_LOKASI - PREMIUM ONLY (filter target lokasi)
       else if (text === '/filter_lokasi') {
-        // Cek apakah user premium
-        const { data: userData } = await supabase
-          .from('telegram_users')
-          .select('premium_until, target_location')
-          .eq('id', userId)
-          .single();
+        // Pakai data user yang sudah diambil di awal (hemat 1 query DB)
+        const userData = dbUser;
 
         const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
