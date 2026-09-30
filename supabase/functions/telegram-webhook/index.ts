@@ -2796,14 +2796,6 @@ async function sendChannelInviteMessage(botToken: string, userId: number, source
 
 // Helper: Build end chat keyboard with rating buttons
 function buildEndChatKeyboard(partnerId: number): any {
-  const voiceBotUsername = getVoiceBotUsername();
-  const newPartnerActions = [
-    ...(voiceBotUsername
-      ? [{ text: '🎙️ Call Acak', url: `https://t.me/${voiceBotUsername}` }]
-      : []),
-    { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
-  ];
-
   return {
     inline_keyboard: [
       [
@@ -2811,7 +2803,9 @@ function buildEndChatKeyboard(partnerId: number): any {
         { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` },
         { text: '👍 Baik', callback_data: `rate_baik_${partnerId}` }
       ],
-      newPartnerActions,
+      [
+        { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
+      ],
       [
         { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${partnerId}` }
       ]
