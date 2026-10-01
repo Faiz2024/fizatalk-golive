@@ -111,91 +111,57 @@ Deno.serve(async (req) => {
       }
     });
 
-    // 3. Query pengguna tidak aktif:
+    // 3. Ambil batch pengguna via RPC atomik (klaim + tandai, anti kirim ganda)
+    const BATCH = 1500;
+    const startedAt = Date.now();
     let users: any[] = [];
-    
-    // Coba baca body untuk testing specific user
+    let isTest = false;
     try {
       const body = await req.json();
       if (body?.test_user_id) {
-        const { data: testUsers, error: testError } = await supabase
+        isTest = true;
+        const { data: t, error: te } = await supabase
           .from("telegram_users")
-          .select("id, first_name, last_reengagement_message_id, username")
+          .select("id, first_name, last_reengagement_message_id, last_reengagement_sent_at")
           .eq("id", Number(body.test_user_id));
-        if (testError) throw testError;
-        users = testUsers ?? [];
-        console.log(`[Reengage] Testing specific user_id: ${body.test_user_id}. Found: ${users.length}`);
+        if (te) throw te;
+        users = (t ?? []).map((u: any) => ({ ...u, prev_sent_at: u.last_reengagement_sent_at }));
       }
-    } catch (_) {
-      // Jika body kosong atau bukan JSON, abaikan dan jalankan alur normal
+    } catch (_) { /* body kosong */ }
+
+    if (!isTest) {
+      const { data, error } = await supabase.rpc("claim_reengagement_batch", { p_limit: BATCH });
+      if (error) throw error;
+      users = data ?? [];
     }
 
     if (users.length === 0) {
-      // - state = 'idle'
-      // - last_active < 7 hari yang lalu
-      // - (last_promo_sent_at IS NULL ATAU last_promo_sent_at < 7 hari yang lalu)
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      
-      const { data: normalUsers, error: usersError } = await supabase
-        .from("v_eligible_reengagement_users")
-        .select("id, first_name, last_reengagement_message_id, username")
-        .eq("state", "idle")
-        .lt("last_active", sevenDaysAgo)
-        .or(`last_reengagement_sent_at.is.null,last_reengagement_sent_at.lt.${sevenDaysAgo}`)
-        .order("last_active", { ascending: false }) // prioritize recently inactive users (descending)
-        .limit(800); // cron tiap 2 jam (09.00–21.00 WIB), batch lebih besar per run
-
-      if (usersError) throw usersError;
-      users = normalUsers ?? [];
-    }
-
-    if (!users || users.length === 0) {
       return new Response(JSON.stringify({ message: "No inactive users found for re-engagement" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     console.log(`[Reengage] Processing batch of ${users.length} users...`);
-    let successCount = 0;
-    let blockedCount = 0;
-    let errorCount = 0;
+    let successCount = 0, blockedCount = 0, errorCount = 0;
+    const results: { id: number; status: string; message_id: number | null; prev: string | null }[] = [];
 
-    // Kumpulkan semua update DB di memori, eksekusi bulk di akhir loop
-    const bulkUpdates: { id: number; last_reengagement_sent_at: string; last_reengagement_message_id: number | null }[] = [];
-
-    // 4. Proses pengiriman batch dengan Promise.all & Throttling (maksimal 5 request per detik)
-    const MAX_CONCURRENT = 5; 
+    // ~25 pesan/detik: 25 worker, tiap worker jeda ~1 detik
+    const MAX_CONCURRENT = 25;
     let currentIndex = 0;
 
     const processUser = async (user: any) => {
-      // a. Hapus pesan lama jika ada
       if (user.last_reengagement_message_id) {
-        try {
-          const delResp = await fetch(`https://api.telegram.org/bot${botToken}/deleteMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: user.id,
-              message_id: Number(user.last_reengagement_message_id)
-            })
-          });
-          const delRes = await delResp.json();
-          if (!delRes.ok) {
-            console.log(`[Reengage] deleteMessage returned not ok for user ${user.id}: ${delRes.description}`);
-          }
-        } catch (delErr) {
-          console.error(`[Reengage] Failed to delete old message for user ${user.id}:`, delErr);
-        }
+        fetch(`https://api.telegram.org/bot${botToken}/deleteMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: user.id, message_id: Number(user.last_reengagement_message_id) }),
+        }).then(r => r.body?.cancel()).catch(() => {});
       }
 
-      // b. Pilih template acak
       const template = templates[Math.floor(Math.random() * templates.length)];
       const photoSource = cachedFileIds[template.imageKey] || template.imageUrl;
-
-      // Kustomisasi nama depan jika ada
       const personalizedText = template.text.replace("Sayang!!!", user.first_name ? `${user.first_name} sayang!!!` : "Sayang!!!");
 
-      // c. Kirim pesan promosi baru
       try {
         const sendResp = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
           method: "POST",
@@ -205,161 +171,82 @@ Deno.serve(async (req) => {
             photo: photoSource,
             caption: personalizedText,
             parse_mode: "HTML",
-            reply_markup: {
-              inline_keyboard: [[{
-                text: template.buttonText,
-                callback_data: template.buttonCallback
-              }]]
-            }
-          })
+            reply_markup: { inline_keyboard: [[{ text: template.buttonText, callback_data: template.buttonCallback }]] },
+          }),
         });
-
         const sendResult = (await sendResp.json()) as TelegramSendPhotoResponse;
 
         if (sendResult.ok && sendResult.result) {
-          const newMessageId = sendResult.result.message_id;
           successCount++;
-
-          // d. Jika menggunakan URL dan mendapatkan file_id baru, simpan ke bot_settings
-          if (!cachedFileIds[template.imageKey] && sendResult.result.photo && sendResult.result.photo.length > 0) {
-            const photos = sendResult.result.photo;
-            const largestPhoto = photos[photos.length - 1];
-            if (largestPhoto && largestPhoto.file_id) {
-              const fileId = largestPhoto.file_id;
-              cachedFileIds[template.imageKey] = fileId; 
-              
+          if (!cachedFileIds[template.imageKey] && sendResult.result.photo?.length) {
+            const fileId = sendResult.result.photo[sendResult.result.photo.length - 1]?.file_id;
+            if (fileId) {
+              cachedFileIds[template.imageKey] = fileId;
               supabase.from("bot_settings").upsert({
-                key: `reengage_file_id_${template.imageKey}`,
-                value: fileId,
-                updated_at: new Date().toISOString()
-              }).then(() => {
-                console.log(`[Reengage] Successfully cached file_id for ${template.imageKey}: ${fileId}`);
-              }).catch(err => {
-                console.error(`[Reengage] Failed to save file_id cache to database:`, err);
-              });
+                key: `reengage_file_id_${template.imageKey}`, value: fileId, updated_at: new Date().toISOString(),
+              }).then(() => {}, () => {});
             }
           }
-
-          bulkUpdates.push({
-            id: user.id,
-            last_reengagement_sent_at: new Date().toISOString(),
-            last_reengagement_message_id: newMessageId
-          });
-
+          results.push({ id: user.id, status: "sent", message_id: sendResult.result.message_id, prev: user.prev_sent_at });
         } else {
-          // Tangani pemblokiran bot oleh user
           const desc = sendResult.description || "";
-          if (
-            sendResult.error_code === 403 || 
-            desc.includes("blocked") || 
-            desc.includes("deactivated") || 
-            desc.includes("chat not found")
-          ) {
+          if (sendResult.error_code === 403 || desc.includes("blocked") || desc.includes("deactivated") || desc.includes("chat not found")) {
             blockedCount++;
-            bulkUpdates.push({
-              id: user.id,
-              last_reengagement_sent_at: "2099-12-31T00:00:00+00:00",
-              last_reengagement_message_id: null
-            });
-            console.log(`[Reengage] User ${user.id} has blocked the bot. Marked as inactive permanently (2099).`);
+            results.push({ id: user.id, status: "blocked", message_id: null, prev: user.prev_sent_at });
           } else {
             errorCount++;
-            console.error(`[Reengage] Telegram sendPhoto failed for user ${user.id}: ${desc}`);
-            bulkUpdates.push({
-              id: user.id,
-              last_reengagement_sent_at: new Date().toISOString(),
-              last_reengagement_message_id: null
-            });
+            console.error(`[Reengage] sendPhoto failed for ${user.id}: ${desc}`);
+            results.push({ id: user.id, status: "error", message_id: null, prev: user.prev_sent_at });
           }
         }
       } catch (err) {
         errorCount++;
-        console.error(`[Reengage] Exception when sending to user ${user.id}:`, err);
+        results.push({ id: user.id, status: "error", message_id: null, prev: user.prev_sent_at });
       }
     };
 
-    // Fungsi worker untuk menjalankan task secara paralel namun terkontrol
+    const TIME_BUDGET_MS = 110_000;
     const worker = async () => {
       while (currentIndex < users.length) {
+        if (Date.now() - startedAt > TIME_BUDGET_MS) break;
         const idx = currentIndex++;
         await processUser(users[idx]);
-        // Jeda ~200ms antar iterasi untuk masing-masing worker
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(r => setTimeout(r, 1000));
       }
     };
+    await Promise.all(Array.from({ length: MAX_CONCURRENT }, worker));
 
-    // Jalankan worker secara bersamaan (maks 5 request simultan)
-    const workers = [];
-    for (let i = 0; i < MAX_CONCURRENT; i++) {
-      workers.push(worker());
-    }
-    await Promise.all(workers);
-
-    // 5. Eksekusi bulk upsert ke database (1 panggilan menggantikan ratusan individual update)
-    if (bulkUpdates.length > 0) {
-      console.log(`[Reengage] Executing bulk upsert for ${bulkUpdates.length} users...`);
-      const { error: bulkError } = await supabase
-        .from("telegram_users")
-        .upsert(bulkUpdates, { onConflict: "id", ignoreDuplicates: false });
-      if (bulkError) {
-        console.error("[Reengage] Bulk upsert failed:", bulkError.message);
-      } else {
-        console.log(`[Reengage] Bulk upsert completed successfully for ${bulkUpdates.length} users.`);
-      }
+    // Pengguna yang diklaim tapi belum sempat diproses → kembalikan agar dikirimi di lanjutan
+    for (let i = currentIndex; i < users.length; i++) {
+      results.push({ id: users[i].id, status: "error", message_id: null, prev: users[i].prev_sent_at });
     }
 
-    // Log ringkasan eksekusi ke bot_logs
+    // 4. Simpan hasil + statistik harian WIB dalam 1 RPC
+    if (results.length > 0) {
+      const { error: finErr } = await supabase.rpc("finish_reengagement_batch", { p_results: results });
+      if (finErr) console.error("[Reengage] finish batch failed:", finErr.message);
+    }
+
     const logMessage = `Re-engagement batch completed. Sent: ${successCount}, Blocked: ${blockedCount}, Error: ${errorCount}`;
     console.log(`[Reengage] ${logMessage}`);
-    
     supabase.rpc("log_bot_event", {
-      p_level: "info",
-      p_source: "reengage-users",
-      p_event: "batch_completed",
-      p_user_id: null,
-      p_message: logMessage,
-      p_context: { successCount, blockedCount, errorCount }
+      p_level: "info", p_source: "reengage-users", p_event: "batch_completed",
+      p_user_id: null, p_message: logMessage, p_context: { successCount, blockedCount, errorCount },
     }).then(() => {}, () => {});
 
-    // 6. Catat statistik harian ke reengagement_daily_stats untuk grafik dashboard
-    try {
-      const todayWIB = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      
-      // Upsert daily stats: sent/blocked/error di-akumulasi. (eligible_count tidak dihitung ulang secara sinkron untuk menghindari timeout)
-      // Kita asumsikan eligible_count tidak di-overwrite menjadi 0 jika nilainya sudah ada.
-      const { data: existingStats } = await supabase
-        .from("reengagement_daily_stats")
-        .select("eligible_count, sent_count, blocked_count, error_count")
-        .eq("date", todayWIB)
-        .maybeSingle();
-
-      const newSent = (existingStats?.sent_count ?? 0) + successCount;
-      const newBlocked = (existingStats?.blocked_count ?? 0) + blockedCount;
-      const newError = (existingStats?.error_count ?? 0) + errorCount;
-      const currentEligible = existingStats?.eligible_count ?? 0;
-
-      await supabase
-        .from("reengagement_daily_stats")
-        .upsert({
-          date: todayWIB,
-          eligible_count: currentEligible,
-          sent_count: newSent,
-          blocked_count: newBlocked,
-          error_count: newError,
-          updated_at: new Date().toISOString()
-        }, { onConflict: "date" });
-
-      console.log(`[Reengage] Daily stats recorded for ${todayWIB}: sent=${newSent}, blocked=${newBlocked}, error=${newError}`);
-    } catch (statsErr) {
-      console.error("[Reengage] Failed to record daily stats:", statsErr);
+    // 5. Lanjutkan sendiri jika antrean masih ada dan masih sebelum 21.00 WIB
+    const wibHour = new Date(Date.now() + 7 * 3600_000).getUTCHours();
+    if (!isTest && users.length >= BATCH && wibHour < 21) {
+      fetch(`${supabaseUrl}/functions/v1/reengage-users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-cron-secret": expectedCronSecret },
+        body: "{}",
+      }).catch(() => {});
+      await new Promise(r => setTimeout(r, 500));
     }
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      processed: users.length, 
-      sent: successCount, 
-      blocked: blockedCount, 
-      errors: errorCount 
+    return new Response(JSON.stringify({
+      success: true, processed: users.length, sent: successCount, blocked: blockedCount, errors: errorCount,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
