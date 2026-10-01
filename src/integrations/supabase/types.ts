@@ -1023,6 +1023,15 @@ export type Database = {
         Args: { p_user_id: number }
         Returns: boolean
       }
+      claim_reengagement_batch: {
+        Args: { p_limit: number }
+        Returns: {
+          first_name: string
+          id: number
+          last_reengagement_message_id: number
+          prev_sent_at: string
+        }[]
+      }
       claim_referral_reward: {
         Args: { p_reward_type: string; p_user_id: number }
         Returns: Json
@@ -1049,6 +1058,10 @@ export type Database = {
         Returns: Json
       }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
+      finish_reengagement_batch: {
+        Args: { p_results: Json }
+        Returns: undefined
+      }
       generate_unique_payment_code: { Args: never; Returns: number }
       get_admin_dashboard_stats: { Args: { p_force?: boolean }; Returns: Json }
       get_partner_settings: { Args: { p_partner_id: number }; Returns: Json }
