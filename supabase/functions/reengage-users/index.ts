@@ -145,8 +145,8 @@ Deno.serve(async (req) => {
     let successCount = 0, blockedCount = 0, errorCount = 0;
     const results: { id: number; status: string; message_id: number | null; prev: string | null }[] = [];
 
-    // ~25 pesan/detik: 25 worker, tiap worker jeda ~1 detik
-    const MAX_CONCURRENT = 25;
+    // ~15 pesan/detik: 15 worker, tiap worker jeda ~1 detik (menjaga jalur obrolan aktif tetap lega)
+    const MAX_CONCURRENT = 15;
     let currentIndex = 0;
 
     const processUser = async (user: any) => {
