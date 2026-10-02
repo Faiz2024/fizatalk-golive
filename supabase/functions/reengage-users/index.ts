@@ -112,12 +112,16 @@ Deno.serve(async (req) => {
     });
 
     // 3. Ambil batch pengguna via RPC atomik (klaim + tandai, anti kirim ganda)
-    const BATCH = 1500;
+    // Batas baris respons API = 1000, jadi BATCH disamakan agar lanjutan otomatis terpicu.
+    const BATCH = 1000;
+    const MAX_HOPS = 8;
     const startedAt = Date.now();
     let users: any[] = [];
     let isTest = false;
+    let hop = 0;
     try {
       const body = await req.json();
+      hop = Number(body?.hop) || 0;
       if (body?.test_user_id) {
         isTest = true;
         const { data: t, error: te } = await supabase
@@ -160,7 +164,8 @@ Deno.serve(async (req) => {
 
       const template = templates[Math.floor(Math.random() * templates.length)];
       const photoSource = cachedFileIds[template.imageKey] || template.imageUrl;
-      const personalizedText = template.text.replace("Sayang!!!", user.first_name ? `${user.first_name} sayang!!!` : "Sayang!!!");
+      const safeName = String(user.first_name ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+      const personalizedText = template.text.replace("Sayang!!!", safeName ? `${safeName} sayang!!!` : "Sayang!!!");
 
       try {
         const sendResp = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
@@ -196,7 +201,9 @@ Deno.serve(async (req) => {
           } else {
             errorCount++;
             console.error(`[Reengage] sendPhoto failed for ${user.id}: ${desc}`);
-            results.push({ id: user.id, status: "error", message_id: null, prev: user.prev_sent_at });
+            // 400 = error permanen (data/format) → lewati 30 hari; lainnya dicoba lagi
+            const st = sendResult.error_code === 400 ? "permanent" : "error";
+            results.push({ id: user.id, status: st, message_id: null, prev: user.prev_sent_at });
           }
         }
       } catch (err) {
