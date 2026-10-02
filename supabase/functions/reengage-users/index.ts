@@ -243,11 +243,11 @@ Deno.serve(async (req) => {
 
     // 5. Lanjutkan sendiri jika antrean masih ada dan masih sebelum 21.00 WIB
     const wibHour = new Date(Date.now() + 7 * 3600_000).getUTCHours();
-    if (!isTest && users.length >= BATCH && wibHour < 21) {
+    if (!isTest && users.length >= BATCH && wibHour < 21 && hop < MAX_HOPS) {
       fetch(`${supabaseUrl}/functions/v1/reengage-users`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-cron-secret": expectedCronSecret },
-        body: "{}",
+        body: JSON.stringify({ hop: hop + 1 }),
       }).catch(() => {});
       await new Promise(r => setTimeout(r, 500));
     }
