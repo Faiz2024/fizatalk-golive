@@ -77,28 +77,28 @@ Deno.serve(async (req) => {
         imageUrl: settings["reengage_url_cute_pleading_cat"] || "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=800",
         text: "Sayang!!! 🥺\n\nKangen deh, udah lama kita gak chatan bareng... Kamu kemana aja sih? 🥺👉👈\n\nYuk cari teman ngobrol atau partner seru baru sekarang! Banyak yang nyariin kamu lho...",
         buttonText: "Temui Dia Kembali 🥺",
-        buttonCallback: "search_partner:promo_cute_pleading_cat"
+        buttonCallback: "reengage:cute_pleading_cat"
       },
       {
         imageKey: "mysterious_gift_box",
         imageUrl: settings["reengage_url_mysterious_gift_box"] || "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800",
         text: "Ada yang mau ngirimin hadiah spesial ke kamu! 🎁✨\n\nPenasaran siapa dan apa hadiahnya? Jangan sampai terlewat lho, langsung cari tahu partner kamu sekarang juga!",
         buttonText: "Cari Hadiahnya 🎁",
-        buttonCallback: "search_partner:promo_mysterious_gift_box"
+        buttonCallback: "reengage:mysterious_gift_box"
       },
       {
         imageKey: "grumpy_cute_cat",
         imageUrl: settings["reengage_url_grumpy_cute_cat"] || "https://images.unsplash.com/photo-1513360309081-36f5e878fc9e?w=800",
         text: "Kamu darimana aja sih? 😤\n\nKok tega ninggalin aku sendirian di sini... Cepat kembali dan jawab aku sekarang! Aku udah siapin partner yang cocok banget buat kamu.",
         buttonText: "Jawab Sekarang 😤",
-        buttonCallback: "search_partner:promo_grumpy_cute_cat"
+        buttonCallback: "reengage:grumpy_cute_cat"
       },
       {
         imageKey: "social_match_hearts",
         imageUrl: settings["reengage_url_social_match_hearts"] || "https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=800",
         text: "Banyak partner baru yang lagi nungguin kamu nih! ⚡🔥\n\nAda yang cocok banget sama kriteria kamu. Yuk, mulai cari partner baru dan langsung ngobrol seru!",
         buttonText: "Mulai Cari Partner ⚡",
-        buttonCallback: "search_partner:promo_social_match_hearts"
+        buttonCallback: "reengage:social_match_hearts"
       }
     ];
 

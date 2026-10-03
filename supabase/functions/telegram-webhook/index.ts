@@ -2518,12 +2518,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
       await sendTelegramMessage(botToken, targetId, blockedMsg, blockedKeyboard);
     }
   } else {
-    // ----- LOGIKA HANYA PERINGATAN (1/4 - 3/4) -----
-    await supabase.from('telegram_users').update({
-      spam_warnings: warnings,
-      spam_warning_until: newWarningDate.toISOString(),
-      penalty_points: (user.penalty_points || 0) + 10 // Tambah penalty poin
-    }).eq('id', targetId);
+    // ----- PERINGATAN ADMIN: hanya kirim pesan, tanpa poin/penalti di database -----
 
     // Peringatan HANYA jika bukan premium
     if (!isPremium) {
@@ -2533,7 +2528,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
           [{ text: '💎 Upgrade Premium (Bebas Peringatan)', callback_data: 'show_premium_offer_peringatan' }]
         ]
       };
-      const warnMsg = `⚠️ <b>PERINGATAN (${warnings}/4)</b>\n\nKami mendeteksi aktivitas SPAM atau konten dilarang di akun Anda.\n\n🚫 <b>HIMBAUAN:</b>\nJangan menyebar spam link, mengirim stiker 18+, atau media 18+.\n\n<i>Peringatan ini akan hilang seiring banyaknya partner yang suka berinteraksi dengan Anda.</i>\n\n💎 <b>Beli Premium</b> untuk menghindari peringatan ini dan blokir permanen.`;
+      const warnMsg = `⚠️ <b>PERINGATAN DARI ADMIN</b>\n\nKami mendeteksi aktivitas SPAM atau konten dilarang di akun Anda.\n\n🚫 <b>HIMBAUAN:</b>\nJangan menyebar spam link, mengirim stiker 18+, atau media 18+.\n\n<i>Peringatan ini akan hilang seiring banyaknya partner yang suka berinteraksi dengan Anda.</i>\n\n💎 <b>Beli Premium</b> untuk menghindari peringatan ini dan blokir permanen.`;
       await sendTelegramMessage(botToken, targetId, warnMsg, premiumUpgradeKeyboard);
     }
   }
@@ -2546,7 +2541,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
       body: JSON.stringify({
         chat_id: adminChatId,
         message_id: adminMsg.message_id,
-        text: adminMsg.text + `\n\n✅ <b>Tindakan:</b> ${action === 'warn' ? 'Diberi Peringatan' : 'Diblokir'} (${warnings}/4)`
+        text: adminMsg.text + `\n\n✅ <b>Tindakan:</b> ${action === 'warn' ? 'Diberi Peringatan' : 'Diblokir'}`
       })
     });
   }
