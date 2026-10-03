@@ -2518,12 +2518,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
       await sendTelegramMessage(botToken, targetId, blockedMsg, blockedKeyboard);
     }
   } else {
-    // ----- LOGIKA HANYA PERINGATAN (1/4 - 3/4) -----
-    await supabase.from('telegram_users').update({
-      spam_warnings: warnings,
-      spam_warning_until: newWarningDate.toISOString(),
-      penalty_points: (user.penalty_points || 0) + 10 // Tambah penalty poin
-    }).eq('id', targetId);
+    // ----- PERINGATAN ADMIN: hanya kirim pesan, tanpa poin/penalti di database -----
 
     // Peringatan HANYA jika bukan premium
     if (!isPremium) {
@@ -2533,7 +2528,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
           [{ text: '💎 Upgrade Premium (Bebas Peringatan)', callback_data: 'show_premium_offer_peringatan' }]
         ]
       };
-      const warnMsg = `⚠️ <b>PERINGATAN (${warnings}/4)</b>\n\nKami mendeteksi aktivitas SPAM atau konten dilarang di akun Anda.\n\n🚫 <b>HIMBAUAN:</b>\nJangan menyebar spam link, mengirim stiker 18+, atau media 18+.\n\n<i>Peringatan ini akan hilang seiring banyaknya partner yang suka berinteraksi dengan Anda.</i>\n\n💎 <b>Beli Premium</b> untuk menghindari peringatan ini dan blokir permanen.`;
+      const warnMsg = `⚠️ <b>PERINGATAN DARI ADMIN</b>\n\nKami mendeteksi aktivitas SPAM atau konten dilarang di akun Anda.\n\n🚫 <b>HIMBAUAN:</b>\nJangan menyebar spam link, mengirim stiker 18+, atau media 18+.\n\n<i>Peringatan ini akan hilang seiring banyaknya partner yang suka berinteraksi dengan Anda.</i>\n\n💎 <b>Beli Premium</b> untuk menghindari peringatan ini dan blokir permanen.`;
       await sendTelegramMessage(botToken, targetId, warnMsg, premiumUpgradeKeyboard);
     }
   }
@@ -2546,7 +2541,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
       body: JSON.stringify({
         chat_id: adminChatId,
         message_id: adminMsg.message_id,
-        text: adminMsg.text + `\n\n✅ <b>Tindakan:</b> ${action === 'warn' ? 'Diberi Peringatan' : 'Diblokir'} (${warnings}/4)`
+        text: adminMsg.text + `\n\n✅ <b>Tindakan:</b> ${action === 'warn' ? 'Diberi Peringatan' : 'Diblokir'}`
       })
     });
   }
@@ -3051,7 +3046,9 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData === 'open_gift_menu' || callbackData === 'open_topup_menu') return 'default';
   if (callbackData === 'change_target' || callbackData === 'change_location') return 'default';
   if (callbackData === 'check_channel_joined') return 'search_partner'; // Sama dengan search
-  if (callbackData.startsWith('dismiss_promo')) return 'search_partner'; // Dismiss promo = search
+  if (callbackData.startsWith('dismiss_promo')) return 'search_partner';
+  if (callbackData.startsWith('reengage:')) return 'search_partner';
+  if (callbackData.startsWith('rmx_')) return 'report_media'; // Dismiss promo = search
   if (callbackData.startsWith('cs_approve_') || callbackData.startsWith('cs_reject_')) return 'cs_action';
   if (callbackData.startsWith('reportm_')) return 'report_media';
   if (callbackData.startsWith('admin_warnm_') || callbackData.startsWith('admin_blockm_')) return 'admin_media_action';
@@ -4863,6 +4860,12 @@ Deno.serve(async (req) => {
 
         await answerCallbackQuery(botToken, query.id, 'Laporan diteruskan ke Admin. Terima kasih!', true);
 
+        // Penalti cerdas (skala laporan 12 jam) + silent lock 1x per partner per sesi
+        const { error: lsErr } = await supabase.rpc('submit_partner_report', {
+          p_reporter_id: userId, p_reported_id: spammerId, p_report_type: 'link_spam'
+        });
+        if (lsErr) console.error('[LINK SPAM] rpc error:', lsErr.message);
+
         // Hapus tombol spam dari pesan agar partner tidak double-klik
         if (message) {
           await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
@@ -5046,17 +5049,67 @@ Deno.serve(async (req) => {
 
 
       // MEDIA REPORT LOGIC
+      // Tahap 1: tampilkan pilihan jenis laporan media
       if (callbackData.startsWith('reportm_')) {
         const senderId = callbackData.split('_')[1];
-
-        // 1. Delete message from partner
-        await fetch(`${TELEGRAM_API}${botToken}/deleteMessage`, {
+        answerCallbackQuery(botToken, query.id).catch(() => {});
+        await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: userId, message_id: query.message.message_id })
+          body: JSON.stringify({
+            chat_id: userId, message_id: query.message.message_id,
+            reply_markup: { inline_keyboard: [
+              [{ text: '🔞 Konten Dewasa / Pornografi', callback_data: `rmx_a_${senderId}` }],
+              [{ text: '📢 Iklan / Spam / Penipuan', callback_data: `rmx_s_${senderId}` }],
+              [{ text: '❌ Batalkan', callback_data: `rmx_c_${senderId}` }]
+            ] }
+          })
         });
+        return new Response('OK', { status: 200 });
+      }
 
-        await answerCallbackQuery(botToken, query.id, '✅ Media berhasil dihapus dan dilaporkan ke Admin.', true);
+      // Hapus media dari chat pelapor
+      if (callbackData === 'rmdel') {
+        answerCallbackQuery(botToken, query.id, '🗑️ Media dihapus').catch(() => {});
+        await deleteTelegramMessage(botToken, userId, query.message.message_id);
+        return new Response('OK', { status: 200 });
+      }
+
+      // Tahap 2: proses pilihan laporan media
+      if (callbackData.startsWith('rmx_')) {
+        const [, kind, senderIdStr] = callbackData.split('_');
+        const senderId = senderIdStr;
+        if (kind === 'c') {
+          answerCallbackQuery(botToken, query.id, 'Dibatalkan').catch(() => {});
+          await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: userId, message_id: query.message.message_id,
+              reply_markup: { inline_keyboard: [[{ text: '🗑️ Hapus & Laporkan', callback_data: `reportm_${senderId}` }]] }
+            })
+          });
+          return new Response('OK', { status: 200 });
+        }
+        if (isButtonOnCooldown(userId, 'report_user')) return new Response('OK');
+
+        // Laporan diproses di RPC (silent lock 1x per partner per sesi). UI selalu sukses.
+        const { error: rmErr } = await supabase.rpc('submit_partner_report', {
+          p_reporter_id: userId,
+          p_reported_id: parseInt(senderId),
+          p_report_type: kind === 'a' ? 'media_sange' : 'media_spam'
+        });
+        if (rmErr) console.error('[MEDIA REPORT] rpc error:', rmErr.message);
+
+        answerCallbackQuery(botToken, query.id, '✅ Laporan diterima. Terima kasih!', true).catch(() => {});
+        await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: userId, message_id: query.message.message_id,
+            reply_markup: { inline_keyboard: [[{ text: '🗑️ Hapus Media', callback_data: 'rmdel' }]] }
+          })
+        });
 
         // 2. Extract file_id from query.message
         let fileId = '';
@@ -5098,7 +5151,7 @@ Deno.serve(async (req) => {
           };
 
           if (mediaField !== 'video_note') {
-            payload.caption = `⚠️ <b>LAPORAN MEDIA</b>\n\nPengirim: <code>${senderId}</code>\nMedia ini dilaporkan oleh partner.`;
+            payload.caption = `⚠️ <b>LAPORAN MEDIA</b> (${kind === 'a' ? '🔞 Dewasa' : '📢 Spam'})\n\nPengirim: <code>${senderId}</code>\nPelapor: <code>${userId}</code>`;
             payload.parse_mode = 'HTML';
             payload.has_spoiler = true;
           } else {
@@ -5167,10 +5220,10 @@ Deno.serve(async (req) => {
               inline_keyboard: [[{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }]]
             };
             if (mediaField !== 'video_note') {
-              payload.caption = `⚠️ <b>PERINGATAN DARI ADMIN (${warnings}/4)</b>\n\nMedia yang Anda kirim telah dilaporkan dan melanggar aturan komunitas. Harap patuhi aturan atau akun Anda akan diblokir otomatis.`;
+              payload.caption = `⚠️ <b>PERINGATAN DARI ADMIN</b>\n\nMedia yang Anda kirim telah dilaporkan dan melanggar aturan komunitas. Harap patuhi aturan atau akun Anda akan diblokir otomatis.`;
               payload.parse_mode = 'HTML';
             } else {
-              await sendTelegramMessage(botToken, parseInt(senderId), `⚠️ <b>PERINGATAN DARI ADMIN (${warnings}/4)</b>\nVideo Note yang Anda kirim melanggar aturan komunitas.`, payload.reply_markup);
+              await sendTelegramMessage(botToken, parseInt(senderId), `⚠️ <b>PERINGATAN DARI ADMIN</b>\nVideo Note yang Anda kirim melanggar aturan komunitas.`, payload.reply_markup);
             }
           } else {
             payload.reply_markup = {
@@ -5201,7 +5254,7 @@ Deno.serve(async (req) => {
         await deleteTelegramMessage(botToken, query.message.chat.id, query.message.message_id);
 
         const newCaption = (actualAction === 'warned' || actualAction === 'warn')
-          ? `✅ Peringatan (${warnings}/4) telah dikirim ke ${senderId}.`
+          ? `✅ Peringatan telah dikirim ke ${senderId}.`
           : `✅ User ${senderId} telah diblokir (Batas 4/4 Peringatan).`;
 
         await sendTelegramMessage(botToken, query.message.chat.id, newCaption);
@@ -6161,26 +6214,17 @@ Deno.serve(async (req) => {
       }
 
       // --- LOGIKA SEARCH PARTNER (INLINE BUTTON) - SATU PANGGILAN RPC ---
-      if (callbackData === 'search_partner' || callbackData.startsWith('search_partner:')) {
+      if (callbackData === 'search_partner' || callbackData.startsWith('search_partner:') || callbackData.startsWith('reengage:')) {
         // Intersepsi klik promo untuk pencatatan konversi
-        if (callbackData.startsWith('search_partner:promo_')) {
-          // Cek umur pesan promo (maksimal 1 jam = 3600 detik)
-          if (message && message.date) {
-            const messageTimeMs = message.date * 1000;
-            const currentTimeMs = Date.now();
-            const ageHours = (currentTimeMs - messageTimeMs) / (1000 * 60 * 60);
-
-            if (ageHours > 1) {
-              await answerCallbackQuery(botToken, query.id, '❌ Promo sudah kadaluarsa (lebih dari 1 jam).', true);
-              await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
-              return new Response('OK', { status: 200 });
-            }
-
-            // Hapus pesan promo secara langsung agar tidak menumpuk di riwayat chat
-            await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
+        // Tombol ajakan kembali (reengage). Format lama 'search_partner:promo_' tetap didukung. Tanpa batas waktu.
+        if (callbackData.startsWith('reengage:') || callbackData.startsWith('search_partner:promo_')) {
+          if (message) {
+            deleteTelegramMessage(botToken, message.chat.id, message.message_id).catch(() => {});
           }
 
-          const templateKey = callbackData.replace('search_partner:promo_', '');
+          const templateKey = callbackData.startsWith('reengage:')
+            ? callbackData.slice('reengage:'.length)
+            : callbackData.replace('search_partner:promo_', '');
           // Catat konversi secara asinkron ke database
           supabase.from('reengagement_clicks').insert({
             user_id: userId,
@@ -6843,7 +6887,7 @@ Deno.serve(async (req) => {
     // UBAH BAGIAN INI: Tambahkan retry sederhana atau error blocking
     const { data: dbUser, error: dbError } = await supabase
       .from('telegram_users')
-      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location')
+      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at')
       .eq('id', userId)
       .maybeSingle();
 
@@ -7140,7 +7184,9 @@ Deno.serve(async (req) => {
 
       const isSenderPremium = dbUser?.premium_until && new Date(dbUser.premium_until) > new Date();
 
-      if (hasSpamEntities(message) && !isSenderPremium) {
+      const withinFirstMinute = !!dbUser?.matched_at && (Date.now() - new Date(dbUser.matched_at).getTime()) <= 60000;
+
+      if (hasSpamEntities(message) && !isSenderPremium && withinFirstMinute) {
         spamMarkup = {
           inline_keyboard: [[{ text: '🚩 Laporkan spam', callback_data: `reportspam_${userId}` }]]
         };

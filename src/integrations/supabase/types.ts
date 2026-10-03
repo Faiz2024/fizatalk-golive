@@ -716,6 +716,7 @@ export type Database = {
           cashout_draft: Json | null
           chat_end_count: number | null
           chats_since_premium_shadow: number
+          clean_days_streak: number
           coins: number
           created_at: string
           first_name: string | null
@@ -728,10 +729,12 @@ export type Database = {
           last_channel_invite_sent_at: string | null
           last_negative_report_at: string | null
           last_partners: number[] | null
+          last_penalty_decay_at: string | null
           last_promo_sent_at: string | null
           last_reengagement_message_id: number | null
           last_reengagement_sent_at: string | null
           location: string | null
+          matched_at: string | null
           negative_reports_count: number
           partner_id: number | null
           penalty_points: number | null
@@ -755,6 +758,7 @@ export type Database = {
           cashout_draft?: Json | null
           chat_end_count?: number | null
           chats_since_premium_shadow?: number
+          clean_days_streak?: number
           coins?: number
           created_at?: string
           first_name?: string | null
@@ -767,10 +771,12 @@ export type Database = {
           last_channel_invite_sent_at?: string | null
           last_negative_report_at?: string | null
           last_partners?: number[] | null
+          last_penalty_decay_at?: string | null
           last_promo_sent_at?: string | null
           last_reengagement_message_id?: number | null
           last_reengagement_sent_at?: string | null
           location?: string | null
+          matched_at?: string | null
           negative_reports_count?: number
           partner_id?: number | null
           penalty_points?: number | null
@@ -794,6 +800,7 @@ export type Database = {
           cashout_draft?: Json | null
           chat_end_count?: number | null
           chats_since_premium_shadow?: number
+          clean_days_streak?: number
           coins?: number
           created_at?: string
           first_name?: string | null
@@ -806,10 +813,12 @@ export type Database = {
           last_channel_invite_sent_at?: string | null
           last_negative_report_at?: string | null
           last_partners?: number[] | null
+          last_penalty_decay_at?: string | null
           last_promo_sent_at?: string | null
           last_reengagement_message_id?: number | null
           last_reengagement_sent_at?: string | null
           location?: string | null
+          matched_at?: string | null
           negative_reports_count?: number
           partner_id?: number | null
           penalty_points?: number | null
