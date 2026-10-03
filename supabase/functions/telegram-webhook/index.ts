@@ -5220,10 +5220,10 @@ Deno.serve(async (req) => {
               inline_keyboard: [[{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }]]
             };
             if (mediaField !== 'video_note') {
-              payload.caption = `⚠️ <b>PERINGATAN DARI ADMIN (${warnings}/4)</b>\n\nMedia yang Anda kirim telah dilaporkan dan melanggar aturan komunitas. Harap patuhi aturan atau akun Anda akan diblokir otomatis.`;
+              payload.caption = `⚠️ <b>PERINGATAN DARI ADMIN</b>\n\nMedia yang Anda kirim telah dilaporkan dan melanggar aturan komunitas. Harap patuhi aturan atau akun Anda akan diblokir otomatis.`;
               payload.parse_mode = 'HTML';
             } else {
-              await sendTelegramMessage(botToken, parseInt(senderId), `⚠️ <b>PERINGATAN DARI ADMIN (${warnings}/4)</b>\nVideo Note yang Anda kirim melanggar aturan komunitas.`, payload.reply_markup);
+              await sendTelegramMessage(botToken, parseInt(senderId), `⚠️ <b>PERINGATAN DARI ADMIN</b>\nVideo Note yang Anda kirim melanggar aturan komunitas.`, payload.reply_markup);
             }
           } else {
             payload.reply_markup = {
@@ -5254,7 +5254,7 @@ Deno.serve(async (req) => {
         await deleteTelegramMessage(botToken, query.message.chat.id, query.message.message_id);
 
         const newCaption = (actualAction === 'warned' || actualAction === 'warn')
-          ? `✅ Peringatan (${warnings}/4) telah dikirim ke ${senderId}.`
+          ? `✅ Peringatan telah dikirim ke ${senderId}.`
           : `✅ User ${senderId} telah diblokir (Batas 4/4 Peringatan).`;
 
         await sendTelegramMessage(botToken, query.message.chat.id, newCaption);
