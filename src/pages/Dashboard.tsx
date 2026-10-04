@@ -13,7 +13,7 @@ import {
   Smile,
   DollarSign,
   Users,
-  UserClock,
+  Clock,
   Send,
   SendHorizonal,
   MailCheck,
@@ -398,7 +398,7 @@ const Dashboard = () => {
         </Card>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <KPICard title="Layak (Inaktif 7–30 Hari)" value={reengageSummary?.eligible7d ?? 0} Icon={UserClock} loading={isLoading} accent="bg-cyan-500" />
+          <KPICard title="Layak (Inaktif 7–30 Hari)" value={reengageSummary?.eligible7d ?? 0} Icon={Clock} loading={isLoading} accent="bg-cyan-500" />
           <KPICard title="Layak (Inaktif >30 Hari)" value={reengageSummary?.eligible30d ?? 0} Icon={Users} loading={isLoading} accent="bg-teal-500" />
           <KPICard title="Terkirim 7 Hari" value={reengageSummary?.sent7d ?? 0} Icon={Send} loading={isLoading} accent="bg-fuchsia-500" />
           <KPICard title="Terkirim 30 Hari" value={reengageSummary?.sent30d ?? 0} Icon={SendHorizonal} loading={isLoading} accent="bg-violet-500" />
