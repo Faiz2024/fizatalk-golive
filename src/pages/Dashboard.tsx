@@ -57,6 +57,13 @@ const fetchStats = async () => {
       eligible: number;
       sent: number;
     }[];
+    reengageSummary: {
+      eligible7d: number;
+      eligible30d: number;
+      sent7d: number;
+      sent30d: number;
+      sentTotal: number;
+    };
     transactions: {
       date: string;
       label: string;
@@ -123,6 +130,7 @@ const Dashboard = () => {
   const activity = statsQ.data?.activity ?? [];
   const reengageActivity = statsQ.data?.reengageActivity ?? [];
   const reengageDailyStats = statsQ.data?.reengageDailyStats ?? [];
+  const reengageSummary = statsQ.data?.reengageSummary;
   const transactions = statsQ.data?.transactions ?? [];
   const referral = statsQ.data?.referral;
   const referralDaily = referral?.daily ?? [];
