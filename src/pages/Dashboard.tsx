@@ -12,6 +12,11 @@ import {
   Sun,
   Smile,
   DollarSign,
+  Users,
+  UserClock,
+  Send,
+  SendHorizonal,
+  MailCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -391,6 +396,14 @@ const Dashboard = () => {
             )}
           </CardContent>
         </Card>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <KPICard title="Layak (Inaktif 7–30 Hari)" value={reengageSummary?.eligible7d ?? 0} Icon={UserClock} loading={isLoading} accent="bg-cyan-500" />
+          <KPICard title="Layak (Inaktif >30 Hari)" value={reengageSummary?.eligible30d ?? 0} Icon={Users} loading={isLoading} accent="bg-teal-500" />
+          <KPICard title="Terkirim 7 Hari" value={reengageSummary?.sent7d ?? 0} Icon={Send} loading={isLoading} accent="bg-fuchsia-500" />
+          <KPICard title="Terkirim 30 Hari" value={reengageSummary?.sent30d ?? 0} Icon={SendHorizonal} loading={isLoading} accent="bg-violet-500" />
+          <KPICard title="Total Terkirim" value={reengageSummary?.sentTotal ?? 0} Icon={MailCheck} loading={isLoading} accent="bg-emerald-500" />
+        </div>
 
         <Card className="border-border/50 bg-card/60 backdrop-blur">
           <CardHeader>
