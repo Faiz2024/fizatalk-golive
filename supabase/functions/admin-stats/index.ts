@@ -45,6 +45,13 @@ Deno.serve(async (req) => {
         eligible: number;
         sent: number;
       }[];
+      reengage_summary: {
+        eligible7d: number;
+        eligible30d: number;
+        sent7d: number;
+        sent30d: number;
+        sentTotal: number;
+      };
       transactions: {
         date: string;
         label: string;
@@ -164,7 +171,7 @@ Deno.serve(async (req) => {
     };
 
     return new Response(
-      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats, transactions, special_promo: raw.special_promo, referral }),
+      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats, reengageSummary: raw.reengage_summary, transactions, special_promo: raw.special_promo, referral }),
 
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
