@@ -447,7 +447,7 @@ const Dashboard = () => {
                       strokeWidth={2.5}
                       fill="url(#eligible30dGradient)"
                       dot={{ r: 3, fill: "#14b8a6", stroke: "#fff", strokeWidth: 1.5 }}
-                      activeDot={{ r: 6, fill: "#14b8a6", stroke": "#fff", strokeWidth: 2 }}
+                      activeDot={{ r: 6, fill: "#14b8a6", stroke: "#fff", strokeWidth: 2 }}
                     />
                     <Bar
                       dataKey="sent7d"
