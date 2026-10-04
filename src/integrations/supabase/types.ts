@@ -547,24 +547,36 @@ export type Database = {
         Row: {
           blocked_count: number
           date: string
+          eligible_30d: number
+          eligible_7d: number
           eligible_count: number
           error_count: number
+          sent_30d: number
+          sent_7d: number
           sent_count: number
           updated_at: string
         }
         Insert: {
           blocked_count?: number
           date: string
+          eligible_30d?: number
+          eligible_7d?: number
           eligible_count?: number
           error_count?: number
+          sent_30d?: number
+          sent_7d?: number
           sent_count?: number
           updated_at?: string
         }
         Update: {
           blocked_count?: number
           date?: string
+          eligible_30d?: number
+          eligible_7d?: number
           eligible_count?: number
           error_count?: number
+          sent_30d?: number
+          sent_7d?: number
           sent_count?: number
           updated_at?: string
         }

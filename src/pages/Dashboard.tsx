@@ -13,10 +13,6 @@ import {
   Smile,
   DollarSign,
   Users,
-  Clock,
-  Send,
-  SendHorizonal,
-  MailCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -60,15 +56,12 @@ const fetchStats = async () => {
     reengageDailyStats: {
       label: string;
       eligible: number;
-      sent: number;
-    }[];
-    reengageSummary: {
       eligible7d: number;
       eligible30d: number;
+      sent: number;
       sent7d: number;
       sent30d: number;
-      sentTotal: number;
-    };
+    }[];
     transactions: {
       date: string;
       label: string;
@@ -135,7 +128,6 @@ const Dashboard = () => {
   const activity = statsQ.data?.activity ?? [];
   const reengageActivity = statsQ.data?.reengageActivity ?? [];
   const reengageDailyStats = statsQ.data?.reengageDailyStats ?? [];
-  const reengageSummary = statsQ.data?.reengageSummary;
   const transactions = statsQ.data?.transactions ?? [];
   const referral = statsQ.data?.referral;
   const referralDaily = referral?.daily ?? [];
@@ -397,14 +389,6 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <KPICard title="Layak (Inaktif 7–30 Hari)" value={reengageSummary?.eligible7d ?? 0} Icon={Clock} loading={isLoading} accent="bg-cyan-500" />
-          <KPICard title="Layak (Inaktif >30 Hari)" value={reengageSummary?.eligible30d ?? 0} Icon={Users} loading={isLoading} accent="bg-teal-500" />
-          <KPICard title="Terkirim 7 Hari" value={reengageSummary?.sent7d ?? 0} Icon={Send} loading={isLoading} accent="bg-fuchsia-500" />
-          <KPICard title="Terkirim 30 Hari" value={reengageSummary?.sent30d ?? 0} Icon={SendHorizonal} loading={isLoading} accent="bg-violet-500" />
-          <KPICard title="Total Terkirim" value={reengageSummary?.sentTotal ?? 0} Icon={MailCheck} loading={isLoading} accent="bg-emerald-500" />
-        </div>
-
         <Card className="border-border/50 bg-card/60 backdrop-blur">
           <CardHeader>
             <CardTitle>Antrian Re-engagement: Eligible vs Terkirim per Hari (30 Hari Terakhir)</CardTitle>
@@ -417,13 +401,13 @@ const Dashboard = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={reengageDailyStats} margin={{ top: 20, right: 16, left: -10, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="eligibleGradient" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="eligible7dGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.35} />
                         <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.02} />
                       </linearGradient>
-                      <linearGradient id="sentGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#d946ef" stopOpacity={0.9} />
-                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.7} />
+                      <linearGradient id="eligible30dGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.02} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -447,20 +431,47 @@ const Dashboard = () => {
                     <Legend wrapperStyle={{ fontSize: 13 }} />
                     <Area
                       type="monotone"
-                      dataKey="eligible"
-                      name="User Eligible"
+                      dataKey="eligible7d"
+                      name="Layak (Inaktif 7–30 Hari)"
                       stroke="#06b6d4"
                       strokeWidth={2.5}
-                      fill="url(#eligibleGradient)"
+                      fill="url(#eligible7dGradient)"
                       dot={{ r: 3, fill: "#06b6d4", stroke: "#fff", strokeWidth: 1.5 }}
                       activeDot={{ r: 6, fill: "#06b6d4", stroke: "#fff", strokeWidth: 2 }}
                     />
+                    <Area
+                      type="monotone"
+                      dataKey="eligible30d"
+                      name="Layak (Inaktif >30 Hari)"
+                      stroke="#14b8a6"
+                      strokeWidth={2.5}
+                      fill="url(#eligible30dGradient)"
+                      dot={{ r: 3, fill: "#14b8a6", stroke: "#fff", strokeWidth: 1.5 }}
+                      activeDot={{ r: 6, fill: "#14b8a6", stroke: "#fff", strokeWidth: 2 }}
+                    />
                     <Bar
-                      dataKey="sent"
-                      name="Notifikasi Terkirim"
-                      fill="url(#sentGradient)"
+                      dataKey="sent7d"
+                      name="Terkirim (Inaktif 7–30 Hari)"
+                      stackId="sent"
+                      fill="#d946ef"
+                      barSize={14}
+                    />
+                    <Bar
+                      dataKey="sent30d"
+                      name="Terkirim (Inaktif >30 Hari)"
+                      stackId="sent"
+                      fill="#8b5cf6"
                       radius={[4, 4, 0, 0]}
                       barSize={14}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="sent"
+                      name="Total Terkirim"
+                      stroke="#10b981"
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: "#10b981", stroke: "#fff", strokeWidth: 1.5 }}
+                      activeDot={{ r: 6, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
