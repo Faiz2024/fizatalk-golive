@@ -13,10 +13,6 @@ import {
   Smile,
   DollarSign,
   Users,
-  Clock,
-  Send,
-  SendHorizonal,
-  MailCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -60,15 +56,12 @@ const fetchStats = async () => {
     reengageDailyStats: {
       label: string;
       eligible: number;
-      sent: number;
-    }[];
-    reengageSummary: {
       eligible7d: number;
       eligible30d: number;
+      sent: number;
       sent7d: number;
       sent30d: number;
-      sentTotal: number;
-    };
+    }[];
     transactions: {
       date: string;
       label: string;

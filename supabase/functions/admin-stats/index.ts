@@ -43,7 +43,11 @@ Deno.serve(async (req) => {
       reengage_daily_stats: {
         date: string;
         eligible: number;
+        eligible7d: number;
+        eligible30d: number;
         sent: number;
+        sent7d: number;
+        sent30d: number;
       }[];
       reengage_summary: {
         eligible7d: number;
@@ -114,7 +118,11 @@ Deno.serve(async (req) => {
       return {
         label,
         eligible: row.eligible ?? 0,
+        eligible7d: row.eligible7d ?? 0,
+        eligible30d: row.eligible30d ?? 0,
         sent: row.sent ?? 0,
+        sent7d: row.sent7d ?? 0,
+        sent30d: row.sent30d ?? 0,
       };
     });
 
