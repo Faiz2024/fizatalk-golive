@@ -3049,6 +3049,7 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('dismiss_promo')) return 'search_partner';
   if (callbackData.startsWith('reengage:')) return 'search_partner';
   if (callbackData.startsWith('rmx_')) return 'report_media'; // Dismiss promo = search
+  if (callbackData.startsWith('rspam_')) return 'report_media';
   if (callbackData.startsWith('cs_approve_') || callbackData.startsWith('cs_reject_')) return 'cs_action';
   if (callbackData.startsWith('reportm_')) return 'report_media';
   if (callbackData.startsWith('admin_warnm_') || callbackData.startsWith('admin_blockm_')) return 'admin_media_action';
@@ -5086,7 +5087,7 @@ Deno.serve(async (req) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: userId, message_id: query.message.message_id,
-              reply_markup: { inline_keyboard: [[{ text: '🗑️ Hapus & Laporkan', callback_data: `reportm_${senderId}` }]] }
+              reply_markup: { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${senderId}` }]] }
             })
           });
           return new Response('OK', { status: 200 });
@@ -7348,7 +7349,7 @@ Deno.serve(async (req) => {
 
           const reportMarkup = isPremiumSender
             ? { inline_keyboard: [] }
-            : { inline_keyboard: [[{ text: '🗑️ Hapus & Laporkan', callback_data: `reportm_${userId}` }]] };
+            : { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${userId}` }]] };
 
           const bodyPayload: any = {
             chat_id: partnerId,
