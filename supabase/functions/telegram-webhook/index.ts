@@ -4854,9 +4854,49 @@ Deno.serve(async (req) => {
       }
 
       // >>> ROUTE PENANGANAN SPAM <<<
+      // Tahap 1: tampilkan submenu jenis pelanggaran (tanpa DB call)
       if (callbackData.startsWith('reportspam_')) {
+        const spammerId = callbackData.split('_')[1];
+        answerCallbackQuery(botToken, query.id).catch(() => {});
+        await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: userId,
+            message_id: query.message.message_id,
+            reply_markup: { inline_keyboard: [
+              [{ text: '🆔 Spam Username / ID', callback_data: `rspam_u_${spammerId}` }],
+              [{ text: '📢 Spam Promosi / Jualan', callback_data: `rspam_p_${spammerId}` }],
+              [{ text: '🔞 Spam Vulgar / VCS', callback_data: `rspam_v_${spammerId}` }],
+              [{ text: '🔗 Spam Link', callback_data: `rspam_l_${spammerId}` }],
+              [{ text: '❌ Batalkan', callback_data: `rspam_c_${spammerId}` }]
+            ] }
+          })
+        });
+        return new Response('OK', { status: 200 });
+      }
+
+      // Tahap 2: proses pilihan jenis pelanggaran spam link/ID
+      if (callbackData.startsWith('rspam_')) {
+        const [, kind, spammerIdStr] = callbackData.split('_');
+        const spammerId = parseInt(spammerIdStr);
+
+        // Batalkan: kembalikan tombol awal
+        if (kind === 'c') {
+          answerCallbackQuery(botToken, query.id, 'Dibatalkan').catch(() => {});
+          await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: userId,
+              message_id: query.message.message_id,
+              reply_markup: { inline_keyboard: [[{ text: '🚩 Laporkan spam', callback_data: `reportspam_${spammerId}` }]] }
+            })
+          });
+          return new Response('OK', { status: 200 });
+        }
+
         if (isButtonOnCooldown(userId, 'report_user')) return new Response('OK');
-        const spammerId = parseInt(callbackData.split('_')[1]);
         const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
 
         await answerCallbackQuery(botToken, query.id, 'Laporan diteruskan ke Admin. Terima kasih!', true);
@@ -4868,21 +4908,23 @@ Deno.serve(async (req) => {
         if (lsErr) console.error('[LINK SPAM] rpc error:', lsErr.message);
 
         // Hapus tombol spam dari pesan agar partner tidak double-klik
-        if (message) {
-          await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: userId,
-              message_id: message.message_id,
-              reply_markup: { inline_keyboard: [] }
-            })
-          });
-        }
+        await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: userId,
+            message_id: query.message.message_id,
+            reply_markup: { inline_keyboard: [] }
+          })
+        });
 
-        // Notifikasi ke CS / Admin
+        // Notifikasi ke CS / Admin dengan rincian kategori
         if (adminChatId) {
-          const adminMsg = `🚨 <b>LAPORAN SPAM/LINK</b>\n\nTerlapor ID: <code>${spammerId}</code>\nPelapor ID: <code>${userId}</code>\n\nPilih tindakan (Bukti pesan di bawah):`;
+          const kindLabel = kind === 'u' ? 'Spam Username/ID'
+            : kind === 'p' ? 'Spam Promosi/Jualan'
+            : kind === 'v' ? 'Spam Vulgar/VCS'
+            : 'Spam Link';
+          const adminMsg = `🚨 <b>LAPORAN SPAM/LINK</b>\n\nJenis: <b>${kindLabel}</b>\nTerlapor ID: <code>${spammerId}</code>\nPelapor ID: <code>${userId}</code>\n\nPilih tindakan (Bukti pesan di bawah):`;
           const adminKb = {
             inline_keyboard: [
               [
