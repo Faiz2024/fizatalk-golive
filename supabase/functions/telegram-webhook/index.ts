@@ -5330,7 +5330,8 @@ Deno.serve(async (req) => {
             body: JSON.stringify({
               chat_id: userId,        // Penerima (yang klik tombol)
               from_chat_id: senderId, // Pengirim Asli
-              message_id: originalMsgId
+              message_id: originalMsgId,
+              reply_markup: { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${senderId}` }]] }
             })
           });
 
