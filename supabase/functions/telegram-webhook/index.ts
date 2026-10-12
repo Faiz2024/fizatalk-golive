@@ -443,26 +443,30 @@ function buildPaymentMethodKeyboard(
 // === PREMIUM PAYMENT CONFIG (Sakurupiah) ===
 const PREMIUM_PAY_CONFIG: Record<string, { days: number; price: number; label: string }> = {
   '30': { days: 30, price: 28000, label: 'PREMIUM 30 HARI (PROMO SPESIAL)' },
-  '35': { days: 35, price: 30000, label: 'PREMIUM 35 HARI (PROMO)' },
+  '365': { days: 365, price: 199000, label: 'PREMIUM 1 TAHUN (PROMO SPESIAL)' },
   '7': { days: 7, price: 19000, label: 'PREMIUM 7 HARI' },
   '3': { days: 3, price: 10000, label: 'PREMIUM 3 HARI' },
   '1': { days: 1, price: 5000, label: 'PREMIUM 1 HARI' },
   'n7': { days: 7, price: 25000, label: 'PREMIUM 7 HARI' },
   'n30': { days: 30, price: 60000, label: 'PREMIUM 30 HARI' },
+  'n365': { days: 365, price: 499000, label: 'PREMIUM 1 TAHUN' },
   'sp30': { days: 30, price: 15000, label: 'PREMIUM 30 HARI (PROMO HARI INI)' },
   'sp7': { days: 7, price: 10000, label: 'PREMIUM 7 HARI (PROMO HARI INI)' },
+  'sp365': { days: 365, price: 99000, label: 'PREMIUM 1 TAHUN (PROMO HARI INI)' },
 };
 
 const BUY_PREMIUM_MAP: Record<string, string> = {
   'buy_premium_30': '30',
-  'buy_premium_35': '35',
+  'buy_premium_365': '365',
   'buy_premium_7': '7',
   'buy_premium_3': '3',
   'buy_premium_1': '1',
   'buy_premium_normal_7': 'n7',
   'buy_premium_normal_30': 'n30',
+  'buy_premium_normal_365': 'n365',
   'special_buy_premium_30': 'sp30',
   'special_buy_premium_7': 'sp7',
+  'special_buy_premium_365': 'sp365',
 };
 
 // === TELEGRAM STARS PAYMENT ===
@@ -1363,7 +1367,7 @@ async function handleCSApproveReject(
         premiumEndDate.setDate(premiumEndDate.getDate() + premReq.duration_days);
       }
 
-      const isSpecialPromo = (premReq.price === 15000 && premReq.duration_days === 30) || (premReq.price === 10000 && premReq.duration_days === 7);
+      const isSpecialPromo = (premReq.price === 15000 && premReq.duration_days === 30) || (premReq.price === 10000 && premReq.duration_days === 7) || (premReq.price === 99000 && premReq.duration_days === 365);
       const updatePayload: any = { 
         premium_until: premiumEndDate.toISOString(), 
         penalty_points: 0, 
@@ -2232,7 +2236,8 @@ const TOPUP_OPTIONS = [
 const PREMIUM_PACKAGES = {
   normal: {
     '7': { days: 7, price: 25000, label: '1 Minggu' },
-    '30': { days: 30, price: 60000, label: '1 Bulan' }
+    '30': { days: 30, price: 60000, label: '1 Bulan' },
+    '365': { days: 365, price: 499000, label: '1 Tahun' }
   },
   promo: {
     '30': { days: 30, price: 5000, label: '1 Bulan' },
@@ -2277,6 +2282,7 @@ function buildPremiumNormalKeyboard(): any {
     inline_keyboard: [
       [{ text: `📦 ${PREMIUM_PACKAGES.normal['7'].label} - Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_7' }],
       [{ text: `📦 ${PREMIUM_PACKAGES.normal['30'].label} - Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_30' }],
+      [{ text: `👑 ${PREMIUM_PACKAGES.normal['365'].label} - Rp ${PREMIUM_PACKAGES.normal['365'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_365' }],
       buildReferralButtonRow()
 
     ]
@@ -4047,9 +4053,9 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 
   const promoKeyboard = {
     inline_keyboard: [
+      [{ text: '👑 1 Tahun / 𝑅̶𝑝̶4̶9̶9̶.̶0̶0̶0̶ ➡️ Rp 199.000 (Hemat 60%)', callback_data: 'buy_premium_365' }],
       [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 28.000', callback_data: 'buy_premium_30' }],
       [{ text: '📦 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 19.000', callback_data: 'buy_premium_7' }],
-      [{ text: '💎 35 Hari / Rp 30.000', callback_data: 'buy_premium_35' }],
       [{ text: '📅 3 Hari / Rp 10.000', callback_data: 'buy_premium_3' }],
       [{ text: '⚡ 1 Hari / Rp 5.000', callback_data: 'buy_premium_1' }],
       buildReferralButtonRow(),
@@ -4081,6 +4087,7 @@ Anda adalah 1 dari 50 pengguna yang berhak mendapatkan <b>PENAWARAN SPESIAL 1 KA
 
   const promoKeyboard = {
     inline_keyboard: [
+      [{ text: '👑 1 Tahun / 𝑅̶𝑝̶4̶9̶9̶.̶0̶0̶0̶ ➡️ Rp 99.000 (Hemat 80%)', callback_data: 'special_buy_premium_365' }],
       [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 15.000 (1x)', callback_data: 'special_buy_premium_30' }],
       [{ text: '🔥 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 10.000 (1x)', callback_data: 'special_buy_premium_7' }],
       buildReferralButtonRow()
@@ -4694,14 +4701,14 @@ Deno.serve(async (req) => {
       // Tombol yang tertinggal (>1 jam) otomatis kedaluwarsa & dihapus
       const LIMITED_TIME_PROMOS = [
         'buy_premium_30',
-        'buy_premium_35',
+        'buy_premium_365',
         'buy_premium_7',
         'buy_premium_3',
         'buy_premium_1'
       ];
 
       const isLimitedPromoCallback = LIMITED_TIME_PROMOS.includes(callbackData) ||
-        (callbackData.startsWith('prem_pay_') && ['30', '35', '7', '3', '1'].includes(callbackData.split('_')[2]));
+        (callbackData.startsWith('prem_pay_') && ['30', '365', '7', '3', '1'].includes(callbackData.split('_')[2]));
 
       if (isLimitedPromoCallback) {
         let promoExpired = false;

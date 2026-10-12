@@ -37,7 +37,7 @@ export async function handlePremiumSuccess(supabase: any, botToken: string, requ
     .eq('id', req.user_id)
     .single();
 
-  const isSpecialPromo = (req.price === 15000 && req.duration_days === 30) || (req.price === 10000 && req.duration_days === 7);
+  const isSpecialPromo = (req.price === 15000 && req.duration_days === 30) || (req.price === 10000 && req.duration_days === 7) || (req.price === 99000 && req.duration_days === 365);
 
   // Validasi Lapis 3: Cek apakah invoice telat dibayar (melewati batas hari) atau sudah klaim
   if (isSpecialPromo) {
