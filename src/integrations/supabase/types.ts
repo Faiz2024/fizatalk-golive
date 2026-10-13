@@ -736,6 +736,7 @@ export type Database = {
           has_received_special_promo: boolean | null
           id: number
           is_channel_member: boolean | null
+          is_face_verified: boolean
           is_tiktok_mode: boolean | null
           last_active: string
           last_channel_invite_sent_at: string | null
@@ -750,7 +751,10 @@ export type Database = {
           negative_reports_count: number
           partner_id: number | null
           penalty_points: number | null
+          pending_profile_photo_file_id: string | null
           premium_until: string | null
+          profile_flow: string | null
+          profile_photo_file_id: string | null
           referral_qualified_count: number
           referral_rewards_claimed: number
           referred_by: number | null
@@ -765,6 +769,9 @@ export type Database = {
           target_location: string | null
           unacknowledged_reports_count: number | null
           username: string | null
+          verification_admin_msg_id: number | null
+          verification_gesture: string | null
+          verification_status: string
         }
         Insert: {
           cashout_draft?: Json | null
@@ -778,6 +785,7 @@ export type Database = {
           has_received_special_promo?: boolean | null
           id: number
           is_channel_member?: boolean | null
+          is_face_verified?: boolean
           is_tiktok_mode?: boolean | null
           last_active?: string
           last_channel_invite_sent_at?: string | null
@@ -792,7 +800,10 @@ export type Database = {
           negative_reports_count?: number
           partner_id?: number | null
           penalty_points?: number | null
+          pending_profile_photo_file_id?: string | null
           premium_until?: string | null
+          profile_flow?: string | null
+          profile_photo_file_id?: string | null
           referral_qualified_count?: number
           referral_rewards_claimed?: number
           referred_by?: number | null
@@ -807,6 +818,9 @@ export type Database = {
           target_location?: string | null
           unacknowledged_reports_count?: number | null
           username?: string | null
+          verification_admin_msg_id?: number | null
+          verification_gesture?: string | null
+          verification_status?: string
         }
         Update: {
           cashout_draft?: Json | null
@@ -820,6 +834,7 @@ export type Database = {
           has_received_special_promo?: boolean | null
           id?: number
           is_channel_member?: boolean | null
+          is_face_verified?: boolean
           is_tiktok_mode?: boolean | null
           last_active?: string
           last_channel_invite_sent_at?: string | null
@@ -834,7 +849,10 @@ export type Database = {
           negative_reports_count?: number
           partner_id?: number | null
           penalty_points?: number | null
+          pending_profile_photo_file_id?: string | null
           premium_until?: string | null
+          profile_flow?: string | null
+          profile_photo_file_id?: string | null
           referral_qualified_count?: number
           referral_rewards_claimed?: number
           referred_by?: number | null
@@ -849,6 +867,9 @@ export type Database = {
           target_location?: string | null
           unacknowledged_reports_count?: number | null
           username?: string | null
+          verification_admin_msg_id?: number | null
+          verification_gesture?: string | null
+          verification_status?: string
         }
         Relationships: []
       }
@@ -1073,6 +1094,7 @@ export type Database = {
         Returns: Json
       }
       decay_negative_reports: { Args: { p_user_id: number }; Returns: number }
+      delete_profile_photo: { Args: { p_user_id: number }; Returns: Json }
       end_chat_comprehensive: { Args: { p_user_id: number }; Returns: Json }
       exchange_chat_call_invite: {
         Args: { p_join_token: string; p_user_id: number }
@@ -1141,6 +1163,10 @@ export type Database = {
         Args: { p_action: string; p_actor_id: number; p_invite_id: string }
         Returns: Json
       }
+      resolve_face_verification: {
+        Args: { p_action: string; p_user_id: number }
+        Returns: Json
+      }
       resolve_reconnect: {
         Args: { p_action: string; p_request_id: string }
         Returns: Json
@@ -1153,6 +1179,10 @@ export type Database = {
           p_user_id: number
           p_username?: string
         }
+        Returns: Json
+      }
+      set_profile_flow: {
+        Args: { p_flow: string; p_user_id: number }
         Returns: Json
       }
       set_referral_cashout_admin_message: {
@@ -1168,6 +1198,10 @@ export type Database = {
         Returns: Json
       }
       set_user_payment_state: { Args: { p_user_id: number }; Returns: Json }
+      set_verification_admin_message: {
+        Args: { p_message_id: number; p_user_id: number }
+        Returns: undefined
+      }
       should_show_channel_join: {
         Args: { p_user_id: number }
         Returns: boolean
@@ -1181,6 +1215,11 @@ export type Database = {
         }
         Returns: Json
       }
+      submit_profile_photo: {
+        Args: { p_file_id: string; p_gesture: string; p_user_id: number }
+        Returns: Json
+      }
+      submit_verification_video: { Args: { p_user_id: number }; Returns: Json }
       toggle_tiktok_mode: { Args: { p_user_id: number }; Returns: Json }
       update_daily_eligible_count: { Args: never; Returns: undefined }
       update_last_active_daily: {

@@ -3793,10 +3793,13 @@ async function sendPairingNotifications(
   let genderUser1 = 'cowok';
   let genderUser2 = 'cowok';
 
+  let photoUser1: string | null = null;
+  let photoUser2: string | null = null;
+
   try {
     const { data: usersData } = await supabase
       .from('telegram_users')
-      .select('id, gender')
+      .select('id, gender, profile_photo_file_id')
       .in('id', [user1Id, user2Id]);
 
     if (usersData) {
@@ -3804,6 +3807,8 @@ async function sendPairingNotifications(
       const u2 = usersData.find((u: any) => u.id === user2Id);
       if (u1?.gender) genderUser1 = u1.gender;
       if (u2?.gender) genderUser2 = u2.gender;
+      photoUser1 = u1?.profile_photo_file_id ?? null;
+      photoUser2 = u2?.profile_photo_file_id ?? null;
     }
   } catch (e) {
     console.error('Failed fetching gender for pairing msg', e);
@@ -3813,24 +3818,139 @@ async function sendPairingNotifications(
   const warningUser1 = getMessageByGender(genderUser1);
   const warningUser2 = getMessageByGender(genderUser2);
 
-  // Send notifications in parallel
+  // Send notifications in parallel (foto profil partner jika ada & terverifikasi)
   await Promise.all([
-    sendTelegramMessage(
-      botToken,
-      user1Id,
-      // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
-      buildChatKeyboard(user1IsPremium, user2Id)
-    ),
-    sendTelegramMessage(
-      botToken,
-      user2Id,
-      // `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\nHarap sopan dan patuhi aturan.`,
-      `✅ <b>Partner ditemukan!</b> Mulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
-      buildChatKeyboard(user2IsPremium, user1Id)
-    )
+    sendPairingMessage(botToken, user1Id,
+      `✅ <b>Partner ditemukan!</b>${photoUser2 ? ' ✔️ <i>Terverifikasi</i>' : ''} Mulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
+      buildChatKeyboard(user1IsPremium, user2Id), photoUser2),
+    sendPairingMessage(botToken, user2Id,
+      `✅ <b>Partner ditemukan!</b>${photoUser1 ? ' ✔️ <i>Terverifikasi</i>' : ''} Mulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
+      buildChatKeyboard(user2IsPremium, user1Id), photoUser1)
   ]);
 }
+
+async function sendPairingMessage(botToken: string, chatId: number, text: string, replyMarkup: any, photoFileId: string | null): Promise<void> {
+  if (photoFileId) {
+    try {
+      const res = await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, photo: photoFileId, caption: text, parse_mode: 'HTML', reply_markup: replyMarkup })
+      });
+      if (res.ok) return;
+    } catch (_) { /* fallback ke teks */ }
+  }
+  await sendTelegramMessage(botToken, chatId, text, replyMarkup);
+}
+
+// ============= FOTO PROFIL & VERIFIKASI VIDEO NOTE =============
+const VERIFY_GESTURES = [
+  '✌️ Tunjukkan tanda peace (dua jari) di samping wajah',
+  '👍 Acungkan jempol di samping wajah',
+  '👋 Lambaikan tangan ke kamera',
+  '🤟 Tunjukkan tiga jari di samping wajah',
+  '☝️ Tunjuk ke atas dengan satu jari di samping wajah',
+];
+const PROFILE_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+async function tgCall(botToken: string, method: string, body: any): Promise<any> {
+  try {
+    const res = await fetch(`${TELEGRAM_API}${botToken}/${method}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    return await res.json();
+  } catch (_) { return null; }
+}
+
+async function sendProfilePhotoMenu(botToken: string, userId: number, u: any): Promise<void> {
+  const verified = !!u?.is_face_verified;
+  const hasPhoto = !!u?.profile_photo_file_id;
+  const status = u?.verification_status;
+  let text = `🖼️ <b>Foto Profil</b>\n\nFoto profilmu akan tampil ke partner saat partner ditemukan.\n\n`;
+  text += `Status verifikasi: <b>${verified ? '✅ Terverifikasi' : status === 'pending' ? '⏳ Menunggu review admin' : '❌ Belum verifikasi'}</b>\n`;
+  text += `Foto profil: <b>${hasPhoto ? 'Aktif' : 'Belum ada'}</b>`;
+  const rows: any[] = [];
+  if (status !== 'pending') rows.push([{ text: hasPhoto ? '🔄 Ganti Foto Profil' : '📷 Atur Foto Profil', callback_data: 'pp_set' }]);
+  if (hasPhoto) rows.push([{ text: '🗑️ Hapus Foto Profil', callback_data: 'pp_del' }]);
+  rows.push([{ text: '⬅️ Kembali', callback_data: 'pp_close' }]);
+  await sendTelegramMessage(botToken, userId, text, { inline_keyboard: rows });
+}
+
+// Return true jika pesan ditangani alur foto profil
+async function handleProfileFlowMessage(supabase: any, botToken: string, userId: number, message: any, flow: string): Promise<boolean> {
+  const backKb = { inline_keyboard: [[{ text: '⬅️ Batalkan', callback_data: 'pp_cancel' }]] };
+
+  if (flow === 'await_photo') {
+    if (message.document && String(message.document.mime_type || '').startsWith('image/')) {
+      await sendTelegramMessage(botToken, userId, '⚠️ Kirim sebagai <b>Foto</b> biasa (bukan file/dokumen) agar terkompres dan bisa ditampilkan ke partner.', backKb);
+      return true;
+    }
+    if (!message.photo) {
+      await sendTelegramMessage(botToken, userId, '📷 Silakan kirim <b>foto</b> untuk foto profilmu, atau tekan Batalkan.', backKb);
+      return true;
+    }
+    const p = message.photo[message.photo.length - 1];
+    if ((p.file_size || 0) > PROFILE_PHOTO_MAX_BYTES) {
+      await sendTelegramMessage(botToken, userId, `⚠️ <b>Ukuran foto terlalu besar</b> (maks 5 MB).\n\nKompres foto terlebih dahulu (perkecil resolusi atau gunakan aplikasi/situs kompres foto), lalu kirim ulang.`, backKb);
+      return true;
+    }
+    const ratio = p.width / p.height;
+    const isSquare = Math.abs(ratio - 1) <= 0.05;
+    const isWide = Math.abs(ratio - 16 / 9) <= 0.08;
+    if (!isSquare && !isWide) {
+      await sendTelegramMessage(botToken, userId, `⚠️ <b>Rasio foto tidak sesuai.</b>\n\nGunakan foto berbentuk <b>kotak (1:1)</b> atau <b>thumbnail YouTube (16:9)</b>. Crop fotomu dulu lalu kirim ulang.`, backKb);
+      return true;
+    }
+    const gesture = VERIFY_GESTURES[Math.floor(Math.random() * VERIFY_GESTURES.length)];
+    const { data: r } = await supabase.rpc('submit_profile_photo', { p_user_id: userId, p_file_id: p.file_id, p_gesture: gesture });
+    if (!r?.success) {
+      await sendTelegramMessage(botToken, userId, '⚠️ Gagal menyimpan foto, coba lagi.');
+    } else if (r.verified) {
+      await sendTelegramMessage(botToken, userId, '✅ <b>Foto profil berhasil diatur!</b>\nFoto ini akan tampil ke partner saat partner ditemukan.');
+    } else if (r.pending) {
+      await sendTelegramMessage(botToken, userId, '⏳ Foto disimpan. Verifikasimu masih direview admin; foto akan aktif setelah disetujui.');
+    } else {
+      await sendTelegramMessage(botToken, userId,
+        `🔐 <b>Verifikasi Diperlukan</b>\n\nSebelum foto profil aktif, kamu perlu verifikasi wajah sekali saja.\n\nRekam <b>Video Note (video bulat)</b> langsung dari kamera Telegram dengan:\n• Wajah terlihat jelas\n• Gerakan: <b>${gesture}</b>\n\n<i>Video yang diteruskan (forward) atau dari orang lain tidak diterima.</i>`, backKb);
+    }
+    return true;
+  }
+
+  if (flow === 'await_video') {
+    const forwarded = !!(message.forward_origin || message.forward_from || message.forward_from_chat || message.forward_date || message.forward_sender_name);
+    if (!message.video_note || forwarded || message.via_bot) {
+      await sendTelegramMessage(botToken, userId, '⚠️ Hanya menerima <b>Video Note</b> yang direkam langsung (bukan forward, bukan video biasa). Coba rekam ulang.', backKb);
+      return true;
+    }
+    const { data: r } = await supabase.rpc('submit_verification_video', { p_user_id: userId });
+    if (!r?.success) {
+      await sendTelegramMessage(botToken, userId, '⚠️ Sesi verifikasi tidak valid, mulai ulang lewat /fotoprofil.');
+      return true;
+    }
+    await sendTelegramMessage(botToken, userId, '⏳ <b>Video verifikasi terkirim!</b>\nAdmin akan meninjau secepatnya. Kamu akan diberi tahu hasilnya.');
+    const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+    if (adminChatId) {
+      const chatId = parseInt(adminChatId);
+      const uname = message.from?.username ? `@${message.from.username}` : '-';
+      await tgCall(botToken, 'sendVideoNote', { chat_id: chatId, video_note: message.video_note.file_id });
+      const sent = await tgCall(botToken, 'sendPhoto', {
+        chat_id: chatId, photo: r.photo, parse_mode: 'HTML',
+        caption: `🔐 <b>VERIFIKASI FOTO PROFIL</b>\n\n👤 User: <code>${userId}</code> (${escapeHtml(uname)})\n🤚 Gerakan diminta: <b>${escapeHtml(String(r.gesture || '-'))}</b>\n🕒 ${formatDateTimeWIB(new Date())}\n\nCocokkan wajah di video note di atas dengan foto ini.`,
+        reply_markup: { inline_keyboard: [[
+          { text: '✅ Setujui', callback_data: `pv_ok_${userId}` },
+          { text: '❌ Tolak', callback_data: `pv_rej_${userId}` }
+        ]] }
+      });
+      const mid = sent?.result?.message_id;
+      if (mid) {
+        supabase.rpc('set_verification_admin_message', { p_user_id: userId, p_message_id: mid }).then(() => {}, () => {});
+        tgCall(botToken, 'pinChatMessage', { chat_id: chatId, message_id: mid, disable_notification: false });
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
 
 // LEGACY: Keep old function name as alias for backward compatibility
 async function searchPartnerWithQueueCheck(supabase: any, botToken: string, userId: number): Promise<void> {
@@ -5643,6 +5763,80 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
+      // === FOTO PROFIL (user) ===
+      if (callbackData.startsWith('pp_')) {
+        answerCallbackQuery(botToken, query.id).catch(() => {});
+        const edit = (t: string, kb?: any) => tgCall(botToken, 'editMessageText', {
+          chat_id: userId, message_id: message?.message_id, text: t, parse_mode: 'HTML', reply_markup: kb
+        });
+        if (callbackData === 'pp_set') {
+          const { data: st } = await supabase.from('telegram_users').select('state').eq('id', userId).maybeSingle();
+          if (st?.state === 'chatting') { await edit('⚠️ Akhiri percakapan dulu untuk mengatur foto profil.'); return new Response('OK', { status: 200 }); }
+          const { data: r } = await supabase.rpc('set_profile_flow', { p_user_id: userId, p_flow: 'await_photo' });
+          if (r?.status === 'pending') {
+            await supabase.rpc('set_profile_flow', { p_user_id: userId, p_flow: null });
+            await edit('⏳ Verifikasimu masih direview admin. Tunggu hasilnya dulu ya.');
+          } else {
+            await edit(`📷 <b>Kirim Foto Profil</b>\n\nKetentuan:\n• Bentuk <b>kotak (1:1)</b> atau <b>thumbnail YouTube (16:9)</b>\n• Ukuran maksimal <b>5 MB</b> (kompres dulu jika lebih)\n• Kirim sebagai <b>Foto</b>, bukan file/dokumen\n• Wajah kamu sendiri, sopan, tanpa konten dewasa`,
+              { inline_keyboard: [[{ text: '⬅️ Batalkan', callback_data: 'pp_cancel' }]] });
+          }
+        } else if (callbackData === 'pp_del') {
+          await supabase.rpc('delete_profile_photo', { p_user_id: userId });
+          await edit('🗑️ Foto profil dihapus. Status verifikasimu tetap tersimpan.');
+        } else if (callbackData === 'pp_cancel') {
+          await supabase.rpc('set_profile_flow', { p_user_id: userId, p_flow: null });
+          await edit('↩️ Pengaturan foto profil dibatalkan. Ketik /fotoprofil untuk membuka lagi.');
+        } else {
+          tgCall(botToken, 'deleteMessage', { chat_id: userId, message_id: message?.message_id });
+        }
+        return new Response('OK', { status: 200 });
+      }
+
+      // === ADMIN: verifikasi foto profil ===
+      if (callbackData.startsWith('pv_')) {
+        const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+        if (!adminChatId || message?.chat?.id?.toString() !== adminChatId) {
+          await answerCallbackQuery(botToken, query.id, '⛔ Hanya admin.', true);
+          return new Response('OK', { status: 200 });
+        }
+        const m = callbackData.match(/^pv_(ok|rej|r1|r2|r3|back)_(\d+)$/);
+        if (!m) return new Response('OK', { status: 200 });
+        const act = m[1]; const targetId = parseInt(m[2]);
+        const chatId = message.chat.id; const mid = message.message_id;
+        const baseCaption = message.caption || '';
+        if (act === 'rej' || act === 'back') {
+          answerCallbackQuery(botToken, query.id).catch(() => {});
+          const kb = act === 'rej'
+            ? { inline_keyboard: [
+                [{ text: '😶 Wajah tidak tampil jelas', callback_data: `pv_r1_${targetId}` }],
+                [{ text: '🤚 Gerakan tidak sesuai', callback_data: `pv_r2_${targetId}` }],
+                [{ text: '📋 Tidak sesuai instruksi lainnya', callback_data: `pv_r3_${targetId}` }],
+                [{ text: '⬅️ Kembali', callback_data: `pv_back_${targetId}` }]] }
+            : { inline_keyboard: [[{ text: '✅ Setujui', callback_data: `pv_ok_${targetId}` }, { text: '❌ Tolak', callback_data: `pv_rej_${targetId}` }]] };
+          await tgCall(botToken, 'editMessageReplyMarkup', { chat_id: chatId, message_id: mid, reply_markup: kb });
+          return new Response('OK', { status: 200 });
+        }
+        const isOk = act === 'ok';
+        const { data: r } = await supabase.rpc('resolve_face_verification', { p_user_id: targetId, p_action: isOk ? 'approve' : 'reject' });
+        if (!r?.success) {
+          await answerCallbackQuery(botToken, query.id, 'Sudah diproses sebelumnya.', true);
+          tgCall(botToken, 'unpinChatMessage', { chat_id: chatId, message_id: mid });
+          return new Response('OK', { status: 200 });
+        }
+        answerCallbackQuery(botToken, query.id, isOk ? '✅ Disetujui' : '❌ Ditolak').catch(() => {});
+        const reasons: Record<string, string> = { r1: 'Wajah tidak tampil jelas', r2: 'Gerakan tidak sesuai', r3: 'Tidak sesuai instruksi lainnya' };
+        const reason = reasons[act] || '';
+        await Promise.all([
+          tgCall(botToken, 'editMessageCaption', { chat_id: chatId, message_id: mid,
+            caption: `${baseCaption}\n\n${isOk ? '✅ DISETUJUI' : `❌ DITOLAK: ${reason}`} • ${formatDateTimeWIB(new Date())}`, reply_markup: { inline_keyboard: [] } }),
+          tgCall(botToken, 'unpinChatMessage', { chat_id: chatId, message_id: mid }),
+          sendTelegramMessage(botToken, targetId, isOk
+            ? '✅ <b>Verifikasi berhasil!</b>\nFoto profilmu sekarang aktif dan akan tampil ke partner saat partner ditemukan. Kelola lewat /fotoprofil.'
+            : `❌ <b>Verifikasi ditolak</b>\nAlasan: <b>${reason}</b>\n\nSilakan ulangi lewat /fotoprofil dan ikuti instruksi dengan benar.`)
+        ]);
+        return new Response('OK', { status: 200 });
+      }
+
       // === ADMIN: proses bonus referal ===
       if (callbackData.startsWith('admin_cashout_')) {
         const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
@@ -6940,7 +7134,7 @@ Deno.serve(async (req) => {
     // UBAH BAGIAN INI: Tambahkan retry sederhana atau error blocking
     const { data: dbUser, error: dbError } = await supabase
       .from('telegram_users')
-      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at')
+      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at, profile_flow, is_face_verified, verification_status, profile_photo_file_id')
       .eq('id', userId)
       .maybeSingle();
 
@@ -6953,6 +7147,21 @@ Deno.serve(async (req) => {
 
     if (dbUser) {
       currentUser = dbUser;
+    }
+
+    // === FOTO PROFIL: command & alur (tidak aktif saat chatting) ===
+    if (text === '/fotoprofil') {
+      if (dbUser?.state === 'chatting') {
+        await sendTelegramMessage(botToken, userId, '⚠️ Akhiri percakapan dulu untuk mengatur foto profil.');
+      } else {
+        await sendProfilePhotoMenu(botToken, userId, dbUser);
+      }
+      return new Response('OK', { status: 200 });
+    }
+    if (dbUser?.profile_flow && dbUser.state !== 'chatting' && !(text && text.startsWith('/'))) {
+      if (await handleProfileFlowMessage(supabase, botToken, userId, message, dbUser.profile_flow)) {
+        return new Response('OK', { status: 200 });
+      }
     }
 
     // === HANDLER ISIAN DATA E-WALLET (BONUS REFERAL) ===
