@@ -7135,7 +7135,20 @@ Deno.serve(async (req) => {
     const { data: dbUser, error: dbError } = await supabase
       .from('telegram_users')
       .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at, profile_flow, is_face_verified, verification_status, profile_photo_file_id')
-...
+      .eq('id', userId)
+      .maybeSingle();
+
+    // JIKA DB ERROR: Jangan lanjut ke logika Welcome! 
+    // Return 500 agar Telegram mencoba mengirim ulang pesan (webhook retry)
+    if (dbError) {
+      console.error('[CRITICAL] DB Error fetching user:', dbError.message);
+      return new Response('Database Error', { status: 500 });
+    }
+
+    if (dbUser) {
+      currentUser = dbUser;
+    }
+
     // === FOTO PROFIL: command & alur (tidak aktif saat chatting) ===
     if (text === '/fotoprofil') {
       if (dbUser?.state === 'chatting') {
