@@ -5763,6 +5763,80 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
+      // === FOTO PROFIL (user) ===
+      if (callbackData.startsWith('pp_')) {
+        answerCallbackQuery(botToken, query.id).catch(() => {});
+        const edit = (t: string, kb?: any) => tgCall(botToken, 'editMessageText', {
+          chat_id: userId, message_id: message?.message_id, text: t, parse_mode: 'HTML', reply_markup: kb
+        });
+        if (callbackData === 'pp_set') {
+          const { data: st } = await supabase.from('telegram_users').select('state').eq('id', userId).maybeSingle();
+          if (st?.state === 'chatting') { await edit('⚠️ Akhiri percakapan dulu untuk mengatur foto profil.'); return new Response('OK', { status: 200 }); }
+          const { data: r } = await supabase.rpc('set_profile_flow', { p_user_id: userId, p_flow: 'await_photo' });
+          if (r?.status === 'pending') {
+            await supabase.rpc('set_profile_flow', { p_user_id: userId, p_flow: null });
+            await edit('⏳ Verifikasimu masih direview admin. Tunggu hasilnya dulu ya.');
+          } else {
+            await edit(`📷 <b>Kirim Foto Profil</b>\n\nKetentuan:\n• Bentuk <b>kotak (1:1)</b> atau <b>thumbnail YouTube (16:9)</b>\n• Ukuran maksimal <b>5 MB</b> (kompres dulu jika lebih)\n• Kirim sebagai <b>Foto</b>, bukan file/dokumen\n• Wajah kamu sendiri, sopan, tanpa konten dewasa`,
+              { inline_keyboard: [[{ text: '⬅️ Batalkan', callback_data: 'pp_cancel' }]] });
+          }
+        } else if (callbackData === 'pp_del') {
+          await supabase.rpc('delete_profile_photo', { p_user_id: userId });
+          await edit('🗑️ Foto profil dihapus. Status verifikasimu tetap tersimpan.');
+        } else if (callbackData === 'pp_cancel') {
+          await supabase.rpc('set_profile_flow', { p_user_id: userId, p_flow: null });
+          await edit('↩️ Pengaturan foto profil dibatalkan. Ketik /fotoprofil untuk membuka lagi.');
+        } else {
+          tgCall(botToken, 'deleteMessage', { chat_id: userId, message_id: message?.message_id });
+        }
+        return new Response('OK', { status: 200 });
+      }
+
+      // === ADMIN: verifikasi foto profil ===
+      if (callbackData.startsWith('pv_')) {
+        const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+        if (!adminChatId || message?.chat?.id?.toString() !== adminChatId) {
+          await answerCallbackQuery(botToken, query.id, '⛔ Hanya admin.', true);
+          return new Response('OK', { status: 200 });
+        }
+        const m = callbackData.match(/^pv_(ok|rej|r1|r2|r3|back)_(\d+)$/);
+        if (!m) return new Response('OK', { status: 200 });
+        const act = m[1]; const targetId = parseInt(m[2]);
+        const chatId = message.chat.id; const mid = message.message_id;
+        const baseCaption = message.caption || '';
+        if (act === 'rej' || act === 'back') {
+          answerCallbackQuery(botToken, query.id).catch(() => {});
+          const kb = act === 'rej'
+            ? { inline_keyboard: [
+                [{ text: '😶 Wajah tidak tampil jelas', callback_data: `pv_r1_${targetId}` }],
+                [{ text: '🤚 Gerakan tidak sesuai', callback_data: `pv_r2_${targetId}` }],
+                [{ text: '📋 Tidak sesuai instruksi lainnya', callback_data: `pv_r3_${targetId}` }],
+                [{ text: '⬅️ Kembali', callback_data: `pv_back_${targetId}` }]] }
+            : { inline_keyboard: [[{ text: '✅ Setujui', callback_data: `pv_ok_${targetId}` }, { text: '❌ Tolak', callback_data: `pv_rej_${targetId}` }]] };
+          await tgCall(botToken, 'editMessageReplyMarkup', { chat_id: chatId, message_id: mid, reply_markup: kb });
+          return new Response('OK', { status: 200 });
+        }
+        const isOk = act === 'ok';
+        const { data: r } = await supabase.rpc('resolve_face_verification', { p_user_id: targetId, p_action: isOk ? 'approve' : 'reject' });
+        if (!r?.success) {
+          await answerCallbackQuery(botToken, query.id, 'Sudah diproses sebelumnya.', true);
+          tgCall(botToken, 'unpinChatMessage', { chat_id: chatId, message_id: mid });
+          return new Response('OK', { status: 200 });
+        }
+        answerCallbackQuery(botToken, query.id, isOk ? '✅ Disetujui' : '❌ Ditolak').catch(() => {});
+        const reasons: Record<string, string> = { r1: 'Wajah tidak tampil jelas', r2: 'Gerakan tidak sesuai', r3: 'Tidak sesuai instruksi lainnya' };
+        const reason = reasons[act] || '';
+        await Promise.all([
+          tgCall(botToken, 'editMessageCaption', { chat_id: chatId, message_id: mid,
+            caption: `${baseCaption}\n\n${isOk ? '✅ DISETUJUI' : `❌ DITOLAK: ${reason}`} • ${formatDateTimeWIB(new Date())}`, reply_markup: { inline_keyboard: [] } }),
+          tgCall(botToken, 'unpinChatMessage', { chat_id: chatId, message_id: mid }),
+          sendTelegramMessage(botToken, targetId, isOk
+            ? '✅ <b>Verifikasi berhasil!</b>\nFoto profilmu sekarang aktif dan akan tampil ke partner saat partner ditemukan. Kelola lewat /fotoprofil.'
+            : `❌ <b>Verifikasi ditolak</b>\nAlasan: <b>${reason}</b>\n\nSilakan ulangi lewat /fotoprofil dan ikuti instruksi dengan benar.`)
+        ]);
+        return new Response('OK', { status: 200 });
+      }
+
       // === ADMIN: proses bonus referal ===
       if (callbackData.startsWith('admin_cashout_')) {
         const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
@@ -7060,19 +7134,21 @@ Deno.serve(async (req) => {
     // UBAH BAGIAN INI: Tambahkan retry sederhana atau error blocking
     const { data: dbUser, error: dbError } = await supabase
       .from('telegram_users')
-      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at')
-      .eq('id', userId)
-      .maybeSingle();
-
-    // JIKA DB ERROR: Jangan lanjut ke logika Welcome! 
-    // Return 500 agar Telegram mencoba mengirim ulang pesan (webhook retry)
-    if (dbError) {
-      console.error('[CRITICAL] DB Error fetching user:', dbError.message);
-      return new Response('Database Error', { status: 500 });
+      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at, profile_flow, is_face_verified, verification_status, profile_photo_file_id')
+...
+    // === FOTO PROFIL: command & alur (tidak aktif saat chatting) ===
+    if (text === '/fotoprofil') {
+      if (dbUser?.state === 'chatting') {
+        await sendTelegramMessage(botToken, userId, '⚠️ Akhiri percakapan dulu untuk mengatur foto profil.');
+      } else {
+        await sendProfilePhotoMenu(botToken, userId, dbUser);
+      }
+      return new Response('OK', { status: 200 });
     }
-
-    if (dbUser) {
-      currentUser = dbUser;
+    if (dbUser?.profile_flow && dbUser.state !== 'chatting' && !(text && text.startsWith('/'))) {
+      if (await handleProfileFlowMessage(supabase, botToken, userId, message, dbUser.profile_flow)) {
+        return new Response('OK', { status: 200 });
+      }
     }
 
     // === HANDLER ISIAN DATA E-WALLET (BONUS REFERAL) ===
