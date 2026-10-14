@@ -22,6 +22,13 @@
       "when": 1791942031233,
       "tag": "0002_fast_response_db_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791951147292,
+      "tag": "0003_fast_response_rolling_window",
+      "breakpoints": true
     }
   ]
 }
