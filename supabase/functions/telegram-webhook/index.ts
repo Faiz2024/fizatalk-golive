@@ -3799,7 +3799,7 @@ async function sendPairingNotifications(
   try {
     const { data: usersData } = await supabase
       .from('telegram_users')
-      .select('id, gender, profile_photo_file_id')
+      .select('id, gender, profile_photo_file_id, total_response_time_seconds, total_response_count')
       .in('id', [user1Id, user2Id]);
 
     if (usersData) {
@@ -3809,6 +3809,8 @@ async function sendPairingNotifications(
       if (u2?.gender) genderUser2 = u2.gender;
       photoUser1 = u1?.profile_photo_file_id ?? null;
       photoUser2 = u2?.profile_photo_file_id ?? null;
+      const isFast = (u: any) => (u?.total_response_count ?? 0) >= 10 && (u.total_response_time_seconds / u.total_response_count) < 60;
+      fastUser1 = isFast(u1); fastUser2 = isFast(u2);
     }
   } catch (e) {
     console.error('Failed fetching gender for pairing msg', e);
@@ -3821,10 +3823,10 @@ async function sendPairingNotifications(
   // Send notifications in parallel (foto profil partner jika ada & terverifikasi)
   await Promise.all([
     sendPairingMessage(botToken, user1Id,
-      `✅ <b>Partner ditemukan!</b>${photoUser2 ? ' ✔️ <i>Terverifikasi</i>' : ''} Mulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
+      `✅ <b>Partner ditemukan!</b>${photoUser2 ? ' ✔️ <i>Terverifikasi</i>' : ''}${fastUser2 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
       buildChatKeyboard(user1IsPremium, user2Id), photoUser2),
     sendPairingMessage(botToken, user2Id,
-      `✅ <b>Partner ditemukan!</b>${photoUser1 ? ' ✔️ <i>Terverifikasi</i>' : ''} Mulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
+      `✅ <b>Partner ditemukan!</b>${photoUser1 ? ' ✔️ <i>Terverifikasi</i>' : ''}${fastUser1 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
       buildChatKeyboard(user2IsPremium, user1Id), photoUser1)
   ]);
 }
@@ -4237,6 +4239,37 @@ interface EndChatResult {
   } | null;
 }
 
+// ===== FAST RESPON TRACKING (in-memory, flush batch via RPC hemat) =====
+const FR_MAX_GAP = 600; // abaikan jeda > 10 menit
+const FR_FLUSH_AT = 5;
+const frPending = new Map<number, number>(); // recipientId -> unix detik pesan partner pertama yg belum dibalas
+const frStats = new Map<number, { s: number; c: number }>();
+function frFlush(supabase: any, uid: number) {
+  const st = frStats.get(uid);
+  if (!st || st.c === 0) return;
+  frStats.delete(uid);
+  supabase.rpc('add_response_stats', { p_user_id: uid, p_seconds: st.s, p_count: st.c })
+    .then(({ error }: any) => { if (error) console.error('[FR] flush', error.message); });
+}
+function frTrack(supabase: any, senderId: number, partnerId: number, ts: number) {
+  const waitFrom = frPending.get(senderId);
+  if (waitFrom !== undefined) {
+    frPending.delete(senderId);
+    const gap = ts - waitFrom;
+    if (gap >= 0 && gap <= FR_MAX_GAP) {
+      const st = frStats.get(senderId) ?? { s: 0, c: 0 };
+      st.s += gap; st.c += 1; frStats.set(senderId, st);
+      if (st.c >= FR_FLUSH_AT) frFlush(supabase, senderId);
+    }
+  }
+  if (!frPending.has(partnerId)) frPending.set(partnerId, ts);
+  if (frPending.size > 20000) frPending.clear();
+}
+function frEnd(supabase: any, a: number, b?: number | null) {
+  frPending.delete(a); frFlush(supabase, a);
+  if (b) { frPending.delete(b); frFlush(supabase, b); }
+}
+
 async function endChat(supabase: any, botToken: string, userId: number): Promise<boolean> {
 
 
@@ -4244,6 +4277,7 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   const { data, error } = await supabase.rpc('end_chat_comprehensive', {
     p_user_id: userId
   });
+  try { frEnd(supabase, userId, (data as any)?.partner_id ?? null); } catch (_) { /* ignore */ }
 
   if (error) {
     console.error('[END_CHAT_FAIL] rpc_error', error);
@@ -7213,6 +7247,7 @@ Deno.serve(async (req) => {
     // ************************************************
     if (currentUser?.state === 'chatting' && currentUser?.partner_id && message.message_id) {
       const partnerId = currentUser.partner_id as number;
+      if (!(text && text.startsWith('/'))) frTrack(supabase, userId, partnerId, message.date || Math.floor(Date.now()/1000));
 
       let isCommand = false;
 
