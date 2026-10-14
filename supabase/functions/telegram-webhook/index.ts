@@ -7223,7 +7223,7 @@ Deno.serve(async (req) => {
     // ************************************************
     if (currentUser?.state === 'chatting' && currentUser?.partner_id && message.message_id) {
       const partnerId = currentUser.partner_id as number;
-      if (!(text && text.startsWith('/'))) frTrack(supabase, userId, partnerId, message.date || Math.floor(Date.now()/1000));
+      if (!(text && text.startsWith('/'))) frTrack(supabase, userId, partnerId);
 
       let isCommand = false;
 
