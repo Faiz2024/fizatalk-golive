@@ -3810,7 +3810,7 @@ async function sendPairingNotifications(
       if (u2?.gender) genderUser2 = u2.gender;
       photoUser1 = u1?.profile_photo_file_id ?? null;
       photoUser2 = u2?.profile_photo_file_id ?? null;
-      const isFast = (u: any) => (u?.total_response_count ?? 0) >= 10 && (u.total_response_time_seconds / u.total_response_count) < 60;
+      const isFast = (u: any) => (u?.total_response_count ?? 0) >= 30 && (u.total_response_time_seconds / u.total_response_count) < 25;
       fastUser1 = isFast(u1); fastUser2 = isFast(u2);
     }
   } catch (e) {
