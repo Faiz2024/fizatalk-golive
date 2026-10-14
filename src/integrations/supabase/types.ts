@@ -767,6 +767,8 @@ export type Database = {
           state: Database["public"]["Enums"]["user_state"]
           target_gender: string | null
           target_location: string | null
+          total_response_count: number
+          total_response_time_seconds: number
           unacknowledged_reports_count: number | null
           username: string | null
           verification_admin_msg_id: number | null
@@ -816,6 +818,8 @@ export type Database = {
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
           target_location?: string | null
+          total_response_count?: number
+          total_response_time_seconds?: number
           unacknowledged_reports_count?: number | null
           username?: string | null
           verification_admin_msg_id?: number | null
@@ -865,6 +869,8 @@ export type Database = {
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
           target_location?: string | null
+          total_response_count?: number
+          total_response_time_seconds?: number
           unacknowledged_reports_count?: number | null
           username?: string | null
           verification_admin_msg_id?: number | null
@@ -1045,6 +1051,10 @@ export type Database = {
       }
     }
     Functions: {
+      add_response_stats: {
+        Args: { p_count: number; p_seconds: number; p_user_id: number }
+        Returns: undefined
+      }
       admin_process_media_report: {
         Args: { p_action: string; p_sender_id: number }
         Returns: Json
