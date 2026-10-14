@@ -740,6 +740,7 @@ export type Database = {
           is_tiktok_mode: boolean | null
           last_active: string
           last_channel_invite_sent_at: string | null
+          last_incoming_msg_at: string | null
           last_negative_report_at: string | null
           last_partners: number[] | null
           last_penalty_decay_at: string | null
@@ -791,6 +792,7 @@ export type Database = {
           is_tiktok_mode?: boolean | null
           last_active?: string
           last_channel_invite_sent_at?: string | null
+          last_incoming_msg_at?: string | null
           last_negative_report_at?: string | null
           last_partners?: number[] | null
           last_penalty_decay_at?: string | null
@@ -842,6 +844,7 @@ export type Database = {
           is_tiktok_mode?: boolean | null
           last_active?: string
           last_channel_invite_sent_at?: string | null
+          last_incoming_msg_at?: string | null
           last_negative_report_at?: string | null
           last_partners?: number[] | null
           last_penalty_decay_at?: string | null
@@ -1159,6 +1162,10 @@ export type Database = {
         Returns: Json
       }
       prune_bot_logs: { Args: never; Returns: Json }
+      record_chat_response: {
+        Args: { p_partner_id: number; p_sender_id: number }
+        Returns: undefined
+      }
       register_referral: {
         Args: { p_new_user_id: number; p_referrer_id: number }
         Returns: Json

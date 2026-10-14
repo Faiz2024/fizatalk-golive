@@ -15,6 +15,13 @@
       "when": 1791940137100,
       "tag": "0001_fast_response_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791942031233,
+      "tag": "0002_fast_response_db_tracking",
+      "breakpoints": true
     }
   ]
 }

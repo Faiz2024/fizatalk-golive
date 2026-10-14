@@ -4240,35 +4240,11 @@ interface EndChatResult {
   } | null;
 }
 
-// ===== FAST RESPON TRACKING (in-memory, flush batch via RPC hemat) =====
-const FR_MAX_GAP = 600; // abaikan jeda > 10 menit
-const FR_FLUSH_AT = 5;
-const frPending = new Map<number, number>(); // recipientId -> unix detik pesan partner pertama yg belum dibalas
-const frStats = new Map<number, { s: number; c: number }>();
-function frFlush(supabase: any, uid: number) {
-  const st = frStats.get(uid);
-  if (!st || st.c === 0) return;
-  frStats.delete(uid);
-  supabase.rpc('add_response_stats', { p_user_id: uid, p_seconds: st.s, p_count: st.c })
-    .then(({ error }: any) => { if (error) console.error('[FR] flush', error.message); });
-}
-function frTrack(supabase: any, senderId: number, partnerId: number, ts: number) {
-  const waitFrom = frPending.get(senderId);
-  if (waitFrom !== undefined) {
-    frPending.delete(senderId);
-    const gap = ts - waitFrom;
-    if (gap >= 0 && gap <= FR_MAX_GAP) {
-      const st = frStats.get(senderId) ?? { s: 0, c: 0 };
-      st.s += gap; st.c += 1; frStats.set(senderId, st);
-      if (st.c >= FR_FLUSH_AT) frFlush(supabase, senderId);
-    }
-  }
-  if (!frPending.has(partnerId)) frPending.set(partnerId, ts);
-  if (frPending.size > 20000) frPending.clear();
-}
-function frEnd(supabase: any, a: number, b?: number | null) {
-  frPending.delete(a); frFlush(supabase, a);
-  if (b) { frPending.delete(b); frFlush(supabase, b); }
+// ===== FAST RESPON TRACKING (persisten di DB via 1 RPC atomik, non-blocking) =====
+function frTrack(supabase: any, senderId: number, partnerId: number) {
+  const p = supabase.rpc('record_chat_response', { p_sender_id: senderId, p_partner_id: partnerId })
+    .then(({ error }: any) => { if (error) console.error('[FR] record', error.message); });
+  try { (globalThis as any).EdgeRuntime?.waitUntil?.(p); } catch (_) { /* ignore */ }
 }
 
 async function endChat(supabase: any, botToken: string, userId: number): Promise<boolean> {
@@ -4278,7 +4254,6 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   const { data, error } = await supabase.rpc('end_chat_comprehensive', {
     p_user_id: userId
   });
-  try { frEnd(supabase, userId, (data as any)?.partner_id ?? null); } catch (_) { /* ignore */ }
 
   if (error) {
     console.error('[END_CHAT_FAIL] rpc_error', error);
@@ -7248,7 +7223,7 @@ Deno.serve(async (req) => {
     // ************************************************
     if (currentUser?.state === 'chatting' && currentUser?.partner_id && message.message_id) {
       const partnerId = currentUser.partner_id as number;
-      if (!(text && text.startsWith('/'))) frTrack(supabase, userId, partnerId, message.date || Math.floor(Date.now()/1000));
+      if (!(text && text.startsWith('/'))) frTrack(supabase, userId, partnerId);
 
       let isCommand = false;
 
