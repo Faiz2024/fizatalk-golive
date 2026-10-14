@@ -3794,6 +3794,7 @@ async function sendPairingNotifications(
   let genderUser2 = 'cowok';
 
   let photoUser1: string | null = null;
+  let fastUser1 = false; let fastUser2 = false;
   let photoUser2: string | null = null;
 
   try {
