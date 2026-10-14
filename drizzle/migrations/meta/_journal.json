@@ -8,6 +8,13 @@
       "when": 1791855609990,
       "tag": "0000_profile_photo_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791940137100,
+      "tag": "0001_fast_response_stats",
+      "breakpoints": true
     }
   ]
 }
