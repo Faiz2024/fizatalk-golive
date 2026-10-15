@@ -7479,9 +7479,15 @@ Deno.serve(async (req) => {
       if (!envelope?.ok) {
         if (envelope?.reason === 'partner_disconnected') {
           // Partner baru saja keluar (stop/next) tepat sebelum pesan ini diproses.
-          // Jangan teruskan pesan; bersihkan state pengirim dan beri tahu.
-          await endChat(supabase, botToken, userId);
-          await sendTelegramMessage(botToken, userId, '⚠️ Partner telah mengakhiri obrolan. Pesan kamu tidak terkirim.');
+          // Jangan teruskan pesan; reset state pengirim secara guarded dan beri tahu.
+          await supabase
+            .from('telegram_users')
+            .update({ state: 'idle', partner_id: null })
+            .eq('id', userId)
+            .eq('state', 'chatting');
+          await sendTelegramMessage(botToken, userId,
+            '⚠️ Partner telah mengakhiri obrolan. Pesan kamu tidak terkirim.',
+            { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] });
         }
         // reason 'not_chatting': state berubah di tengah jalan — abaikan pesan dengan aman.
         return new Response('OK', { status: 200 });
