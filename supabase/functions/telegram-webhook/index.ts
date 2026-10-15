@@ -7469,11 +7469,31 @@ Deno.serve(async (req) => {
 
 
 
-      // === CEK STATUS TIKTOK MODE PARTNER (Digunakan oleh Blok A, Stiker, dan B) ===
-      const { data: partnerSettings } = await supabase.rpc('get_partner_settings', {
-        p_partner_id: partnerId
+      // === VALIDASI PASANGAN + STATUS TIKTOK MODE PARTNER (1 RPC atomik) ===
+      // get_chat_envelope memvalidasi state timbal balik (u.partner_id = p.id AND p.partner_id = u.id)
+      // sekaligus mengambil mode Live partner — menggantikan RPC get_partner_settings terpisah.
+      const { data: envelope } = await supabase.rpc('get_chat_envelope', {
+        p_user_id: userId
       });
-      const isPartnerInTikTokMode = partnerSettings?.is_tiktok_mode || false;
+
+      if (!envelope?.ok) {
+        if (envelope?.reason === 'partner_disconnected') {
+          // Partner baru saja keluar (stop/next) tepat sebelum pesan ini diproses.
+          // Jangan teruskan pesan; reset state pengirim secara guarded dan beri tahu.
+          await supabase
+            .from('telegram_users')
+            .update({ state: 'idle', partner_id: null })
+            .eq('id', userId)
+            .eq('state', 'chatting');
+          await sendTelegramMessage(botToken, userId,
+            '⚠️ Partner telah mengakhiri obrolan. Pesan kamu tidak terkirim.',
+            { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] });
+        }
+        // reason 'not_chatting': state berubah di tengah jalan — abaikan pesan dengan aman.
+        return new Response('OK', { status: 200 });
+      }
+
+      const isPartnerInTikTokMode = envelope?.partner_tiktok_mode || false;
 
       // === LOGIKA HANDLER REPLY / BALAS PESAN (UPDATED) ===
 
