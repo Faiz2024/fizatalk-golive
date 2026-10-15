@@ -5784,7 +5784,7 @@ Deno.serve(async (req) => {
             await supabase.rpc('set_profile_flow', { p_user_id: userId, p_flow: null });
             await edit('⏳ Verifikasimu masih direview admin. Tunggu hasilnya dulu ya.');
           } else {
-            await edit(`📷 <b>Kirim Foto Profil</b>\n\nKetentuan:\n• Bentuk <b>kotak (1:1)</b> atau <b>thumbnail YouTube (16:9)</b>\n• Ukuran maksimal <b>5 MB</b> (kompres dulu jika lebih)\n• Kirim sebagai <b>Foto</b>, bukan file/dokumen\n• Wajah kamu sendiri, sopan, tanpa konten dewasa`,
+            await edit(`📷 <b>Kirim Foto Profil</b>\n\nKetentuan:\n• Ukuran maksimal <b>5 MB</b> (kompres dulu jika lebih)\n• Kirim sebagai <b>Foto</b>, bukan file/dokumen\n• Wajah kamu sendiri, sopan, tanpa konten dewasa`,
               { inline_keyboard: [[{ text: '⬅️ Batalkan', callback_data: 'pp_cancel' }]] });
           }
         } else if (callbackData === 'pp_del') {
