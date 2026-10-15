@@ -5834,8 +5834,11 @@ Deno.serve(async (req) => {
         const reasons: Record<string, string> = { r1: 'Wajah tidak tampil jelas', r2: 'Gerakan tidak sesuai', r3: 'Tidak sesuai instruksi lainnya' };
         const reason = reasons[act] || '';
         await Promise.all([
-          tgCall(botToken, 'editMessageCaption', { chat_id: chatId, message_id: mid,
-            caption: `${baseCaption}\n\n${isOk ? '✅ DISETUJUI' : `❌ DITOLAK: ${reason}`} • ${formatDateTimeWIB(new Date())}`, reply_markup: { inline_keyboard: [] } }),
+          message.video_note
+            ? tgCall(botToken, 'editMessageReplyMarkup', { chat_id: chatId, message_id: mid,
+                reply_markup: { inline_keyboard: [[{ text: `${isOk ? '✅ DISETUJUI' : `❌ DITOLAK: ${reason}`} • ${formatDateTimeWIB(new Date())}`, callback_data: 'noop' }]] } })
+            : tgCall(botToken, 'editMessageCaption', { chat_id: chatId, message_id: mid,
+                caption: `${baseCaption}\n\n${isOk ? '✅ DISETUJUI' : `❌ DITOLAK: ${reason}`} • ${formatDateTimeWIB(new Date())}`, reply_markup: { inline_keyboard: [] } }),
           tgCall(botToken, 'unpinChatMessage', { chat_id: chatId, message_id: mid }),
           sendTelegramMessage(botToken, targetId, isOk
             ? '✅ <b>Verifikasi berhasil!</b>\nFoto profilmu sekarang aktif dan akan tampil ke partner saat partner ditemukan. Kelola lewat /fotoprofil.'
