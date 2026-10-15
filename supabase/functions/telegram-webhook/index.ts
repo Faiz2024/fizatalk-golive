@@ -3896,13 +3896,6 @@ async function handleProfileFlowMessage(supabase: any, botToken: string, userId:
       await sendTelegramMessage(botToken, userId, `⚠️ <b>Ukuran foto terlalu besar</b> (maks 5 MB).\n\nKompres foto terlebih dahulu (perkecil resolusi atau gunakan aplikasi/situs kompres foto), lalu kirim ulang.`, backKb);
       return true;
     }
-    const ratio = p.width / p.height;
-    const isSquare = Math.abs(ratio - 1) <= 0.05;
-    const isWide = Math.abs(ratio - 16 / 9) <= 0.08;
-    if (!isSquare && !isWide) {
-      await sendTelegramMessage(botToken, userId, `⚠️ <b>Rasio foto tidak sesuai.</b>\n\nGunakan foto berbentuk <b>kotak (1:1)</b> atau <b>thumbnail YouTube (16:9)</b>. Crop fotomu dulu lalu kirim ulang.`, backKb);
-      return true;
-    }
     const gesture = VERIFY_GESTURES[Math.floor(Math.random() * VERIFY_GESTURES.length)];
     const { data: r } = await supabase.rpc('submit_profile_photo', { p_user_id: userId, p_file_id: p.file_id, p_gesture: gesture });
     if (!r?.success) {
@@ -3934,10 +3927,14 @@ async function handleProfileFlowMessage(supabase: any, botToken: string, userId:
     if (adminChatId) {
       const chatId = parseInt(adminChatId);
       const uname = message.from?.username ? `@${message.from.username}` : '-';
-      await tgCall(botToken, 'sendVideoNote', { chat_id: chatId, video_note: message.video_note.file_id });
-      const sent = await tgCall(botToken, 'sendPhoto', {
-        chat_id: chatId, photo: r.photo, parse_mode: 'HTML',
-        caption: `🔐 <b>VERIFIKASI FOTO PROFIL</b>\n\n👤 User: <code>${userId}</code> (${escapeHtml(uname)})\n🤚 Gerakan diminta: <b>${escapeHtml(String(r.gesture || '-'))}</b>\n🕒 ${formatDateTimeWIB(new Date())}\n\nCocokkan wajah di video note di atas dengan foto ini.`,
+      // Video note tidak mendukung caption: kirim info sebagai teks, lalu video note dengan tombol (reply ke info)
+      const info = await tgCall(botToken, 'sendMessage', {
+        chat_id: chatId, parse_mode: 'HTML',
+        text: `🔐 <b>VERIFIKASI WAJAH</b>\n\n👤 User: <code>${userId}</code> (${escapeHtml(uname)})\n🤚 Gerakan diminta: <b>${escapeHtml(String(r.gesture || '-'))}</b>\n🕒 ${formatDateTimeWIB(new Date())}\n\nPeriksa video note di bawah: wajah jelas & gerakan sesuai.`
+      });
+      const sent = await tgCall(botToken, 'sendVideoNote', {
+        chat_id: chatId, video_note: message.video_note.file_id,
+        ...(info?.result?.message_id ? { reply_parameters: { message_id: info.result.message_id, allow_sending_without_reply: true } } : {}),
         reply_markup: { inline_keyboard: [[
           { text: '✅ Setujui', callback_data: `pv_ok_${userId}` },
           { text: '❌ Tolak', callback_data: `pv_rej_${userId}` }
@@ -5837,8 +5834,11 @@ Deno.serve(async (req) => {
         const reasons: Record<string, string> = { r1: 'Wajah tidak tampil jelas', r2: 'Gerakan tidak sesuai', r3: 'Tidak sesuai instruksi lainnya' };
         const reason = reasons[act] || '';
         await Promise.all([
-          tgCall(botToken, 'editMessageCaption', { chat_id: chatId, message_id: mid,
-            caption: `${baseCaption}\n\n${isOk ? '✅ DISETUJUI' : `❌ DITOLAK: ${reason}`} • ${formatDateTimeWIB(new Date())}`, reply_markup: { inline_keyboard: [] } }),
+          message.video_note
+            ? tgCall(botToken, 'editMessageReplyMarkup', { chat_id: chatId, message_id: mid,
+                reply_markup: { inline_keyboard: [[{ text: `${isOk ? '✅ DISETUJUI' : `❌ DITOLAK: ${reason}`} • ${formatDateTimeWIB(new Date())}`, callback_data: 'noop' }]] } })
+            : tgCall(botToken, 'editMessageCaption', { chat_id: chatId, message_id: mid,
+                caption: `${baseCaption}\n\n${isOk ? '✅ DISETUJUI' : `❌ DITOLAK: ${reason}`} • ${formatDateTimeWIB(new Date())}`, reply_markup: { inline_keyboard: [] } }),
           tgCall(botToken, 'unpinChatMessage', { chat_id: chatId, message_id: mid }),
           sendTelegramMessage(botToken, targetId, isOk
             ? '✅ <b>Verifikasi berhasil!</b>\nFoto profilmu sekarang aktif dan akan tampil ke partner saat partner ditemukan. Kelola lewat /fotoprofil.'
