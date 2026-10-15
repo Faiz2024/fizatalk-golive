@@ -1120,6 +1120,7 @@ export type Database = {
       }
       generate_unique_payment_code: { Args: never; Returns: number }
       get_admin_dashboard_stats: { Args: { p_force?: boolean }; Returns: Json }
+      get_chat_envelope: { Args: { p_user_id: number }; Returns: Json }
       get_partner_settings: { Args: { p_partner_id: number }; Returns: Json }
       get_referral_cashout_amount: { Args: never; Returns: number }
       get_referral_stats: { Args: never; Returns: Json }

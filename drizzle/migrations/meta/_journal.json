@@ -29,6 +29,13 @@
       "when": 1791951147292,
       "tag": "0003_fast_response_rolling_window",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792047407731,
+      "tag": "0004_chat_envelope_relay_rpc",
+      "breakpoints": true
     }
   ]
 }
