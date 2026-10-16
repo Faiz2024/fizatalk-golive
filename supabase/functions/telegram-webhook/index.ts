@@ -7755,6 +7755,10 @@ Deno.serve(async (req) => {
         await sendTelegramMessage(botToken, userId, '⚠️ <b>Voice call hanya dapat diajakkan kepada partner chat aktif.</b>\n\nCari partner terlebih dahulu, lalu kirim /call.');
       }
 
+      else if (text === '/rules' || text === '/tos') {
+        // Ketentuan Penggunaan - bisa dibuka kapan saja
+        await sendTelegramMessage(botToken, userId, TOS_TEXT);
+      }
       else if (text === '/start' || text.startsWith('/start ')) {
         // Payload deep-link undangan: /start ref_<referrer_id>
         const startPayload = text.length > 7 ? text.slice(7).trim() : '';
@@ -7824,7 +7828,7 @@ Deno.serve(async (req) => {
           await sendTelegramMessage(
             botToken,
             userId,
-            '👋 <b>Selamat datang di Fizatalk!</b>\n\nPilih jenis kelamin kamu:',
+            '👋 <b>Selamat datang di Fizatalk!</b>\n\n' + TOS_TEXT + '\n\nPilih jenis kelamin kamu:',
             genderKeyboard
           );
           return new Response('OK', { status: 200 });
