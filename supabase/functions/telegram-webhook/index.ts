@@ -7781,7 +7781,8 @@ Deno.serve(async (req) => {
             first_name: message.from.first_name,
             username: message.from.username,
             state: 'idle',
-            coins: 0
+            coins: 0,
+            tos_version_seen: 1 // User baru melihat ketentuan di pesan sambutan /start
           });
 
           // Catat undangan (hanya untuk user yang benar-benar baru)
@@ -7803,7 +7804,7 @@ Deno.serve(async (req) => {
           await sendTelegramMessage(
             botToken,
             userId,
-            '👋 <b>Selamat datang di Fizatalk!</b>\n\nPilih jenis kelamin kamu:',
+            '👋 <b>Selamat datang di Fizatalk!</b>\n\n' + TOS_TEXT + '\n\nPilih jenis kelamin kamu:',
             genderKeyboard
           );
           return new Response('OK', { status: 200 });
