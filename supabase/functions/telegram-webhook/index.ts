@@ -117,6 +117,16 @@ const TELEGRAM_API = 'https://api.telegram.org/bot';
 // Channel yang wajib di-join sebelum bisa menggunakan fitur next/search
 const REQUIRED_CHANNEL = '@FizaTalkCh';
 
+// Ketentuan Penggunaan v1 (18+ & Safe Harbor) - ditampilkan di /start, /rules, dan sekali ke user lama
+const TOS_TEXT = `📜 <b>KETENTUAN PENGGUNAAN FIZATALK</b>
+
+1️⃣ Layanan ini khusus untuk pengguna berusia <b>minimal 18 tahun</b>.
+2️⃣ <b>Dilarang keras</b> mengirim atau mempromosikan: konten seksual anak di bawah umur, penipuan, prostitusi daring/VCS, perjudian, narkoba, dan segala bentuk tindak pidana.
+3️⃣ Seluruh pesan, foto, video, dan media yang Anda kirim adalah <b>tanggung jawab hukum pribadi Anda</b> sebagai pengirim.
+4️⃣ Pelanggaran berat akan berakibat <b>pemblokiran permanen</b> dan data dapat diserahkan kepada pihak berwenang jika diminta secara resmi.
+
+<i>Dengan melanjutkan penggunaan bot ini, Anda menyatakan telah berusia minimal 18 tahun dan menyetujui seluruh ketentuan di atas.</i>`;
+
 // ============================================
 // HELPER: Format waktu ke zona WIB (UTC+7)
 // ============================================
@@ -2834,6 +2844,7 @@ interface ComprehensiveSearchResult {
   old_partner_promo?: { should_send: boolean };
   should_check_channel?: boolean;
   is_new_user?: boolean;
+  show_tos_notice?: boolean;
   blocked_message?: string;
   blocked_until?: string;
   reputation?: {
@@ -3479,6 +3490,11 @@ async function comprehensiveSearchAction(
   }
 
   const result = data as ComprehensiveSearchResult;
+
+  // Notifikasi Ketentuan Penggunaan sekali seumur hidup (user lama). RPC sudah menandai agar tidak berulang.
+  if (result.show_tos_notice) {
+    await sendTelegramMessage(botToken, userId, TOS_TEXT);
+  }
 
   // Handle jika user diblokir (dari blocked_users table)
   if (!result.success && result.error === 'user_blocked') {
@@ -7739,6 +7755,10 @@ Deno.serve(async (req) => {
         await sendTelegramMessage(botToken, userId, '⚠️ <b>Voice call hanya dapat diajakkan kepada partner chat aktif.</b>\n\nCari partner terlebih dahulu, lalu kirim /call.');
       }
 
+      else if (text === '/rules' || text === '/tos') {
+        // Ketentuan Penggunaan - bisa dibuka kapan saja
+        await sendTelegramMessage(botToken, userId, TOS_TEXT);
+      }
       else if (text === '/start' || text.startsWith('/start ')) {
         // Payload deep-link undangan: /start ref_<referrer_id>
         const startPayload = text.length > 7 ? text.slice(7).trim() : '';
@@ -7765,7 +7785,8 @@ Deno.serve(async (req) => {
             first_name: message.from.first_name,
             username: message.from.username,
             state: 'idle',
-            coins: 0
+            coins: 0,
+            tos_version_seen: 1 // User baru melihat ketentuan di pesan sambutan /start
           });
 
           // Catat undangan (hanya untuk user yang benar-benar baru)
@@ -7787,7 +7808,7 @@ Deno.serve(async (req) => {
           await sendTelegramMessage(
             botToken,
             userId,
-            '👋 <b>Selamat datang di Fizatalk!</b>\n\nPilih jenis kelamin kamu:',
+            '👋 <b>Selamat datang di Fizatalk!</b>\n\n' + TOS_TEXT + '\n\nPilih jenis kelamin kamu:',
             genderKeyboard
           );
           return new Response('OK', { status: 200 });
@@ -7807,7 +7828,7 @@ Deno.serve(async (req) => {
           await sendTelegramMessage(
             botToken,
             userId,
-            '👋 <b>Selamat datang di Fizatalk!</b>\n\nPilih jenis kelamin kamu:',
+            '👋 <b>Selamat datang di Fizatalk!</b>\n\n' + TOS_TEXT + '\n\nPilih jenis kelamin kamu:',
             genderKeyboard
           );
           return new Response('OK', { status: 200 });
