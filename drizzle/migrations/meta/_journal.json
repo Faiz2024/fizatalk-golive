@@ -36,6 +36,13 @@
       "when": 1792047407731,
       "tag": "0004_chat_envelope_relay_rpc",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792172275991,
+      "tag": "0005_tos_notice_one_time",
+      "breakpoints": true
     }
   ]
 }

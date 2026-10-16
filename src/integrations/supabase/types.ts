@@ -768,6 +768,7 @@ export type Database = {
           state: Database["public"]["Enums"]["user_state"]
           target_gender: string | null
           target_location: string | null
+          tos_version_seen: number
           total_response_count: number
           total_response_time_seconds: number
           unacknowledged_reports_count: number | null
@@ -820,6 +821,7 @@ export type Database = {
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
           target_location?: string | null
+          tos_version_seen?: number
           total_response_count?: number
           total_response_time_seconds?: number
           unacknowledged_reports_count?: number | null
@@ -872,6 +874,7 @@ export type Database = {
           state?: Database["public"]["Enums"]["user_state"]
           target_gender?: string | null
           target_location?: string | null
+          tos_version_seen?: number
           total_response_count?: number
           total_response_time_seconds?: number
           unacknowledged_reports_count?: number | null
