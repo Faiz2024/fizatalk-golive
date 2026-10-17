@@ -43,6 +43,13 @@
       "when": 1792172275991,
       "tag": "0005_tos_notice_one_time",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792201046102,
+      "tag": "0006_face_verification_data_minimization",
+      "breakpoints": true
     }
   ]
 }
