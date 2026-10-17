@@ -117,15 +117,46 @@ const TELEGRAM_API = 'https://api.telegram.org/bot';
 // Channel yang wajib di-join sebelum bisa menggunakan fitur next/search
 const REQUIRED_CHANNEL = '@FizaTalkCh';
 
-// Ketentuan Penggunaan v1 (18+ & Safe Harbor) - ditampilkan di /start, /rules, dan sekali ke user lama
-const TOS_TEXT = `📜 <b>KETENTUAN PENGGUNAAN FIZATALK</b>
+// Ketentuan Layanan v2.0 - /start, /rules, /tos, /aturan, dan pemberitahuan 1x ke semua user lama
+const CS_CONTACT = '@FizaTalkCS';
+const TOS_TEXT = `📜 <b>KETENTUAN LAYANAN FIZATALK (v2.0)</b>
 
-1️⃣ Layanan ini khusus untuk pengguna berusia <b>minimal 18 tahun</b>.
-2️⃣ <b>Dilarang keras</b> mengirim atau mempromosikan: konten seksual anak di bawah umur, penipuan, prostitusi daring/VCS, perjudian, narkoba, dan segala bentuk tindak pidana.
-3️⃣ Seluruh pesan, foto, video, dan media yang Anda kirim adalah <b>tanggung jawab hukum pribadi Anda</b> sebagai pengirim.
-4️⃣ Pelanggaran berat akan berakibat <b>pemblokiran permanen</b> dan data dapat diserahkan kepada pihak berwenang jika diminta secara resmi.
+<b>1. Status Penyedia</b>
+Fizatalk adalah sarana perantara pesan anonim antar-pengguna. Seluruh pesan, foto, video, suara, stiker, dan tautan adalah <b>tanggung jawab hukum pribadi pengirim</b>.
 
-<i>Dengan melanjutkan penggunaan bot ini, Anda menyatakan telah berusia minimal 18 tahun dan menyetujui seluruh ketentuan di atas.</i>`;
+<b>2. Batas Usia</b>
+Layanan khusus pengguna berusia <b>minimal 18 tahun</b>.
+
+<b>3. Larangan Keras (Zero Tolerance)</b>
+• Konten seksual/eksploitasi anak
+• Penawaran prostitusi, VCS, atau jasa asusila
+• Penipuan, pemerasan, judi online, narkoba
+• Menyebarkan data pribadi orang lain (doxxing)
+Pelanggaran berat = <b>blokir permanen</b> tanpa pemberitahuan.
+
+<b>4. Pembayaran & Tanpa Pengembalian Dana</b>
+Semua pembelian (Premium, koin, fitur berbayar) bersifat <b>FINAL dan TIDAK DAPAT DIKEMBALIKAN</b> dengan alasan apa pun. Jika akun dibatasi atau diblokir karena melanggar, sisa Premium/koin <b>hangus</b> tanpa kompensasi.
+
+<b>5. Kepatuhan Hukum</b>
+Pengelola tunduk pada hukum Republik Indonesia dan dapat menyerahkan data teknis kepada aparat berwenang atas permintaan resmi.
+
+<b>6. Pengaduan</b>
+Laporkan pelanggaran kepada ${CS_CONTACT} (sertakan ID/username, bukti tangkapan layar, dan waktu kejadian).
+
+<i>Dengan melanjutkan penggunaan bot ini, Anda menyatakan berusia minimal 18 tahun serta telah membaca, memahami, dan menyetujui seluruh ketentuan di atas.</i>`;
+
+const TOS_UPDATE_NOTICE = `📢 <b>Pembaruan Ketentuan Layanan (v2.0)</b>
+
+Fizatalk memperbarui ketentuan layanan:
+1️⃣ Fizatalk hanya perantara pesan; pengirim bertanggung jawab penuh atas pesan & media.
+2️⃣ Dilarang keras: konten seksual anak, prostitusi/VCS, penipuan, judi online, doxxing. Pelanggaran berat = blokir permanen.
+3️⃣ Semua pembelian (Premium/koin) <b>FINAL & TIDAK DAPAT DIKEMBALIKAN</b>, termasuk jika akun terkena sanksi/blokir.
+
+<i>Dengan melanjutkan penggunaan bot atau mencari partner, Anda menyatakan telah membaca, memahami, dan menyetujui ketentuan ini.</i>
+
+Baca lengkap: /rules • Pengaduan: ${CS_CONTACT}`;
+
+const TOS_KEYBOARD = { inline_keyboard: [[{ text: '⚖️ Lapor Pelanggaran / CS', url: 'https://t.me/FizaTalkCS' }]] };
 
 // ============================================
 // HELPER: Format waktu ke zona WIB (UTC+7)
@@ -3493,7 +3524,7 @@ async function comprehensiveSearchAction(
 
   // Notifikasi Ketentuan Penggunaan sekali seumur hidup (user lama). RPC sudah menandai agar tidak berulang.
   if (result.show_tos_notice) {
-    await sendTelegramMessage(botToken, userId, TOS_TEXT);
+    await sendTelegramMessage(botToken, userId, TOS_UPDATE_NOTICE, TOS_KEYBOARD);
   }
 
   // Handle jika user diblokir (dari blocked_users table)
@@ -7755,9 +7786,9 @@ Deno.serve(async (req) => {
         await sendTelegramMessage(botToken, userId, '⚠️ <b>Voice call hanya dapat diajakkan kepada partner chat aktif.</b>\n\nCari partner terlebih dahulu, lalu kirim /call.');
       }
 
-      else if (text === '/rules' || text === '/tos') {
-        // Ketentuan Penggunaan - bisa dibuka kapan saja
-        await sendTelegramMessage(botToken, userId, TOS_TEXT);
+      else if (text === '/rules' || text === '/tos' || text === '/aturan') {
+        // Ketentuan Layanan - bisa dibuka kapan saja
+        await sendTelegramMessage(botToken, userId, TOS_TEXT, TOS_KEYBOARD);
       }
       else if (text === '/start' || text.startsWith('/start ')) {
         // Payload deep-link undangan: /start ref_<referrer_id>
