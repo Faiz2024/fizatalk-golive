@@ -615,8 +615,8 @@ async function processStarsFinePayment(
 
   const invoiceLink = await createStarsInvoiceLink(
     botToken,
-    'Pembayaran Denda - Buka Blokir',
-    `Denda Rp ${FINE_AMOUNT.toLocaleString('id-ID')}`,
+    'Biaya Pemulihan Akun',
+    `Biaya Pemulihan Rp ${FINE_AMOUNT.toLocaleString('id-ID')}`,
     payload, starsPrice
   );
 
@@ -785,7 +785,7 @@ async function handleSuccessfulStarsPayment(
       // Record transaction
       await supabase.from('coin_transactions').insert({
         user_id: userId, amount: -FINE_AMOUNT, type: 'fine_payment',
-        description: `Denda buka blokir via Stars (${starsAmount}⭐)`
+        description: `Biaya pemulihan akun via Stars (${starsAmount}⭐)`
       });
 
       const welcomeKeyboard = {
@@ -794,7 +794,7 @@ async function handleSuccessfulStarsPayment(
 
       await sendTelegramMessage(botToken, userId,
         `✅ <b>AKUN TELAH DIBUKA BLOKIR!</b>\n\n` +
-        `🎉 Pembayaran denda berhasil!\n` +
+        `🎉 Biaya pemulihan akun berhasil!\n` +
         `⭐ Dibayar: ${starsAmount} Stars\n\n` +
         `Silakan mulai chat:`,
         welcomeKeyboard
@@ -804,7 +804,7 @@ async function handleSuccessfulStarsPayment(
       const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
       if (csChatId) {
         await sendTelegramMessage(botToken, parseInt(csChatId),
-          `✅ <b>DENDA DIBAYAR VIA STARS</b>\n\n🆔 User: <code>${userId}</code>\n⭐ Stars: ${starsAmount}\n💰 Denda: Rp ${FINE_AMOUNT.toLocaleString('id-ID')}\n\n✅ Auto-approved`
+          `✅ <b>PEMULIHAN AKUN DIBAYAR VIA STARS</b>\n\n🆔 User: <code>${userId}</code>\n⭐ Stars: ${starsAmount}\n💰 Biaya Pemulihan: Rp ${FINE_AMOUNT.toLocaleString('id-ID')}\n\n✅ Auto-approved`
         );
       }
     }
@@ -1334,7 +1334,7 @@ async function handlePaymentProofUpload(
       productInfo = `Top-up ${txData.amount} Koin`;
       totalAmount = txData.amount * COIN_PRICE + txData.unique_code;
     } else if (txType === 'fine') {
-      productInfo = 'Denda Buka Blokir';
+      productInfo = 'Biaya Pemulihan Akun';
       totalAmount = txData.total_amount;
     }
 
@@ -1507,7 +1507,7 @@ async function handleCSApproveReject(
 
       await supabase.from('coin_transactions').insert({
         user_id: userId, amount: -fineReq.amount, type: 'fine_payment',
-        description: 'Denda buka blokir via QRIS Manual'
+        description: 'Biaya pemulihan akun via QRIS Manual'
       });
 
       const welcomeKeyboard = {
@@ -1515,7 +1515,7 @@ async function handleCSApproveReject(
       };
 
       await sendTelegramMessage(botToken, userId,
-        `✅ <b>AKUN TELAH DIBUKA BLOKIR!</b>\n\n🎉 Pembayaran denda berhasil diverifikasi!\n\nSilakan mulai chat:`,
+        `✅ <b>AKUN TELAH DIBUKA BLOKIR!</b>\n\n🎉 Biaya pemulihan akun berhasil diverifikasi!\n\nSilakan mulai chat:`,
         welcomeKeyboard
       );
 
@@ -2141,16 +2141,16 @@ async function processSakurupiahFinePayment(
 
   const invoice = await createSakurupiahInvoice({
     method, amount: FINE_AMOUNT, merchantRef,
-    productName: 'Pembayaran Denda Buka Blokir', customerName: userName, expired: 60,
+    productName: 'Biaya Pemulihan Akun', customerName: userName, expired: 60,
   });
 
   if (!invoice.success) {
     // Fallback 1: Pakasir (QRIS otomatis), Fallback 2: QRIS Manual
     console.log(`[FINE] Sakurupiah failed, fallback to Pakasir: ${invoice.error}`);
-    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Denda Buka Blokir', 'pay_fine', method);
+    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Biaya Pemulihan Akun', 'pay_fine', method);
     if (!pakasirOk) {
       console.log('[FINE] Pakasir failed, fallback to QRIS Manual');
-      await sendManualQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Denda Buka Blokir', 'pay_fine');
+      await sendManualQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Biaya Pemulihan Akun', 'pay_fine');
     }
     return;
   }
@@ -2163,7 +2163,7 @@ async function processSakurupiahFinePayment(
 
   if (method === 'QRIS' && invoice.qrString) {
     const qrUrl = invoice.qrString;
-    const caption = `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
+    const caption = `💸  <b>BIAYA PEMULIHAN AKUN</b>\n\n` +
       `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  <b>CARA BAYAR:</b>\n\n` +
@@ -2210,7 +2210,7 @@ async function processSakurupiahFinePayment(
     const walletKb = { inline_keyboard: walletButtons };
 
     await sendTelegramMessage(botToken, userId,
-      `💸  <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n` +
+      `💸  <b>BIAYA PEMULIHAN AKUN</b>\n\n` +
       `💰  Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `📱  Klik tombol di bawah untuk membayar langsung via aplikasi <b>${walletInfo.name}</b>\n\n` +
@@ -2223,7 +2223,7 @@ async function processSakurupiahFinePayment(
   const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
   if (csChatId) {
     await sendTelegramMessage(botToken, parseInt(csChatId),
-      `💰 <b>PEMBAYARAN DENDA DIMULAI</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n💵 Total: Rp ${FINE_AMOUNT.toLocaleString('id-ID')}\n📱 Via: ${method}\n\n⏳ Menunggu pembayaran (auto-verify)...`
+      `💰 <b>PEMBAYARAN PEMULIHAN AKUN DIMULAI</b>\n\n👤 User: ${userName}\n🆔 ID: <code>${userId}</code>\n💵 Total: Rp ${FINE_AMOUNT.toLocaleString('id-ID')}\n📱 Via: ${method}\n\n⏳ Menunggu pembayaran (auto-verify)...`
     );
   }
 }
@@ -2301,7 +2301,6 @@ function getPremiumBenefitsText(): string {
   return `✨ <b>KEUNTUNGAN PREMIUM:</b>
 • 🎯 <b>Filter Gender:</b> Bebas pilih target gender chat sesuai keinginanmu.
 • 📍 <b>Filter Lokasi:</b> Cari partner berdasarkan target lokasi spesifik.
-• 🛡️ <b>Anti Banned:</b> Akunmu mendapatkan status VIP yang lebih kebal terhadap blokir/banned.
 • 🎭 <b>Bebas Stiker:</b> Kirim stiker favoritmu tanpa batasan atau peninjauan sistem.
 • ⚠️ <b>Bebas Peringatan:</b> Terbebas dari peringatan spam yang mengganggu kenyamanan chat.
 • ⭐ <b>Badge Premium:</b> Tampil beda dengan lencana eksklusif.
@@ -2337,7 +2336,7 @@ async function sendPremiumOffer(supabase: any, botToken: string, userId: number,
   const keyboard = buildPremiumNormalKeyboard();
 
   // Get premium file_id from database
-  const premiumFileId = await getPremiumFileId(supabase);
+  const premiumFileId: string | null = null; // gambar premium dinonaktifkan
 
   if (!premiumFileId) {
     // No photo set, send text only
@@ -2557,8 +2556,8 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
       // Gunakan UI Blokir Existing
       const blockedKeyboard = {
         inline_keyboard: [
-          [{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }],
-          [{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }]
+          [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }],
+          [{ text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }]
         ]
       };
       const blockedMsg = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ <b>Alasan:</b> Anda telah mencapai batas peringatan SPAM (4/4). Demi kenyamanan, akses chat Anda <b>dinonaktifkan</b>.\n\nPilih opsi di bawah untuk memulihkan akun:`;
@@ -2575,7 +2574,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
           [{ text: '💎 Upgrade Premium (Bebas Peringatan)', callback_data: 'show_premium_offer_peringatan' }]
         ]
       };
-      const warnMsg = `⚠️ <b>PERINGATAN DARI ADMIN</b>\n\nKami mendeteksi aktivitas SPAM atau konten dilarang di akun Anda.\n\n🚫 <b>HIMBAUAN:</b>\nJangan menyebar spam link, mengirim stiker 18+, atau media 18+.\n\n<i>Peringatan ini akan hilang seiring banyaknya partner yang suka berinteraksi dengan Anda.</i>\n\n💎 <b>Beli Premium</b> untuk menghindari peringatan ini dan blokir permanen.`;
+      const warnMsg = `⚠️ <b>PERINGATAN DARI ADMIN</b>\n\nKami mendeteksi aktivitas SPAM atau konten dilarang di akun Anda.\n\n🚫 <b>HIMBAUAN:</b>\nJangan menyebar spam link, mengirim stiker 18+, atau media 18+.\n\n<i>Peringatan ini akan hilang seiring banyaknya partner yang suka berinteraksi dengan Anda.</i>\n\n💎 <b>Beli Premium</b> untuk menikmati fitur eksklusif. Tetap patuhi Ketentuan Penggunaan.`;
       await sendTelegramMessage(botToken, targetId, warnMsg, premiumUpgradeKeyboard);
     }
   }
@@ -3532,10 +3531,10 @@ async function comprehensiveSearchAction(
     const blockedKeyboard = {
       inline_keyboard: [
         [
-          { text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }
+          { text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }
         ],
         [
-          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }
+          { text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }
         ]
       ]
     };
@@ -3549,11 +3548,11 @@ async function comprehensiveSearchAction(
 
   🔓 <b>CARA MEMBUKA BLOKIR:</b>
 
-  1️⃣ <b>Bayar Denda Pelanggaran</b>
-  Hapus status blokir saat ini dengan membayar denda sebesar <b>Rp 10.000</b>.
+  1️⃣ <b>Biaya Pemulihan Akun</b>
+  Aktifkan kembali akun dengan biaya administrasi pemulihan sebesar <b>Rp 10.000</b>.
 
-  2️⃣ <b>Upgrade ke Premium (Recommended)</b>
-  Dapatkan status <b>VIP</b> yang lebih kebal terhadap laporan palsu, prioritas matching, dan fitur eksklusif lainnya.
+  2️⃣ <b>Upgrade ke Premium</b>
+  Nikmati filter gender & lokasi, prioritas matching, dan fitur eksklusif lainnya. Premium tetap wajib mematuhi Ketentuan Penggunaan.
 
   Pilih opsi di bawah untuk memulihkan akun Anda segera:`;
 
@@ -3585,10 +3584,10 @@ async function comprehensiveSearchAction(
     const blockedKeyboard = {
       inline_keyboard: [
         [
-          { text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }
+          { text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }
         ],
         [
-          { text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }
+          { text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }
         ]
       ]
     };
@@ -3602,11 +3601,11 @@ async function comprehensiveSearchAction(
 
   🔓 <b>CARA MEMBUKA BLOKIR:</b>
 
-  1️⃣ <b>Bayar Denda Pelanggaran</b>
-  Hapus status blokir saat ini dengan membayar denda sebesar <b>Rp 10.000</b>.
+  1️⃣ <b>Biaya Pemulihan Akun</b>
+  Aktifkan kembali akun dengan biaya administrasi pemulihan sebesar <b>Rp 10.000</b>.
 
-  2️⃣ <b>Upgrade ke Premium (Recommended)</b>
-  Dapatkan status <b>VIP</b> yang lebih kebal terhadap laporan palsu, prioritas matching, dan fitur eksklusif lainnya.
+  2️⃣ <b>Upgrade ke Premium</b>
+  Nikmati filter gender & lokasi, prioritas matching, dan fitur eksklusif lainnya. Premium tetap wajib mematuhi Ketentuan Penggunaan.
 
   Pilih opsi di bawah untuk memulihkan akun Anda segera:`;
 
@@ -3700,10 +3699,10 @@ async function handleComprehensiveSearchResult(
     ]);
   }
 
-  // Jika penalty >= 40, tampilkan tombol Upgrade Premium (Anti Banned)
+  // Jika penalty >= 40, tampilkan tombol Upgrade Premium
   if (penaltyPoints >= 40 && !isPremium) {
     inlineKeyboard.push([
-      { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
+      { text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }
     ]);
   }
 
@@ -4204,7 +4203,7 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
     selectedPromoFileId = PROMO_FILEID_LIST[randomIndex];
   } else {
     // Fallback: Jika list kosong, ambil dari setting database (agar Admin tetap punya kontrol via /set_promo)
-    selectedPromoFileId = await getPromoPremiumFileId(supabase);
+    selectedPromoFileId = null; // gambar promo dinonaktifkan
   }
 
   const promoMessage = `🚨 <b>PROMO TERBATAS! HANYA 1 JAM!</b> 🚨
@@ -4236,7 +4235,7 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 }
 
 async function executeSpecialPromoAction(supabase: any, botToken: string, userId: number) {
-  let selectedPromoFileId: string | null = await getBotSetting(supabase, 'special_promo_premium_file_id');
+  let selectedPromoFileId: string | null = null; // gambar promo dinonaktifkan
 
   const promoMessage = `🎉 <b>SELAMAT! ANDA TERPILIH!</b> 🎉
 
@@ -4246,7 +4245,6 @@ Anda adalah 1 dari 50 pengguna yang berhak mendapatkan <b>PENAWARAN SPESIAL 1 KA
 
 💎 <b>Benefit Premium Khusus:</b>
 ✅ Bebas Kirim Stiker & GIF
-✅ Anti Banned (Perlindungan Ekstra)
 ✅ Filter Gender & Lokasi Sepuasnya
 ✅ Badge Premium VIP
 
@@ -4502,10 +4500,10 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
         ]);
       }
       
-      // Jika penalty >= 40, tambahkan tombol Upgrade Premium (Anti Banned)
+      // Jika penalty >= 40, tambahkan tombol Upgrade Premium
       if (penaltyPoints >= 40 && !isPremium) {
         inlineKeyboard.push([
-          { text: '💎 Upgrade Premium (Anti Banned)', callback_data: 'show_premium_offer_antibanned' }
+          { text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }
         ]);
       }
 
@@ -4999,8 +4997,8 @@ Deno.serve(async (req) => {
 
         } else if (callbackData === 'cancel_fine') {
           // Kembali ke halaman peringatan blokir
-          backText = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ Akses chat Anda dinonaktifkan karena pelanggaran.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ <b>Bayar Denda Pelanggaran</b>\nBayar denda sebesar <b>Rp 10.000</b>.`;
-          backKeyboard = { inline_keyboard: [[{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }]] };
+          backText = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ Akses chat Anda dinonaktifkan karena pelanggaran.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ <b>Biaya Pemulihan Akun</b>\nBiaya administrasi pemulihan sebesar <b>Rp 10.000</b>.`;
+          backKeyboard = { inline_keyboard: [[{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]] };
         }
 
         // 2. Eksekusi Pengubahan UI
@@ -5443,7 +5441,7 @@ Deno.serve(async (req) => {
 
           if (actualAction === 'warned' || actualAction === 'warn') {
             payload.reply_markup = {
-              inline_keyboard: [[{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }]]
+              inline_keyboard: [[{ text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }]]
             };
             if (mediaField !== 'video_note') {
               payload.caption = `⚠️ <b>PERINGATAN DARI ADMIN</b>\n\nMedia yang Anda kirim telah dilaporkan dan melanggar aturan komunitas. Harap patuhi aturan atau akun Anda akan diblokir otomatis.`;
@@ -5454,8 +5452,8 @@ Deno.serve(async (req) => {
           } else {
             payload.reply_markup = {
               inline_keyboard: [
-                [{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }],
-                [{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }]
+                [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }],
+                [{ text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }]
               ]
             };
             if (mediaField !== 'video_note') {
@@ -5556,15 +5554,15 @@ Deno.serve(async (req) => {
         const fineStarsPayload = JSON.stringify({ t: 'f', u: userId });
         const fineStarsInvoiceLink = await createStarsInvoiceLink(
           botToken,
-          'Pembayaran Denda - Buka Blokir',
-          `Denda Rp ${FINE_AMOUNT.toLocaleString('id-ID')}`,
+          'Biaya Pemulihan Akun',
+          `Biaya Pemulihan Rp ${FINE_AMOUNT.toLocaleString('id-ID')}`,
           fineStarsPayload,
           fineStarsPrice
         );
         console.log(`[STARS] fine payment button mode: ${fineStarsInvoiceLink ? 'url' : 'callback_fallback'}`);
 
         await sendTelegramMessage(botToken, userId,
-          `💸 <b>PEMBAYARAN DENDA - BUKA BLOKIR</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
+          `💸 <b>BIAYA PEMULIHAN AKUN</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
           buildPaymentMethodKeyboard('fine_pay', 'cancel_fine', FINE_AMOUNT, fineStarsInvoiceLink || undefined)
         );
         return new Response('OK', { status: 200 });
@@ -5653,7 +5651,7 @@ Deno.serve(async (req) => {
         return new Response('OK', { status: 200 });
       }
 
-      // --- LOGIKA SHOW PREMIUM OFFER (DINAMIS DARI TOMBOL ANTI BANNED / STIKER / PERINGATAN) ---
+      // --- LOGIKA SHOW PREMIUM OFFER (DINAMIS DARI TOMBOL BLOKIR / STIKER / PERINGATAN) ---
       // === REFERRAL: menu undangan & klaim hadiah ===
       if (callbackData === 'referral_menu') {
         answerCallbackQuery(botToken, query.id).catch(() => {});
@@ -6024,12 +6022,12 @@ Deno.serve(async (req) => {
         } else if (isNonOrganic && !proc.is_premium) {
           const blockedKeyboard = {
             inline_keyboard: [
-              [{ text: '💸 Bayar Denda - Rp 10.000', callback_data: 'pay_fine' }],
-              [{ text: '💎 Upgrade Premium (Anti-Banned)', callback_data: 'show_premium_offer_antibanned' }]
+              [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }],
+              [{ text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }]
             ]
           };
           await sendTelegramMessage(botToken, proc.user_id,
-            `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n❌ Penarikan bonus ditolak karena teman yang diundang terdeteksi <b>tidak valid/tidak organik</b>.\n\n🗑 Seluruh akun hasil undangan langsung Anda telah dihapus. Akses bot Anda diblokir untuk menjaga keamanan program referal.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ Bayar denda pelanggaran sebesar <b>Rp 10.000</b>.\n2️⃣ Upgrade ke <b>Premium (Anti-Banned)</b>.`,
+            `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n❌ Penarikan bonus ditolak karena teman yang diundang terdeteksi <b>tidak valid/tidak organik</b>.\n\n🗑 Seluruh akun hasil undangan langsung Anda telah dihapus. Akses bot Anda diblokir untuk menjaga keamanan program referal.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ Biaya administrasi pemulihan akun sebesar <b>Rp 10.000</b>.\n2️⃣ Upgrade ke <b>Premium</b>.`,
             blockedKeyboard);
         } else if (isNonOrganic) {
           await sendTelegramMessage(botToken, proc.user_id,
@@ -6056,7 +6054,7 @@ Deno.serve(async (req) => {
 
         let customTitle = '🔒 Fitur Khusus Premium!';
         if (callbackData === 'show_premium_offer_antibanned') {
-          customTitle = '💎 Upgrade Premium (Anti Banned)';
+          customTitle = '💎 Upgrade Premium';
         } else if (callbackData === 'show_premium_offer_stiker') {
           customTitle = '💎 Upgrade Premium (Bebas Stiker)';
         } else if (callbackData === 'show_premium_offer_peringatan') {
