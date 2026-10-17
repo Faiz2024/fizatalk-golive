@@ -209,7 +209,7 @@ export async function handleFineSuccess(supabase: any, botToken: string, request
     user_id: req.user_id,
     amount: -req.amount,
     type: 'deduction',
-    description: `Pembayaran denda buka blokir via ${gatewayLabel}`
+    description: `Pembayaran biaya pemulihan akun buka blokir via ${gatewayLabel}`
   });
 
   const welcomeKeyboard = {
@@ -217,14 +217,14 @@ export async function handleFineSuccess(supabase: any, botToken: string, request
   };
 
   await sendTelegramMessage(botToken, req.user_id,
-    `✅ <b>AKUN TELAH DIBUKA BLOKIR!</b>\n\n🎉 Pembayaran denda berhasil diverifikasi otomatis.\n\nAkun Anda sekarang aktif kembali. Harap patuhi ketentuan penggunaan.\n\nSilakan mulai chat:`,
+    `✅ <b>AKUN TELAH DIBUKA BLOKIR!</b>\n\n🎉 Biaya pemulihan akun berhasil diverifikasi otomatis.\n\nAkun Anda sekarang aktif kembali. Harap patuhi ketentuan penggunaan.\n\nSilakan mulai chat:`,
     welcomeKeyboard
   );
 
   const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
   if (csChatId) {
     await sendTelegramMessage(botToken, parseInt(csChatId),
-      `✅ <b>DENDA AUTO-APPROVED - USER UNBLOCKED</b>\n\n👤 User: ${req.user_id}\n💰 Denda: Rp ${req.amount.toLocaleString('id-ID')}`
+      `✅ <b>PEMULIHAN AKUN AUTO-APPROVED - USER UNBLOCKED</b>\n\n👤 User: ${req.user_id}\n💰 Biaya Pemulihan: Rp ${req.amount.toLocaleString('id-ID')}`
     );
   }
 
