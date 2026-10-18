@@ -44,13 +44,17 @@ export async function createPakasirV2Invoice(
       payment.order_id !== orderId || payment.project !== slug || payment.amount !== amount ||
       payment.payment_method !== 'qris' || typeof payment.qr_string !== 'string' || !payment.qr_string ||
       !Number.isSafeInteger(payment.total_payment) || payment.total_payment < amount ||
-      typeof payment.expired_at !== 'string' || !Number.isFinite(Date.parse(payment.expired_at)) ||
-      payment.is_sandbox !== false) {
+      typeof payment.is_sandbox !== 'boolean') {
+      return { success: false, error: 'invalid_create_response' };
+    }
+    // Pakasir v2 names the expiry field `expires_at`; keep `expired_at` for compatibility.
+    const rawExpires = payment.expires_at ?? payment.expired_at;
+    if (typeof rawExpires !== 'string' || !Number.isFinite(Date.parse(rawExpires))) {
       return { success: false, error: 'invalid_create_response' };
     }
     return {
       success: true, orderId, txnId: payment.txn_id, qrString: payment.qr_string,
-      totalPayment: payment.total_payment, expiredAt: payment.expired_at,
+      totalPayment: payment.total_payment, expiredAt: rawExpires,
       payUrl: `${PAKASIR_BASE}/pay-v2/${encodeURIComponent(payment.txn_id)}?qris_only=1`,
     };
   } catch {
