@@ -4,6 +4,7 @@
 - [x] Verifikasi kontrak API v2 dan kebutuhan kredensial.
 - [x] Migrasikan pembuatan tagihan dan verifikasi callback tanpa mengubah aturan produk.
 - [x] Jalankan pengujian kontrak API dan deploy.
+- [x] Perbaiki pembacaan field kedaluwarsa respons v2 (`expires_at`, kompatibel `expired_at`) — penyebab tagihan Pakasir gagal dan jatuh ke QRIS manual. Deploy 18 Okt 2026.
 - [ ] Verifikasi pembayaran nyata dari QR di Telegram hingga manfaat aktif — menunggu transaksi nyata pengguna; akses langsung dari sandbox mendapat HTTP 403 non-JSON.
 
 - [x] Ubah bonus referal menjadi pilihan 3 teman untuk 1 jam atau 10 teman untuk 1 hari Premium.
