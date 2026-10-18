@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'; // v1
+import { createPakasirV2Invoice, type PakasirInvoiceResult } from '../_shared/pakasir.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -314,17 +315,6 @@ async function createSakurupiahInvoice(params: SakurupiahInvoiceParams): Promise
 }
 
 // === PAKASIR PAYMENT GATEWAY (fallback otomatis saat Sakurupiah gagal) ===
-const PAKASIR_BASE = 'https://app.pakasir.com';
-
-interface PakasirInvoiceResult {
-  success: boolean;
-  orderId?: string;
-  qrString?: string;
-  totalPayment?: number;
-  payUrl?: string;
-  error?: string;
-}
-
 // UUID -> string ringkas tanpa tanda hubung (dipulihkan lagi di pakasir-callback)
 function pakasirOrderId(prefix: 'p_' | 't_' | 'f_', transactionId: string): string {
   return `${prefix}${transactionId.replace(/-/g, '')}`;
@@ -338,29 +328,9 @@ async function createPakasirInvoice(orderId: string, amount: number): Promise<Pa
     return { success: false, error: 'Pakasir not configured' };
   }
 
-  try {
-    const resp = await fetch(`${PAKASIR_BASE}/api/transactioncreate/qris`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project: slug, order_id: orderId, amount, api_key: apiKey }),
-    });
-    const json = await resp.json().catch(() => ({}));
-    if (!resp.ok || !json?.payment?.payment_number) {
-      console.error(`[PAKASIR] Create failed [${resp.status}]:`, JSON.stringify(json).slice(0, 300));
-      return { success: false, error: `create_failed_${resp.status}` };
-    }
-    const pay = json.payment;
-    return {
-      success: true,
-      orderId,
-      qrString: pay.payment_number,
-      totalPayment: pay.total_payment || amount,
-      payUrl: `${PAKASIR_BASE}/pay/${slug}/${amount}?order_id=${encodeURIComponent(orderId)}&qris_only=1`,
-    };
-  } catch (e) {
-    console.error('[PAKASIR] Error:', e);
-    return { success: false, error: 'network_error' };
-  }
+  const result = await createPakasirV2Invoice(orderId, amount, slug, apiKey);
+  if (!result.success) console.error('[PAKASIR] Create failed:', result.error);
+  return result;
 }
 
 // Kirim pembayaran QRIS Pakasir ke user. Return false bila gagal (caller pakai QRIS manual).
@@ -374,15 +344,16 @@ async function sendPakasirQRISPayment(
   const orderId = pakasirOrderId(prefix, transactionId);
 
   const invoice = await createPakasirInvoice(orderId, amount);
-  if (!invoice.success || !invoice.qrString) return false;
+  if (!invoice.success || !invoice.qrString || !invoice.txnId || !invoice.payUrl || !invoice.expiredAt) return false;
 
   const table = type === 'prem' ? 'premium_requests' : type === 'topup' ? 'topup_requests' : 'pending_transactions';
-  const updatePayload: any = { sakurupiah_trx_id: orderId, payment_method: 'PAKASIR_QRIS', status: 'pending' };
+  const updatePayload: any = { sakurupiah_trx_id: invoice.txnId, payment_method: 'PAKASIR_QRIS', status: 'pending' };
   if (type === 'fine') {
     delete updatePayload.payment_method; // pending_transactions tidak punya kolom payment_method
     updatePayload.total_amount = invoice.totalPayment || amount;
   }
-  await supabase.from(table).update(updatePayload).eq('id', transactionId);
+  const { error: saveError } = await supabase.from(table).update(updatePayload).eq('id', transactionId).eq('status', 'pending');
+  if (saveError) throw new Error('Pakasir invoice database save failed');
 
   const total = invoice.totalPayment || amount;
   const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=16&data=${encodeURIComponent(invoice.qrString)}`;
@@ -401,11 +372,11 @@ async function sendPakasirQRISPayment(
     `4️⃣  Konfirmasi pembayaran\n\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
     `✅  Pembayaran <b>otomatis terverifikasi</b>\n` +
-    `⏰  Batas waktu: <b>60 menit</b>`;
+    `⏰  Bayar sebelum: <b>${new Date(invoice.expiredAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })} WIB</b>`;
 
   const kb = {
     inline_keyboard: [
-      [{ text: '🔗 Buka Halaman Pembayaran', url: invoice.payUrl! }],
+      [{ text: '🔗 Buka Halaman Pembayaran', url: invoice.payUrl }],
       [{ text: '🔙 Kembali', callback_data: cancelCallback }],
     ]
   };
