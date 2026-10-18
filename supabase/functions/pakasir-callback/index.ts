@@ -33,9 +33,10 @@ Deno.serve(async (req) => {
   }
   const isV2 = data.txn_id !== undefined;
   if (isV2) {
+    if (!webhookSecret) return reply(500, 'Webhook secret not configured');
     if (typeof data.txn_id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.txn_id) ||
       typeof data.is_sandbox !== 'boolean') return reply(400, 'Invalid v2 payload');
-    if (webhookSecret && !equalSecret(req.headers.get('X-Secret'), webhookSecret)) {
+    if (!equalSecret(req.headers.get('X-Secret'), webhookSecret)) {
       return reply(403, 'Invalid webhook secret');
     }
     if (data.is_sandbox) return reply(403, 'Sandbox payments not accepted');
