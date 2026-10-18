@@ -44,7 +44,7 @@ export async function createPakasirV2Invoice(
       payment.order_id !== orderId || payment.project !== slug || payment.amount !== amount ||
       payment.payment_method !== 'qris' || typeof payment.qr_string !== 'string' || !payment.qr_string ||
       !Number.isSafeInteger(payment.total_payment) || payment.total_payment < amount ||
-      typeof payment.is_sandbox !== 'boolean') {
+      payment.is_sandbox !== false) {
       return { success: false, error: 'invalid_create_response' };
     }
     // Pakasir v2 names the expiry field `expires_at`; keep `expired_at` for compatibility.
