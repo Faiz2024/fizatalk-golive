@@ -1,5 +1,10 @@
 # Roadmap
 
+## Migrasi Pakasir API v2
+- [ ] Verifikasi kontrak API v2 dan kebutuhan kredensial.
+- [ ] Migrasikan pembuatan tagihan dan verifikasi callback tanpa mengubah aturan produk.
+- [ ] Jalankan pengujian, deploy, dan verifikasi pembayaran; tandai jika pembayaran nyata belum diuji.
+
 - [x] Ubah bonus referal menjadi pilihan 3 teman untuk 1 jam atau 10 teman untuk 1 hari Premium.
 
 - [x] Tambahkan RPC atomik untuk dua alasan penolakan cashout referral.
