@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Migrasi Pakasir API v2
-- [ ] Verifikasi kontrak API v2 dan kebutuhan kredensial.
-- [ ] Migrasikan pembuatan tagihan dan verifikasi callback tanpa mengubah aturan produk.
-- [ ] Jalankan pengujian, deploy, dan verifikasi pembayaran; tandai jika pembayaran nyata belum diuji.
+- [x] Verifikasi kontrak API v2 dan kebutuhan kredensial.
+- [x] Migrasikan pembuatan tagihan dan verifikasi callback tanpa mengubah aturan produk.
+- [x] Jalankan pengujian kontrak API dan deploy.
+- [ ] Verifikasi pembayaran nyata dari QR di Telegram hingga manfaat aktif — menunggu transaksi nyata pengguna; akses langsung dari sandbox mendapat HTTP 403 non-JSON.
 
 - [x] Ubah bonus referal menjadi pilihan 3 teman untuk 1 jam atau 10 teman untuk 1 hari Premium.
 
