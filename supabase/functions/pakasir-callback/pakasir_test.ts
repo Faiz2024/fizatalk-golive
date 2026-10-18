@@ -13,9 +13,10 @@ function mockJson(body: unknown, status = 200): typeof fetch {
 
 Deno.test('v2 creates QRIS with header auth, base amount and provider total', async () => {
   const fetcher: typeof fetch = (input, init) => {
+    const options = init as { headers?: HeadersInit; body?: unknown } | undefined;
     assertEquals(input, `https://app.pakasir.com/api/v2/create-transaction/example/${orderId}`);
-    assertEquals(new Headers(init?.headers).get('X-Api-Key'), 'test-key');
-    assertEquals(JSON.parse(String(init?.body)), { method: 'qris', amount: 5000 });
+    assertEquals(new Headers(options?.headers).get('X-Api-Key'), 'test-key');
+    assertEquals(JSON.parse(String(options?.body)), { method: 'qris', amount: 5000 });
     return mockJson(invoice)(input, init);
   };
   const result = await createPakasirV2Invoice(orderId, 5000, 'example', 'test-key', fetcher);
@@ -64,8 +65,9 @@ Deno.test('v2 status binds completed payment to txn, order, amount and live mode
   const input = { orderId, txnId: 'txn_example', amount: 5000 };
   const completed = { txn_id: 'txn_example', order_id: orderId, amount: 5000, is_sandbox: false, status: 'completed' };
   const fetcher: typeof fetch = (url, init) => {
+    const options = init as { headers?: HeadersInit } | undefined;
     assertEquals(url, 'https://app.pakasir.com/api/v2/transaction-status/example/txn_example');
-    assertEquals(new Headers(init?.headers).get('X-Api-Key'), 'test-key');
+    assertEquals(new Headers(options?.headers).get('X-Api-Key'), 'test-key');
     return mockJson(completed)(url, init);
   };
   assertEquals(await verifyPakasirPayment(input, 'example', 'test-key', fetcher), 'verified');
