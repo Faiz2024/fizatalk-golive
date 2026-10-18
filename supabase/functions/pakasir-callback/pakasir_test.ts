@@ -27,6 +27,15 @@ Deno.test('v2 creates QRIS with header auth, base amount and provider total', as
   assertEquals(result.expiredAt, '2026-10-18T12:00:00Z');
 });
 
+Deno.test('v2 accepts the live expires_at field name and rejects a malformed one', async () => {
+  const liveInvoice = { ...invoice, expired_at: undefined, expires_at: '2026-10-18T12:00:00Z' };
+  const live = await createPakasirV2Invoice(orderId, 5000, 'example', 'test-key', mockJson(liveInvoice));
+  assertEquals(live.success, true);
+  assertEquals(live.expiredAt, '2026-10-18T12:00:00Z');
+  const badExpiry = await createPakasirV2Invoice(orderId, 5000, 'example', 'test-key', mockJson({ ...liveInvoice, expires_at: 'soon' }));
+  assertEquals(badExpiry.success, false);
+});
+
 Deno.test('v2 rejects provider mismatches, sandbox, and malformed invoices', async () => {
   for (const change of [{ amount: 1 }, { order_id: 'wrong' }, { project: 'wrong' },
     { is_sandbox: true }, { total_payment: 0 }, { qr_string: '' }, { expired_at: 'wrong' }]) {
