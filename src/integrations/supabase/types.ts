@@ -21,6 +21,7 @@ export type Database = {
           first_name: string | null
           id: string
           is_active: boolean | null
+          is_unblockable: boolean
           reason: string
           unblocked_at: string | null
           unblocked_by: number | null
@@ -33,6 +34,7 @@ export type Database = {
           first_name?: string | null
           id?: string
           is_active?: boolean | null
+          is_unblockable?: boolean
           reason: string
           unblocked_at?: string | null
           unblocked_by?: number | null
@@ -45,6 +47,7 @@ export type Database = {
           first_name?: string | null
           id?: string
           is_active?: boolean | null
+          is_unblockable?: boolean
           reason?: string
           unblocked_at?: string | null
           unblocked_by?: number | null
@@ -229,6 +232,48 @@ export type Database = {
           date?: string
           inactive30?: number
           snapshotted_at?: string
+        }
+        Relationships: []
+      }
+      moderation_reviews: {
+        Row: {
+          context: string
+          created_at: string
+          evidence_file_id: string | null
+          explanation: string
+          id: string
+          reported_id: number
+          reporter_id: number
+          resolved_at: string | null
+          resolved_by: number | null
+          source_message_id: number | null
+          status: string
+        }
+        Insert: {
+          context: string
+          created_at?: string
+          evidence_file_id?: string | null
+          explanation: string
+          id?: string
+          reported_id: number
+          reporter_id: number
+          resolved_at?: string | null
+          resolved_by?: number | null
+          source_message_id?: number | null
+          status?: string
+        }
+        Update: {
+          context?: string
+          created_at?: string
+          evidence_file_id?: string | null
+          explanation?: string
+          id?: string
+          reported_id?: number
+          reporter_id?: number
+          resolved_at?: string | null
+          resolved_by?: number | null
+          source_message_id?: number | null
+          status?: string
         }
         Relationships: []
       }
@@ -749,6 +794,7 @@ export type Database = {
           last_reengagement_sent_at: string | null
           location: string | null
           matched_at: string | null
+          moderation_state: string
           negative_reports_count: number
           partner_id: number | null
           penalty_points: number | null
@@ -759,6 +805,7 @@ export type Database = {
           referral_qualified_count: number
           referral_rewards_claimed: number
           referred_by: number | null
+          report_draft: Json | null
           reports_decay_at: string | null
           shadowban_until: string | null
           spam_warning_until: string | null
@@ -802,6 +849,7 @@ export type Database = {
           last_reengagement_sent_at?: string | null
           location?: string | null
           matched_at?: string | null
+          moderation_state?: string
           negative_reports_count?: number
           partner_id?: number | null
           penalty_points?: number | null
@@ -812,6 +860,7 @@ export type Database = {
           referral_qualified_count?: number
           referral_rewards_claimed?: number
           referred_by?: number | null
+          report_draft?: Json | null
           reports_decay_at?: string | null
           shadowban_until?: string | null
           spam_warning_until?: string | null
@@ -855,6 +904,7 @@ export type Database = {
           last_reengagement_sent_at?: string | null
           location?: string | null
           matched_at?: string | null
+          moderation_state?: string
           negative_reports_count?: number
           partner_id?: number | null
           penalty_points?: number | null
@@ -865,6 +915,7 @@ export type Database = {
           referral_qualified_count?: number
           referral_rewards_claimed?: number
           referred_by?: number | null
+          report_draft?: Json | null
           reports_decay_at?: string | null
           shadowban_until?: string | null
           spam_warning_until?: string | null
@@ -1066,12 +1117,22 @@ export type Database = {
         Returns: Json
       }
       apply_daily_penalty_decay: { Args: never; Returns: number }
+      begin_report_draft: {
+        Args: {
+          p_context: string
+          p_reported_id: number
+          p_reporter_id: number
+          p_source_id: number
+        }
+        Returns: Json
+      }
       bridge_exec_sql: {
         Args: { p_params?: Json; p_sql: string }
         Returns: Json
       }
       cancel_fine_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_premium_transaction: { Args: { p_user_id: number }; Returns: Json }
+      cancel_report_draft: { Args: { p_user_id: number }; Returns: undefined }
       cancel_topup_transaction: { Args: { p_user_id: number }; Returns: Json }
       check_and_claim_special_promo: {
         Args: { p_user_id: number }
@@ -1178,6 +1239,10 @@ export type Database = {
         Args: { p_admin_id: number; p_reason: string; p_request_id: string }
         Returns: Json
       }
+      report_weight: {
+        Args: { p_category: string; p_context: string }
+        Returns: number
+      }
       request_referral_cashout: { Args: { p_user_id: number }; Returns: Json }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
       resolve_chat_call_invite: {
@@ -1186,6 +1251,10 @@ export type Database = {
       }
       resolve_face_verification: {
         Args: { p_action: string; p_user_id: number }
+        Returns: Json
+      }
+      resolve_moderation_review: {
+        Args: { p_action: string; p_admin_id: number; p_review_id: string }
         Returns: Json
       }
       resolve_reconnect: {
@@ -1228,6 +1297,18 @@ export type Database = {
         Returns: boolean
       }
       snapshot_daily_stats: { Args: { p_target_date?: string }; Returns: Json }
+      submit_context_report: {
+        Args: {
+          p_category: string
+          p_context: string
+          p_evidence?: string
+          p_explanation?: string
+          p_reported_id: number
+          p_reporter_id: number
+          p_source_id?: number
+        }
+        Returns: Json
+      }
       submit_partner_report: {
         Args: {
           p_report_type: string
