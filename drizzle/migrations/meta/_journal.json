@@ -50,6 +50,13 @@
       "when": 1792201046102,
       "tag": "0006_face_verification_data_minimization",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792472692440,
+      "tag": "0007_contextual_reports_and_moderation",
+      "breakpoints": true
     }
   ]
 }
