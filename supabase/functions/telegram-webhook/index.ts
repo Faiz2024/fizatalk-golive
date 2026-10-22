@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'; // v1
 import { createPakasirV2Invoice, type PakasirInvoiceResult } from '../_shared/pakasir.ts';
+import { handleReportCallback, handleReportEvidence } from '../_shared/report-handlers.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -646,11 +647,7 @@ async function handleSuccessfulStarsPayment(
       }
 
       const updatePayload: any = { 
-        premium_until: premiumEndDate.toISOString(), 
-        penalty_points: 0, 
-        spam_warnings: 0, 
-        spam_warning_until: null, 
-        unacknowledged_reports_count: 0 
+        premium_until: premiumEndDate.toISOString()
       };
       if (isSpecialPromo) {
         updatePayload.special_promo_purchased_at = new Date().toISOString();
@@ -661,10 +658,7 @@ async function handleSuccessfulStarsPayment(
         .update(updatePayload)
         .eq('id', userId);
 
-      // Unblock if blocked
-      await supabase.from('blocked_users')
-        .update({ is_active: false, unblocked_at: new Date().toISOString() })
-        .eq('user_id', userId);
+      // Premium never clears moderation sanctions.
 
       // Record in premium_requests
       await supabase.from('premium_requests').insert({
@@ -732,6 +726,13 @@ async function handleSuccessfulStarsPayment(
 
     } else if (type === 'f') {
       // FINE PAYMENT
+      const { data: eligible, error } = await supabase.rpc('can_restore_account', { p_user_id: userId });
+      if (error) throw error;
+      if (!eligible) {
+        await tgCall(botToken, 'refundStarPayment', { user_id: userId, telegram_payment_charge_id: chargeId });
+        await sendTelegramMessage(botToken, userId, 'Pembayaran tidak membuka pembatasan moderasi. Permintaan pengembalian Stars dikirim. Hubungi @FizaTalkCS.');
+        return;
+      }
       const FINE_AMOUNT = 10000;
 
       // Unblock user
@@ -1381,11 +1382,7 @@ async function handleCSApproveReject(
 
       const isSpecialPromo = (premReq.price === 15000 && premReq.duration_days === 30) || (premReq.price === 10000 && premReq.duration_days === 7) || (premReq.price === 99000 && premReq.duration_days === 365);
       const updatePayload: any = { 
-        premium_until: premiumEndDate.toISOString(), 
-        penalty_points: 0, 
-        spam_warnings: 0, 
-        spam_warning_until: null, 
-        unacknowledged_reports_count: 0 
+        premium_until: premiumEndDate.toISOString()
       };
       if (isSpecialPromo) {
         updatePayload.special_promo_purchased_at = new Date().toISOString();
@@ -1395,9 +1392,7 @@ async function handleCSApproveReject(
         .update(updatePayload)
         .eq('id', userId);
 
-      // Unblock if blocked
-      await supabase.from('blocked_users')
-        .update({ is_active: false, unblocked_at: new Date().toISOString() }).eq('user_id', userId);
+      // Premium never clears moderation sanctions.
 
       // Record transaction
       await supabase.from('coin_transactions').insert({
@@ -1462,6 +1457,12 @@ async function handleCSApproveReject(
       }
 
       const userId = fineReq.user_id;
+      const { data: eligible, error } = await supabase.rpc('can_restore_account', { p_user_id: userId });
+      if (error) throw error;
+      if (!eligible) {
+        await editCSMessage(botToken, csChatId, csMessage.message_id, originalText, 'Pemulihan ditolak: akun dalam moderasi/permanen. Tinjau pembayaran dengan CS.');
+        return;
+      }
 
       await supabase.from('pending_transactions')
         .update({ status: 'approved', approved_at: new Date().toISOString(), approved_by: csChatId })
@@ -2969,7 +2970,6 @@ const stickerPackCache = new Map<string, StickerPackData>();
 const buttonClickCache = new Map<string, number>();
 
 // Cooldown per action type (dalam milidetik) - DIPERBESAR untuk mencegah double-click
-const PREMIUM_MEDIA_CACHE = new Map<number, { premium: boolean; at: number }>();
 const BUTTON_COOLDOWNS: Record<string, number> = {
   'search_partner': 5000,    // 5 detik - mencari partner (operasi berat)
   'chat_next': 5000,         // 5 detik - next partner (operasi berat)
@@ -3498,6 +3498,10 @@ async function comprehensiveSearchAction(
   }
 
   // Handle jika user diblokir (dari blocked_users table)
+  if (!result.success && (result as any).error === 'moderation_hold') {
+    await sendTelegramMessage(botToken, userId, (result as any).blocked_message);
+    return { success: false, handled: true };
+  }
   if (!result.success && result.error === 'user_blocked') {
     const blockedKeyboard = {
       inline_keyboard: [
@@ -4698,10 +4702,19 @@ Deno.serve(async (req) => {
     if (update.pre_checkout_query) {
       const pcq = update.pre_checkout_query;
       console.log(`[STARS] pre_checkout_query from ${pcq.from.id}: ${pcq.invoice_payload}`);
+      let checkoutAllowed = true;
+      try {
+        const payload = JSON.parse(pcq.invoice_payload);
+        if (payload.t === 'f') {
+          const { data, error } = await supabase.rpc('can_restore_account', { p_user_id: pcq.from.id });
+          if (error) return new Response('Database Error', { status: 500 });
+          checkoutAllowed = data === true;
+        }
+      } catch { checkoutAllowed = false; }
       await fetch(`${TELEGRAM_API}${botToken}/answerPreCheckoutQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pre_checkout_query_id: pcq.id, ok: true })
+        body: JSON.stringify({ pre_checkout_query_id: pcq.id, ok: checkoutAllowed, ...(!checkoutAllowed ? { error_message: 'Pembatasan moderasi tidak dapat dibuka dengan pembayaran.' } : {}) })
       });
       return new Response('OK', { status: 200 });
     }
@@ -4712,6 +4725,17 @@ Deno.serve(async (req) => {
       const userId = query.from.id;
       const callbackData = query.data || '';
       const message = query.message;
+      const reportResponse = await handleReportCallback(query, { db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID') });
+      if (reportResponse) return reportResponse;
+
+      if (callbackData === 'pay_fine' || callbackData.startsWith('fine_pay_')) {
+        const { data: eligibility, error } = await supabase.rpc('can_restore_account', { p_user_id: userId });
+        if (error) return new Response('Database Error', { status: 500 });
+        if (!eligibility) {
+          await answerCallbackQuery(botToken, query.id, 'Pembatasan ini tidak dapat dibuka dengan pembayaran. Hubungi @FizaTalkCS.', true);
+          return new Response('OK');
+        }
+      }
 
       // ============================================
       // STEP 1: DEBOUNCE CHECK - PALING AWAL!
@@ -5057,7 +5081,7 @@ Deno.serve(async (req) => {
         const { error: lsErr } = await supabase.rpc('submit_partner_report', {
           p_reporter_id: userId, p_reported_id: spammerId, p_report_type: 'link_spam'
         });
-        if (lsErr) console.error('[LINK SPAM] rpc error:', lsErr.message);
+        if (lsErr) return new Response('Database Error', { status: 500 });
 
         // Hapus tombol spam dari pesan agar partner tidak double-klik
         await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
@@ -5294,7 +5318,7 @@ Deno.serve(async (req) => {
           p_reported_id: parseInt(senderId),
           p_report_type: kind === 'a' ? 'media_sange' : 'media_spam'
         });
-        if (rmErr) console.error('[MEDIA REPORT] rpc error:', rmErr.message);
+        if (rmErr) return new Response('Database Error', { status: 500 });
 
         answerCallbackQuery(botToken, query.id, '✅ Laporan diterima. Terima kasih!', true).catch(() => {});
         await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
@@ -6897,7 +6921,7 @@ Deno.serve(async (req) => {
         if (reportError) {
           console.error('submit_partner_report error:', reportError);
           await answerCallbackQuery(botToken, query.id, '❌ Gagal mengirim rating');
-          return new Response('OK', { status: 200 });
+          return new Response('Database Error', { status: 500 });
         }
 
         // Handle hasil RPC
@@ -7160,7 +7184,7 @@ Deno.serve(async (req) => {
     // UBAH BAGIAN INI: Tambahkan retry sederhana atau error blocking
     const { data: dbUser, error: dbError } = await supabase
       .from('telegram_users')
-      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at, profile_flow, is_face_verified, verification_status, profile_photo_file_id')
+      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at, profile_flow, is_face_verified, verification_status, profile_photo_file_id, report_draft, moderation_state')
       .eq('id', userId)
       .maybeSingle();
 
@@ -7173,6 +7197,22 @@ Deno.serve(async (req) => {
 
     if (dbUser) {
       currentUser = dbUser;
+    }
+
+    if (dbUser?.report_draft) {
+      if (text === '/batal' || text === '/back') {
+        const { error } = await supabase.rpc('cancel_report_draft', { p_user_id: userId });
+        if (error) return new Response('Database Error', { status: 500 });
+        await sendTelegramMessage(botToken, userId, '⬅️ Pengiriman laporan dibatalkan.');
+        return new Response('OK');
+      }
+      if (!text?.startsWith('/')) return await handleReportEvidence(message, dbUser.report_draft, {
+        db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID'),
+      });
+    }
+    if (dbUser?.moderation_state && dbUser.moderation_state !== 'normal' && !['/rules', '/tos', '/aturan'].includes(text || '')) {
+      await sendTelegramMessage(botToken, userId, '⏳ Akun dibatasi oleh moderasi. Pembayaran tidak membuka pembatasan. Sanggahan: @FizaTalkCS.');
+      return new Response('OK');
     }
 
     // === FOTO PROFIL: command & alur (tidak aktif saat chatting) ===
@@ -7471,13 +7511,9 @@ Deno.serve(async (req) => {
       // === DETEKSI SPAM UNTUK SEMUA JENIS PESAN ===
       let spamMarkup = undefined;
 
-      const isSenderPremium = dbUser?.premium_until && new Date(dbUser.premium_until) > new Date();
-
-      const withinFirstMinute = !!dbUser?.matched_at && (Date.now() - new Date(dbUser.matched_at).getTime()) <= 60000;
-
-      if (hasSpamEntities(message) && !isSenderPremium && withinFirstMinute) {
+      if (hasSpamEntities(message)) {
         spamMarkup = {
-          inline_keyboard: [[{ text: '🚩 Laporkan spam', callback_data: `reportspam_${userId}` }]]
+          inline_keyboard: [[{ text: '🚩 Laporkan Link / Username', callback_data: `reportspam_${userId}` }]]
         };
       }
 
@@ -7643,21 +7679,7 @@ Deno.serve(async (req) => {
             finalCaption = finalCaption.substring(0, 997) + "...";
           }
 
-          // Cache premium status 5 menit agar kirim media tidak query DB setiap kali
-          let isPremiumSender: boolean;
-          const cachedPrem = PREMIUM_MEDIA_CACHE.get(userId);
-          if (cachedPrem && Date.now() - cachedPrem.at < 300000) {
-            isPremiumSender = cachedPrem.premium;
-          } else {
-            const { data: senderData } = await supabase.from('telegram_users').select('premium_until').eq('id', userId).single();
-            isPremiumSender = !!(senderData?.premium_until && new Date(senderData.premium_until) > new Date());
-            if (PREMIUM_MEDIA_CACHE.size > 2000) PREMIUM_MEDIA_CACHE.clear();
-            PREMIUM_MEDIA_CACHE.set(userId, { premium: isPremiumSender, at: Date.now() });
-          }
-
-          const reportMarkup = isPremiumSender
-            ? { inline_keyboard: [] }
-            : { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${userId}` }]] };
+          const reportMarkup = { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${userId}` }]] };
 
           const bodyPayload: any = {
             chat_id: partnerId,
@@ -7703,13 +7725,14 @@ Deno.serve(async (req) => {
               from_chat_id: userId,
               message_id: message.message_id,
               caption: finalCaption,
-              parse_mode: 'HTML'
+              parse_mode: 'HTML',
+              reply_markup: { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${userId}` }]] }
             })
           });
         } else {
 
           // Bukan reply, copy biasa (mempertahankan caption asli user jika ada)
-          await copyTelegramMessage(botToken, partnerId, userId, message.message_id);
+          await copyTelegramMessage(botToken, partnerId, userId, message.message_id, { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${userId}` }]] });
         }
       }
 
