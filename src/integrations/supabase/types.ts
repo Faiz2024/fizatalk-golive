@@ -282,6 +282,8 @@ export type Database = {
           created_at: string | null
           id: string
           penalty_change: number
+          report_category: string | null
+          report_context: string | null
           report_type: string
           reported_id: number
           reporter_id: number
@@ -290,6 +292,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           penalty_change: number
+          report_category?: string | null
+          report_context?: string | null
           report_type: string
           reported_id: number
           reporter_id: number
@@ -298,6 +302,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           penalty_change?: number
+          report_category?: string | null
+          report_context?: string | null
           report_type?: string
           reported_id?: number
           reporter_id?: number
@@ -1260,6 +1266,10 @@ export type Database = {
       resolve_reconnect: {
         Args: { p_action: string; p_request_id: string }
         Returns: Json
+      }
+      restoration_payment_allowed: {
+        Args: { p_user_id: number }
+        Returns: boolean
       }
       search_or_next_partner: {
         Args: {
