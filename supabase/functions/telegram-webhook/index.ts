@@ -3205,10 +3205,16 @@ async function handleAdminBlockCommand(supabase: any, botToken: string, userId: 
   const when = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
   const label = `${escapeHtml(data.first_name || '-')}${data.username ? ' (@' + escapeHtml(data.username) + ')' : ''} • <code>${data.user_id}</code>`;
   if (action === 'ban') {
-    const reason = (m[3] || '').trim() || 'Pelanggaran ketentuan layanan';
+    const reason = reasonText || 'Pelanggaran ketentuan layanan';
+    const isTemp = data.duration === 'temp';
+    const until = data.blocked_until ? formatDateTimeWIB(new Date(data.blocked_until)) : '-';
     await Promise.all([
-      sendTelegramMessage(botToken, userId, `🚫 <b>Diblokir</b>\n${label}\nAlasan: ${escapeHtml(reason)}\n🕒 ${when}`),
-      sendTelegramMessage(botToken, data.user_id, `🚫 <b>Akun Anda diblokir oleh admin.</b>\n\nAlasan: ${escapeHtml(reason)}\n\nSelama diblokir, Anda tidak dapat mencari partner maupun membeli Premium. Sanggahan: @FizaTalkCS`),
+      sendTelegramMessage(botToken, userId, isTemp
+        ? `🚫 <b>Diblokir Sementara (14 hari)</b>\n${label}\nAlasan: ${escapeHtml(reason)}\nBerakhir: ${until}\n🕒 ${when}`
+        : `🚫 <b>Diblokir Permanen</b>\n${label}\nAlasan: ${escapeHtml(reason)}\n🕒 ${when}`),
+      sendTelegramMessage(botToken, data.user_id, isTemp
+        ? `🚫 <b>Akun Anda diblokir sementara oleh admin.</b>\n\nAlasan: ${escapeHtml(reason)}\n\n⏳ Blokir berakhir: <b>${until}</b>\n\nSelama diblokir, Anda tidak dapat mencari partner maupun membeli Premium. Sanggahan: @FizaTalkCS\n\n📖 Baca ketentuan layanan: /rules`
+        : `🚫 <b>Akun Anda diblokir oleh admin.</b>\n\nAlasan: ${escapeHtml(reason)}\n\nSelama diblokir, Anda tidak dapat mencari partner maupun membeli Premium. Sanggahan: @FizaTalkCS`),
       data.partner_id ? sendTelegramMessage(botToken, data.partner_id, '⚠️ Partner kamu telah meninggalkan obrolan.', { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] }) : Promise.resolve(),
     ]);
   } else {
