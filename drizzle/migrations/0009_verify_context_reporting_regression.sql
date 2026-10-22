@@ -1,0 +1,32 @@
+DO $test$ DECLARE r jsonb; before_premium timestamptz; rid uuid; BEGIN
+ BEGIN
+  SELECT premium_until INTO before_premium FROM public.telegram_users WHERE id=-90261022010;
+  IF before_premium IS NULL THEN RAISE EXCEPTION 'Missing isolated test fixture'; END IF;
+  r:=public.submit_context_report(-90261022001,-90261022010,'partner','spam');
+  IF NOT (r->>'success')::boolean OR (r->>'new_penalty')::integer<>10 OR (r->>'is_banned')::boolean THEN RAISE EXCEPTION 'First Premium report must warn with 10 points'; END IF;
+  r:=public.submit_context_report(-90261022001,-90261022010,'partner','spam');
+  IF NOT (r->>'silent')::boolean THEN RAISE EXCEPTION 'Duplicate report must be silent'; END IF;
+  r:=public.submit_context_report(-90261022002,-90261022010,'link','fraud');
+  r:=public.submit_context_report(-90261022003,-90261022010,'link','fraud');
+  IF NOT (r->>'is_banned')::boolean OR public.restoration_payment_allowed(-90261022010) THEN RAISE EXCEPTION 'Repeated fraud must restrict Premium without paid recovery'; END IF;
+  r:=public.submit_context_report(-90261022004,-90261022010,'media','sexual');
+  IF NOT EXISTS(SELECT 1 FROM public.telegram_users WHERE id=-90261022010 AND shadowban_until>now()+interval '2 days 23 hours' AND negative_reports_count=4) THEN RAISE EXCEPTION 'Four reports must cause three day shadowban'; END IF;
+  r:=public.begin_report_draft(-90261022001,-90261022010,'partner',101);
+  r:=public.submit_context_report(-90261022001,-90261022010,'partner','danger','Penjelasan kejadian lengkap',NULL,101);
+  IF r->>'error'<>'evidence_required' THEN RAISE EXCEPTION 'Safe screenshot required for partner severe report'; END IF;
+  r:=public.submit_context_report(-90261022001,-90261022010,'partner','danger','Penjelasan kejadian lengkap','safe-test-reference',101);
+  rid:=(r->>'review_id')::uuid;
+  IF NOT EXISTS(SELECT 1 FROM public.telegram_users WHERE id=-90261022010 AND moderation_state='pending') THEN RAISE EXCEPTION 'Severe report must pause pending review'; END IF;
+  r:=public.resolve_moderation_review(rid,'reject',-90261022001);
+  IF NOT EXISTS(SELECT 1 FROM public.telegram_users WHERE id=-90261022010 AND moderation_state='normal' AND premium_until>=before_premium) THEN RAISE EXCEPTION 'Rejected severe report must restore moderation and Premium time'; END IF;
+  r:=public.begin_report_draft(-90261022002,-90261022010,'media',102);
+  r:=public.submit_context_report(-90261022002,-90261022010,'media','danger','Penjelasan kejadian lengkap',NULL,102);
+  rid:=(r->>'review_id')::uuid;
+  r:=public.resolve_moderation_review(rid,'ban',-90261022001);
+  IF public.restoration_payment_allowed(-90261022010) OR NOT EXISTS(SELECT 1 FROM public.telegram_users WHERE id=-90261022010 AND moderation_state='permanent') THEN RAISE EXCEPTION 'Confirmed severe report must remain permanent'; END IF;
+  UPDATE public.blocked_users SET is_active=false,is_unblockable=true WHERE user_id=-90261022010;
+  IF NOT EXISTS(SELECT 1 FROM public.blocked_users WHERE user_id=-90261022010 AND is_active AND NOT is_unblockable) THEN RAISE EXCEPTION 'Permanent ban cannot be bypassed'; END IF;
+  RAISE EXCEPTION USING ERRCODE='Z0001', MESSAGE='regression passed rollback fixture changes';
+ EXCEPTION WHEN SQLSTATE 'Z0001' THEN RAISE NOTICE 'All isolated contextual reporting regression checks passed';
+ END;
+END $test$;

@@ -57,6 +57,20 @@
       "when": 1792472692440,
       "tag": "0007_contextual_reports_and_moderation",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792636231741,
+      "tag": "0008_harden_context_report_runtime",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792636392643,
+      "tag": "0009_verify_context_reporting_regression",
+      "breakpoints": true
     }
   ]
 }
