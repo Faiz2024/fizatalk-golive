@@ -2882,8 +2882,8 @@ function buildSearchMessageWithReputation(
   }
 
   // Keterangan shadowban: pencocokan bisa lebih lama (berlaku untuk semua user)
-  let shadowNote = '';
-  if (reputation?.shadowban_notice) {
+  const shadowNote = '';
+  if (false) {
     const untilText = reputation.shadowban_until
       ? ` Status ini berakhir otomatis pada ${formatDateTimeWIB(new Date(reputation.shadowban_until))}.`
       : '';
@@ -2891,9 +2891,9 @@ function buildSearchMessageWithReputation(
   }
 
   // Jika tidak ada reputation atau penalty di bawah 40
-  if (!reputation || reputation.penalty_points < 40) {
+  if (true) {
     // Jika skipIfLowPenalty = true, tidak perlu kirim pesan (kecuali sedang shadowban non-premium)
-    if (skipIfLowPenalty && !reputation?.shadowban_notice) {
+    if (skipIfLowPenalty) {
       return null;
     }
     return `${baseAction}${filterText}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}${shadowNote}`;
@@ -3544,6 +3544,25 @@ async function comprehensiveSearchAction(
   }
 
   // Handle jika user diblokir (dari blocked_users table)
+  const sanctionError = (result as any).error;
+  if (!result.success && sanctionError === 'report_lock') {
+    const until = (result as any).lock_until ? formatDateTimeWIB(new Date((result as any).lock_until)) : '-';
+    await sendTelegramMessage(botToken, userId,
+      `🔒 <b>AKUN DIKUNCI 3 HARI</b>\n\nAkun Anda menerima 4 laporan dalam 12 jam.\n\n⏳ Kunci berakhir: <b>${until}</b>\n\nSetelah masa kunci selesai, tekan <b>Setuju</b> untuk berjanji tidak mengulangi pelanggaran. Jika kembali menerima 4 laporan dalam 12 jam, akun akan diblokir.`,
+      { inline_keyboard: [[{ text: '✅ Setuju, saya tidak akan mengulangi', callback_data: 'agree_conduct' }]] });
+    return { success: false, handled: true, result };
+  }
+  if (!result.success && sanctionError === 'report_stage2') {
+    await sendTelegramMessage(botToken, userId,
+      `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda kembali menerima 4 laporan dalam 12 jam setelah kesepakatan sebelumnya.\n\nAnda dapat memulihkan akun dengan biaya <b>Rp 10.000</b> dan menyetujui untuk tidak mengulangi pelanggaran.\n\n⚠️ Jika menerima 4 laporan lagi, akun diblokir <b>permanen tanpa opsi pemulihan</b>.`,
+      { inline_keyboard: [[{ text: '✅ Setuju & Pulihkan Akun - Rp 10.000', callback_data: 'pay_fine' }]] });
+    return { success: false, handled: true, result };
+  }
+  if (!result.success && sanctionError === 'report_permanent') {
+    await sendTelegramMessage(botToken, userId,
+      `⛔ <b>AKUN DIBLOKIR PERMANEN</b>\n\nAkun Anda melanggar kesepakatan berulang kali (4 laporan dalam 12 jam untuk ketiga kalinya). Blokir ini tidak dapat dipulihkan dengan pembayaran.`);
+    return { success: false, handled: true, result };
+  }
   if (!result.success && (result as any).error === 'moderation_hold') {
     await sendTelegramMessage(botToken, userId, (result as any).blocked_message);
     return { success: false, handled: true };
@@ -3670,8 +3689,8 @@ async function handleComprehensiveSearchResult(
   isNext: boolean = false,
   searchMessageAlreadySent: boolean = false
 ): Promise<void> {
-  const penaltyPoints = result.reputation?.penalty_points || 0;
-  const warningsCount = (result.reputation as any)?.report_warnings_to_show || 0;
+  const penaltyPoints = 0;
+  const warningsCount = 0;
 
   // Tampilkan peringatan jika ada laporan yang belum diakui
   if (warningsCount > 0) {
@@ -4492,7 +4511,7 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
       target_location: preNextData?.target_location 
     } : undefined;
 
-    const penaltyPoints = preNextData?.penalty_points || 0;
+    const penaltyPoints = 0;
     const isBanned = penaltyPoints >= 100;
 
     const reputation = {
@@ -4783,6 +4802,20 @@ Deno.serve(async (req) => {
       const reportResponse = await handleReportCallback(query, { db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID') });
       if (reportResponse) return reportResponse;
 
+      if (callbackData === 'agree_conduct') {
+        const { data: ag, error } = await supabase.rpc('accept_conduct_agreement', { p_user_id: userId });
+        if (error) return new Response('Database Error', { status: 500 });
+        if (!ag?.success) {
+          const until = ag?.lock_until ? formatDateTimeWIB(new Date(ag.lock_until)) : '-';
+          await answerCallbackQuery(botToken, query.id, `Masa kunci belum selesai. Coba lagi setelah ${until}.`, true);
+          return new Response('OK');
+        }
+        await answerCallbackQuery(botToken, query.id, 'Terima kasih, akun aktif kembali.');
+        if (message) await tgCall(botToken, 'editMessageText', { chat_id: message.chat.id, message_id: message.message_id, parse_mode: 'HTML',
+          text: '✅ <b>Kesepakatan disetujui</b>\n\nAkun Anda aktif kembali. Ingat: 4 laporan lagi dalam 12 jam akan membuat akun diblokir.',
+          reply_markup: { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] } });
+        return new Response('OK');
+      }
       if (callbackData === 'pay_fine' || callbackData.startsWith('fine_pay_')) {
         const { data: eligibility, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: userId });
         if (error) return new Response('Database Error', { status: 500 });

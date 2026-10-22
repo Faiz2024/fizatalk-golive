@@ -781,6 +781,7 @@ export type Database = {
           chats_since_premium_shadow: number
           clean_days_streak: number
           coins: number
+          conduct_agreement_pending: boolean
           created_at: string
           first_name: string | null
           gender: string | null
@@ -812,7 +813,10 @@ export type Database = {
           referral_rewards_claimed: number
           referred_by: number | null
           report_draft: Json | null
+          report_lock_until: string | null
           reports_decay_at: string | null
+          sanction_counted_since: string | null
+          sanction_level: number
           shadowban_until: string | null
           spam_warning_until: string | null
           spam_warnings: number | null
@@ -836,6 +840,7 @@ export type Database = {
           chats_since_premium_shadow?: number
           clean_days_streak?: number
           coins?: number
+          conduct_agreement_pending?: boolean
           created_at?: string
           first_name?: string | null
           gender?: string | null
@@ -867,7 +872,10 @@ export type Database = {
           referral_rewards_claimed?: number
           referred_by?: number | null
           report_draft?: Json | null
+          report_lock_until?: string | null
           reports_decay_at?: string | null
+          sanction_counted_since?: string | null
+          sanction_level?: number
           shadowban_until?: string | null
           spam_warning_until?: string | null
           spam_warnings?: number | null
@@ -891,6 +899,7 @@ export type Database = {
           chats_since_premium_shadow?: number
           clean_days_streak?: number
           coins?: number
+          conduct_agreement_pending?: boolean
           created_at?: string
           first_name?: string | null
           gender?: string | null
@@ -922,7 +931,10 @@ export type Database = {
           referral_rewards_claimed?: number
           referred_by?: number | null
           report_draft?: Json | null
+          report_lock_until?: string | null
           reports_decay_at?: string | null
+          sanction_counted_since?: string | null
+          sanction_level?: number
           shadowban_until?: string | null
           spam_warning_until?: string | null
           spam_warnings?: number | null
@@ -1114,6 +1126,7 @@ export type Database = {
       }
     }
     Functions: {
+      accept_conduct_agreement: { Args: { p_user_id: number }; Returns: Json }
       add_response_stats: {
         Args: { p_count: number; p_seconds: number; p_user_id: number }
         Returns: undefined
