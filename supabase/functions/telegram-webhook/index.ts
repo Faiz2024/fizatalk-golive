@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'; // v1
 import { createPakasirV2Invoice, type PakasirInvoiceResult } from '../_shared/pakasir.ts';
 import { handleReportCallback, handleReportEvidence } from '../_shared/report-handlers.ts';
+import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -3052,6 +3053,8 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('prem_pay_')) return 'prem_pay';
   if (callbackData.startsWith('topup_pay_')) return 'topup_pay';
   if (callbackData.startsWith('fine_pay_')) return 'fine_pay';
+  if (callbackData.startsWith('rc_') || callbackData.startsWith('rcback_')) return 'report_media';
+  if (callbackData.startsWith('mod_')) return 'admin_media_action';
   if (callbackData.startsWith('report_user_')) return 'report_user';
   if (callbackData.startsWith('rate_asik_')) return 'rate_asik';
   if (callbackData.startsWith('rate_baik_')) return 'rate_baik';
@@ -4587,6 +4590,9 @@ Deno.serve(async (req) => {
       return new Response('Bot token not configured', { status: 500 });
     }
 
+    if (!validWebhookSecret(req.headers.get('X-Telegram-Bot-Api-Secret-Token'), await telegramWebhookSecret(botToken))) {
+      return new Response('Forbidden', { status: 403 });
+    }
     const supabase = createClient(supabaseUrl, supabaseKey);
 
 
@@ -4725,18 +4731,6 @@ Deno.serve(async (req) => {
       const userId = query.from.id;
       const callbackData = query.data || '';
       const message = query.message;
-      const reportResponse = await handleReportCallback(query, { db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID') });
-      if (reportResponse) return reportResponse;
-
-      if (callbackData === 'pay_fine' || callbackData.startsWith('fine_pay_')) {
-        const { data: eligibility, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: userId });
-        if (error) return new Response('Database Error', { status: 500 });
-        if (!eligibility) {
-          await answerCallbackQuery(botToken, query.id, 'Pembatasan ini tidak dapat dibuka dengan pembayaran. Hubungi @FizaTalkCS.', true);
-          return new Response('OK');
-        }
-      }
-
       // ============================================
       // STEP 1: DEBOUNCE CHECK - PALING AWAL!
       // ============================================
@@ -4747,6 +4741,18 @@ Deno.serve(async (req) => {
         // Langsung jawab callback dan return - NO DATABASE OPERATIONS
         await answerCallbackQuery(botToken, query.id, '⏳ Mohon tunggu sebentar...', false);
         return new Response('OK', { status: 200 });
+      }
+
+      const reportResponse = await handleReportCallback(query, { db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID') });
+      if (reportResponse) return reportResponse;
+
+      if (callbackData === 'pay_fine' || callbackData.startsWith('fine_pay_')) {
+        const { data: eligibility, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: userId });
+        if (error) return new Response('Database Error', { status: 500 });
+        if (!eligibility) {
+          await answerCallbackQuery(botToken, query.id, 'Pembatasan ini tidak dapat dibuka dengan pembayaran. Hubungi @FizaTalkCS.', true);
+          return new Response('OK');
+        }
       }
 
       // --- UNDANGAN VOICE CALL DARI PARTNER CHAT ---
