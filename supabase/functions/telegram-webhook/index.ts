@@ -2529,8 +2529,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
       // Gunakan UI Blokir Existing
       const blockedKeyboard = {
         inline_keyboard: [
-          [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }],
-          [{ text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }]
+          [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]
         ]
       };
       const blockedMsg = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ <b>Alasan:</b> Anda telah mencapai batas peringatan SPAM (4/4). Demi kenyamanan, akses chat Anda <b>dinonaktifkan</b>.\n\nPilih opsi di bawah untuk memulihkan akun:`;
@@ -3554,9 +3553,6 @@ async function comprehensiveSearchAction(
       inline_keyboard: [
         [
           { text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }
-        ],
-        [
-          { text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }
         ]
       ]
     };
@@ -3607,9 +3603,6 @@ async function comprehensiveSearchAction(
       inline_keyboard: [
         [
           { text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }
-        ],
-        [
-          { text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }
         ]
       ]
     };
@@ -4755,8 +4748,8 @@ Deno.serve(async (req) => {
       let checkoutAllowed = true;
       try {
         const payload = JSON.parse(pcq.invoice_payload);
-        if (payload.t === 'f') {
-          const { data, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: pcq.from.id });
+        if (payload.t === 'f' || payload.t === 'p') {
+          const { data, error } = await supabase.rpc(payload.t === 'f' ? 'restoration_payment_allowed' : 'premium_purchase_allowed', { p_user_id: pcq.from.id });
           if (error) return new Response('Database Error', { status: 500 });
           checkoutAllowed = data === true;
         }
@@ -4764,7 +4757,7 @@ Deno.serve(async (req) => {
       await fetch(`${TELEGRAM_API}${botToken}/answerPreCheckoutQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pre_checkout_query_id: pcq.id, ok: checkoutAllowed, ...(!checkoutAllowed ? { error_message: 'Pembatasan moderasi tidak dapat dibuka dengan pembayaran.' } : {}) })
+        body: JSON.stringify({ pre_checkout_query_id: pcq.id, ok: checkoutAllowed, ...(!checkoutAllowed ? { error_message: 'Akun sedang diblokir/dibatasi. Pembayaran tidak dapat diproses.' } : {}) })
       });
       return new Response('OK', { status: 200 });
     }
@@ -5497,8 +5490,7 @@ Deno.serve(async (req) => {
           } else {
             payload.reply_markup = {
               inline_keyboard: [
-                [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }],
-                [{ text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }]
+                [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]
               ]
             };
             if (mediaField !== 'video_note') {
@@ -6067,8 +6059,7 @@ Deno.serve(async (req) => {
         } else if (isNonOrganic && !proc.is_premium) {
           const blockedKeyboard = {
             inline_keyboard: [
-              [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }],
-              [{ text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }]
+              [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]
             ]
           };
           await sendTelegramMessage(botToken, proc.user_id,

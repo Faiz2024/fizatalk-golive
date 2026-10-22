@@ -31,6 +31,16 @@ export async function handlePremiumSuccess(supabase: any, botToken: string, requ
     return;
   }
 
+  const { data: allowed, error: allowErr } = await supabase.rpc('premium_purchase_allowed', { p_user_id: req.user_id });
+  if (allowErr) throw new Error('premium_purchase_allowed failed');
+  if (allowed !== true) {
+    await supabase.from('premium_requests').update({ status: 'rejected', processed_at: new Date().toISOString() }).eq('id', requestId).eq('status', 'pending');
+    await sendTelegramMessage(botToken, req.user_id, '🚫 <b>Premium tidak diaktifkan</b>\n\nAkun Anda sedang diblokir/dibatasi, sehingga Premium tidak dapat dibeli. Hubungi @FizaTalkCS.');
+    const cs = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+    if (cs) await sendTelegramMessage(botToken, parseInt(cs), `⚠️ <b>PREMIUM DITOLAK (AKUN DIBLOKIR)</b>\n\n👤 User: ${req.user_id}\n💰 Rp ${req.price.toLocaleString('id-ID')}\n📱 Via: ${req.payment_method || gatewayLabel}\nPembayaran masuk; tinjau manual.`);
+    return;
+  }
+
   const { data: userData } = await supabase
     .from('telegram_users')
     .select('premium_until, special_promo_purchased_at, has_received_special_promo, special_promo_sent_at')
