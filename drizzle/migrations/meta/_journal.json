@@ -78,6 +78,13 @@
       "when": 1792645373985,
       "tag": "0010_admin_ban_unban_and_premium_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792645395628,
+      "tag": "0011_fix_admin_set_user_block",
+      "breakpoints": true
     }
   ]
 }
