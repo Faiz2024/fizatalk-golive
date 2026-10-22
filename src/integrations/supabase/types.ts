@@ -1139,6 +1139,7 @@ export type Database = {
         Args: {
           p_action: string
           p_admin_id: number
+          p_duration?: string
           p_reason?: string
           p_target: string
         }
