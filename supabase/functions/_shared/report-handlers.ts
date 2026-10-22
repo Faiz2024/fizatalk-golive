@@ -1,6 +1,5 @@
 import { evidenceValid, reportKeyboard, reportRule, type ReportContext } from './report-policy.ts';
 type Dependencies = { db: any; call: (method: string, body: any) => Promise<any>; adminChat: string | undefined; now?: () => Date };
-const escape = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const wib = (d: Date) => d.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
 const ok = () => new Response('OK');
 const fail = () => new Response('Database Error', { status: 500 });
@@ -14,6 +13,15 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
  const data=String(q.data||''); const m=q.message; const user=q.from.id;
  const answer=(text='')=>d.call('answerCallbackQuery',{callback_query_id:q.id,text});
  const edit=(kb:any)=>d.call('editMessageReplyMarkup',{chat_id:m.chat.id,message_id:m.message_id,reply_markup:kb});
+ const adminAction=data.match(/^admin_(warnm|blockm|warn|block)_(\d+)$/);
+ if(adminAction){
+  if(!m||!await adminAllowed(q,d)){await answer('Hanya admin berwenang.');return ok();}
+  const action=adminAction[1].startsWith('warn')?'warn':'block';
+  const {data:r,error}=await d.db.rpc('admin_process_media_report',{p_sender_id:Number(adminAction[2]),p_action:action});
+  if(error)return fail();if(!r?.success){await answer('Tindakan tidak dapat diproses.');return ok();}
+  await answer('Tindakan tersimpan.');await edit({inline_keyboard:[]});
+  await d.call('sendMessage',{chat_id:Number(adminAction[2]),text:action==='warn'?'⚠️ Admin memberikan peringatan pelanggaran. Aturan berlaku bagi semua pengguna, termasuk Premium.':'🚫 Akun dibatasi oleh admin karena pelanggaran. Hubungi @FizaTalkCS untuk sanggahan.'});return ok();
+ }
  if (data.startsWith('mod_')) {
   if (!m || !await adminAllowed(q,d)) {await answer('Hanya admin berwenang.');return ok();}
   const match=data.match(/^mod_(ban|reject)_([a-f0-9-]{36})$/);if(!match)return ok();
@@ -46,7 +54,7 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
  if(!r.silent){
   await d.call('sendMessage',{chat_id:target,text:`⚠️ Laporan komunitas: ${rule.label}. Hindari pelanggaran; laporan berulang dapat membatasi akun. Aturan berlaku termasuk Premium.${category==='doxxing'?' Jangan bagikan identitas/kontak tanpa persetujuan.':''}`});
   if(d.adminChat){await d.call('sendMessage',{chat_id:d.adminChat,text:`LAPORAN ${context.toUpperCase()}\n${rule.label}\nTerlapor: ${target}\nPelapor: ${user}\n${wib(d.now?.()||new Date())}`,reply_markup:{inline_keyboard:[[{text:'⚠️ Peringatan',callback_data:`admin_warnm_${target}`},{text:'🚫 Blokir',callback_data:`admin_blockm_${target}`}]]}});
-   if(context!=='partner')await d.call('copyMessage',{chat_id:d.adminChat,from_chat_id:user,message_id:m.message_id});}
+   if(context==='link'||(context==='media'&&category==='fraud'))await d.call('copyMessage',{chat_id:d.adminChat,from_chat_id:user,message_id:m.message_id});}
  }
  if(context!=='partner')await d.call('deleteMessage',{chat_id:user,message_id:m.message_id});return ok();
 }
