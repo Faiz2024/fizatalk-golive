@@ -726,7 +726,7 @@ async function handleSuccessfulStarsPayment(
 
     } else if (type === 'f') {
       // FINE PAYMENT
-      const { data: eligible, error } = await supabase.rpc('can_restore_account', { p_user_id: userId });
+      const { data: eligible, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: userId });
       if (error) throw error;
       if (!eligible) {
         await tgCall(botToken, 'refundStarPayment', { user_id: userId, telegram_payment_charge_id: chargeId });
@@ -1457,7 +1457,7 @@ async function handleCSApproveReject(
       }
 
       const userId = fineReq.user_id;
-      const { data: eligible, error } = await supabase.rpc('can_restore_account', { p_user_id: userId });
+      const { data: eligible, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: userId });
       if (error) throw error;
       if (!eligible) {
         await editCSMessage(botToken, csChatId, csMessage.message_id, originalText, 'Pemulihan ditolak: akun dalam moderasi/permanen. Tinjau pembayaran dengan CS.');
@@ -4706,7 +4706,7 @@ Deno.serve(async (req) => {
       try {
         const payload = JSON.parse(pcq.invoice_payload);
         if (payload.t === 'f') {
-          const { data, error } = await supabase.rpc('can_restore_account', { p_user_id: pcq.from.id });
+          const { data, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: pcq.from.id });
           if (error) return new Response('Database Error', { status: 500 });
           checkoutAllowed = data === true;
         }
@@ -4729,7 +4729,7 @@ Deno.serve(async (req) => {
       if (reportResponse) return reportResponse;
 
       if (callbackData === 'pay_fine' || callbackData.startsWith('fine_pay_')) {
-        const { data: eligibility, error } = await supabase.rpc('can_restore_account', { p_user_id: userId });
+        const { data: eligibility, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: userId });
         if (error) return new Response('Database Error', { status: 500 });
         if (!eligibility) {
           await answerCallbackQuery(botToken, query.id, 'Pembatasan ini tidak dapat dibuka dengan pembayaran. Hubungi @FizaTalkCS.', true);

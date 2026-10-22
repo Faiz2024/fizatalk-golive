@@ -185,7 +185,7 @@ export async function handleFineSuccess(supabase: any, botToken: string, request
     return;
   }
 
-  const { data: eligible, error: eligibilityError } = await supabase.rpc('can_restore_account', { p_user_id: req.user_id });
+  const { data: eligible, error: eligibilityError } = await supabase.rpc('restoration_payment_allowed', { p_user_id: req.user_id });
   if (eligibilityError) throw eligibilityError;
   if (!eligible) {
     await sendTelegramMessage(botToken, req.user_id, 'Pembayaran tidak dapat membuka pembatasan moderasi atau blokir permanen. Hubungi @FizaTalkCS untuk peninjauan pembayaran.');
