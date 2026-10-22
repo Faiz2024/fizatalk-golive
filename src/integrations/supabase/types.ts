@@ -1122,6 +1122,15 @@ export type Database = {
         Args: { p_action: string; p_sender_id: number }
         Returns: Json
       }
+      admin_set_user_block: {
+        Args: {
+          p_action: string
+          p_admin_id: number
+          p_reason?: string
+          p_target: string
+        }
+        Returns: Json
+      }
       apply_daily_penalty_decay: { Args: never; Returns: number }
       begin_report_draft: {
         Args: {
@@ -1218,6 +1227,10 @@ export type Database = {
           p_user_id?: number
         }
         Returns: undefined
+      }
+      premium_purchase_allowed: {
+        Args: { p_user_id: number }
+        Returns: boolean
       }
       process_gift_transaction: {
         Args: {
