@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { telegramWebhookSecret } from '../_shared/telegram-webhook-auth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,8 +29,9 @@ Deno.serve(async (req) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: webhookUrl,
+        secret_token: await telegramWebhookSecret(botToken),
         allowed_updates: ['message', 'callback_query', 'edited_message', 'my_chat_member', 'pre_checkout_query'],
-        drop_pending_updates: true,
+        drop_pending_updates: false,
       })
     })
 

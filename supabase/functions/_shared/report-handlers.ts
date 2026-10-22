@@ -10,7 +10,12 @@ async function adminAllowed(q: any, d: Dependencies) {
  return m?.ok && ['creator','administrator'].includes(m.result?.status);
 }
 export async function handleReportCallback(q: any,d: Dependencies): Promise<Response|null> {
- const data=String(q.data||''); const m=q.message; const user=q.from.id;
+ let data=String(q.data||''); const m=q.message; const user=q.from.id;
+ const old=data.match(/^(rspam|rmx)_([a-z])_(\d+)$/);
+ if(old){if(old[2]==='c')data=`rcback_${old[1]==='rspam'?'link':'media'}_${old[3]}`;
+ else data=`rc_${old[1]==='rspam'?'link':'media'}_${old[1]==='rspam'?(old[2]==='v'?'sexual':'promotion'):(old[2]==='a'?'sexual':'fraud')}_${old[3]}`;}
+ const legacy=data.match(/^rate_(spam|sange)_(\d+)$/);
+ if(legacy)data=`rc_partner_${legacy[1]==='spam'?'spam':'harassment'}_${legacy[2]}`;
  const answer=(text='')=>d.call('answerCallbackQuery',{callback_query_id:q.id,text});
  const edit=(kb:any)=>d.call('editMessageReplyMarkup',{chat_id:m.chat.id,message_id:m.message_id,reply_markup:kb});
  const adminAction=data.match(/^admin_(warnm|blockm|warn|block)_(\d+)$/);
@@ -39,7 +44,9 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
  const entry=data.match(/^(report_user|reportspam|reportm)_(\d+)$/);
  const back=data.match(/^rcback_(partner|link|media)_(\d+)$/);
  if(back){if(!m)return ok();await answer();const t=back[1]==='link'?'reportspam':back[1]==='media'?'reportm':'report_user';await edit({inline_keyboard:[[{text:'🚩 Laporkan',callback_data:`${t}_${back[2]}`}]]});return ok();}
- if(entry){if(!m)return ok();const c:ReportContext=entry[1]==='report_user'?'partner':entry[1]==='reportspam'?'link':'media';await answer();await edit(reportKeyboard(c,Number(entry[2])));return ok();}
+ if(entry){if(!m)return ok();const c:ReportContext=entry[1]==='report_user'?'partner':entry[1]==='reportspam'?'link':'media';await answer();
+  if(c==='partner'){const edited=await d.call('editMessageText',{chat_id:m.chat.id,message_id:m.message_id,text:'🚩 Pilih jenis laporan yang sesuai. Laporan palsu dapat merugikan pengguna lain. Laporan berat memerlukan penjelasan dan bukti aman untuk peninjauan.',reply_markup:reportKeyboard(c,Number(entry[2]))});if(!edited?.ok)await edit(reportKeyboard(c,Number(entry[2])));}
+  else await edit(reportKeyboard(c,Number(entry[2])));return ok();}
  const selected=data.match(/^rc_(partner|link|media)_([a-z]+)_(\d+)$/);if(!selected)return null;
  if(!m)return ok();const context=selected[1] as ReportContext;const category=selected[2];const target=Number(selected[3]);const rule=reportRule(context,category);if(!rule||!Number.isSafeInteger(target))return ok();
  if(rule.review){
@@ -52,7 +59,7 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
  if(error)return fail();if(!r?.success){await answer('Laporan tidak diterima: partner tidak sesuai atau reputasi pelapor terlalu rendah.');return ok();}
  await answer('Laporan diterima.');await edit({inline_keyboard:[]});
  if(!r.silent){
-  await d.call('sendMessage',{chat_id:target,text:`⚠️ Laporan komunitas: ${rule.label}. Hindari pelanggaran; laporan berulang dapat membatasi akun. Aturan berlaku termasuk Premium.${category==='doxxing'?' Jangan bagikan identitas/kontak tanpa persetujuan.':''}`});
+  await d.call('sendMessage',{chat_id:target,text:r.is_banned?'🚫 Akun dibatasi sementara karena laporan pelanggaran berulang. Hubungi @FizaTalkCS untuk sanggahan. Pembayaran tidak membuka pembatasan ini.':`⚠️ Laporan komunitas: ${rule.label}. Hindari pelanggaran; laporan berulang dapat membatasi akun. Aturan berlaku termasuk Premium.${category==='doxxing'?' Jangan bagikan identitas/kontak tanpa persetujuan.':''}`});
   if(d.adminChat){await d.call('sendMessage',{chat_id:d.adminChat,text:`LAPORAN ${context.toUpperCase()}\n${rule.label}\nTerlapor: ${target}\nPelapor: ${user}\n${wib(d.now?.()||new Date())}`,reply_markup:{inline_keyboard:[[{text:'⚠️ Peringatan',callback_data:`admin_warnm_${target}`},{text:'🚫 Blokir',callback_data:`admin_blockm_${target}`}]]}});
    if(context==='link'||(context==='media'&&category==='fraud'))await d.call('copyMessage',{chat_id:d.adminChat,from_chat_id:user,message_id:m.message_id});}
  }
@@ -60,7 +67,7 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
 }
 export async function handleReportEvidence(m:any,draft:any,d:Dependencies):Promise<Response>{
  const user=m.from.id;const explanation=m.caption||m.text||'';const photo=m.photo?.at(-1)?.file_id||null;
- if(new Date(draft.expires_at).getTime()<Date.now()){await d.db.rpc('cancel_report_draft',{p_user_id:user});await d.call('sendMessage',{chat_id:user,text:'Waktu pengiriman bukti habis. Buka laporan kembali.'});return ok();}
+ if(new Date(draft.expires_at).getTime()<Date.now()){const {error}=await d.db.rpc('cancel_report_draft',{p_user_id:user});if(error)return fail();await d.call('sendMessage',{chat_id:user,text:'Waktu pengiriman bukti habis. Buka laporan kembali.'});return ok();}
  if(!evidenceValid(draft.context,explanation,photo)){await d.call('sendMessage',{chat_id:user,text:'Sertakan penjelasan 10–1000 karakter; laporan percakapan memerlukan screenshot aman dengan caption. Jangan kirim materi seksual anak.'});return ok();}
  if(!d.adminChat)return fail();
  const {data:r,error}=await d.db.rpc('submit_context_report',{p_reporter_id:user,p_reported_id:Number(draft.target),p_context:draft.context,p_category:'danger',p_explanation:explanation,p_evidence:draft.context==='partner'?photo:null,p_source_id:Number(draft.source_id)});

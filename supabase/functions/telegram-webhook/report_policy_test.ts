@@ -1,5 +1,14 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { evidenceValid, reportRule, reportableMedia } from '../_shared/report-policy.ts';
+import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
+
+Deno.test('forged or missing Telegram webhook secrets cannot authorize updates', async () => {
+  const expected = await telegramWebhookSecret('test-bot-token');
+  assertEquals(validWebhookSecret(null, expected), false);
+  assertEquals(validWebhookSecret('forged', expected), false);
+  assertEquals(validWebhookSecret(await telegramWebhookSecret('other-token'), expected), false);
+  assertEquals(validWebhookSecret(expected, expected), true);
+});
 
 Deno.test('reports are available for both Premium and regular users', () => {
   assertEquals(reportableMedia(true), true);
