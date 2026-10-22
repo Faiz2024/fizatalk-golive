@@ -3189,10 +3189,14 @@ async function handleAdminBlockCommand(supabase: any, botToken: string, userId: 
   const m = text.trim().match(/^\/(ban|blokir|unban|pulihkan)(?:@\S+)?\s*(\S+)?\s*([\s\S]*)$/i)!;
   const action = ['ban', 'blokir'].includes(m[1].toLowerCase()) ? 'ban' : 'unban';
   if (!m[2]) {
-    await sendTelegramMessage(botToken, userId, `ℹ️ Format:\n<code>/ban &lt;id|@username&gt; [alasan]</code>\n<code>/unban &lt;id|@username&gt;</code>`);
+    await sendTelegramMessage(botToken, userId, `ℹ️ Format:\n<code>/ban &lt;id|@username&gt; [alasan]</code> — blokir permanen\n<code>/ban &lt;id|@username&gt; temp [alasan]</code> — blokir sementara 14 hari\n<code>/unban &lt;id|@username&gt;</code>`);
     return null;
   }
-  const { data, error } = await supabase.rpc('admin_set_user_block', { p_target: m[2], p_action: action, p_admin_id: userId, p_reason: m[3] || null });
+  const rest = (m[3] || '').trim();
+  const dm = rest.match(/^(temp|14d|sementara|perm|permanen)\b\s*([\s\S]*)$/i);
+  const duration = action === 'ban' && dm && ['temp', '14d', 'sementara'].includes(dm[1].toLowerCase()) ? 'temp' : 'perm';
+  const reasonText = (dm ? (dm[2] || '').trim() : rest) || null;
+  const { data, error } = await supabase.rpc('admin_set_user_block', { p_target: m[2], p_action: action, p_admin_id: userId, p_reason: reasonText, p_duration: duration });
   if (error) return new Response('Database Error', { status: 500 });
   if (!data?.success) {
     await sendTelegramMessage(botToken, userId, data?.error === 'user_not_found' ? `❌ Pengguna <code>${escapeHtml(m[2])}</code> tidak ditemukan.` : '❌ Input tidak valid.');
