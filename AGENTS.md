@@ -7,3 +7,4 @@
 - Validate moderation administrators against the configured CS identity or live Telegram group administrator membership; message location alone does not authorize a decision.
 - Protect pending/permanent moderation at database state and unblock boundaries; payment fulfillment must never bypass these controls.
 - Keep suspected child sexual material as restricted references rather than automatically redistributing media; request safe explanatory evidence for review.
+- Derive Telegram webhook authentication from the bot credential in one shared helper and register the same secret with Telegram; reject forged updates before database access.

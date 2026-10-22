@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Pelaporan kontekstual bot Telegram
-- [ ] Terapkan menu partner, link/username, dan media tanpa laporan diam/skip.
-- [ ] Terapkan kategori, bukti, peninjauan admin, dan sanksi setara Premium melalui RPC.
-- [ ] Lindungi penangguhan/permanen dari pembayaran pemulihan dan uji lalu deploy bot.
+- [x] Terapkan menu partner, link/username, dan media tanpa laporan diam/skip.
+- [x] Terapkan kategori, bukti, peninjauan admin, dan sanksi setara Premium melalui RPC.
+- [x] Lindungi penangguhan/permanen dari pembayaran pemulihan; uji aturan/RPC lalu deploy bot.
+- [ ] Verifikasi klik laporan → bukti → keputusan admin melalui Telegram nyata — menunggu interaksi akun Telegram pengguna/admin.
 
 ## Migrasi Pakasir API v2
 - [x] Verifikasi kontrak API v2 dan kebutuhan kredensial.
