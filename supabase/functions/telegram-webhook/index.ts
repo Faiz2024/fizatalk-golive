@@ -7590,7 +7590,7 @@ Deno.serve(async (req) => {
           }
         }
       } else if (message.sticker) {
-        const isAllowed = await handleStickerReview(supabase, botToken, message, isSenderPremium);
+        const isAllowed = await handleStickerReview(supabase, botToken, message, false);
         if (!isAllowed) {
           return new Response('OK', { status: 200, headers: corsHeaders });
         }
