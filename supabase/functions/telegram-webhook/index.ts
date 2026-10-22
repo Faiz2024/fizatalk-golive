@@ -3546,21 +3546,29 @@ async function comprehensiveSearchAction(
   // Handle jika user diblokir (dari blocked_users table)
   const sanctionError = (result as any).error;
   if (!result.success && sanctionError === 'report_lock') {
-    const until = (result as any).lock_until ? formatDateTimeWIB(new Date((result as any).lock_until)) : '-';
     await sendTelegramMessage(botToken, userId,
-      `🔒 <b>AKUN DIKUNCI 3 HARI</b>\n\nAkun Anda menerima 4 laporan dalam 12 jam.\n\n⏳ Kunci berakhir: <b>${until}</b>\n\nSetelah masa kunci selesai, tekan <b>Setuju</b> untuk berjanji tidak mengulangi pelanggaran. Jika kembali menerima 4 laporan dalam 12 jam, akun akan diblokir.`,
+      `🔒 <b>AKUN DIBATASI</b>\n\nAkun Anda dibatasi karena laporan dari pengguna lain terhadap aktivitas Anda.\n\nTekan <b>Setuju</b> untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan.\n\n📖 Baca ketentuan layanan: /rules`,
       { inline_keyboard: [[{ text: '✅ Setuju, saya tidak akan mengulangi', callback_data: 'agree_conduct' }]] });
     return { success: false, handled: true, result };
   }
   if (!result.success && sanctionError === 'report_stage2') {
+    const remaining = formatRemainingTime((result as any).blocked_until);
     await sendTelegramMessage(botToken, userId,
-      `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda kembali menerima 4 laporan dalam 12 jam setelah kesepakatan sebelumnya.\n\nAnda dapat memulihkan akun dengan biaya <b>Rp 10.000</b> dan menyetujui untuk tidak mengulangi pelanggaran.\n\n⚠️ Jika menerima 4 laporan lagi, akun diblokir <b>permanen tanpa opsi pemulihan</b>.`,
+      `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang terhadap ketentuan layanan.\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\nAnda dapat memulihkan akun lebih cepat dengan biaya <b>Rp 10.000</b> dan menyetujui untuk tidak mengulangi pelanggaran.\n\n⚠️ Jika kembali melanggar setelah pemulihan, blokir berikutnya <b>tidak dapat dibuka dengan pembayaran</b>.\n\n📖 Baca ketentuan layanan: /rules`,
       { inline_keyboard: [[{ text: '✅ Setuju & Pulihkan Akun - Rp 10.000', callback_data: 'pay_fine' }]] });
     return { success: false, handled: true, result };
   }
   if (!result.success && sanctionError === 'report_permanent') {
+    const remaining = formatRemainingTime((result as any).blocked_until);
     await sendTelegramMessage(botToken, userId,
-      `⛔ <b>AKUN DIBLOKIR PERMANEN</b>\n\nAkun Anda melanggar kesepakatan berulang kali (4 laporan dalam 12 jam untuk ketiga kalinya). Blokir ini tidak dapat dipulihkan dengan pembayaran.`);
+      `⛔ <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang setelah pemulihan sebelumnya. Blokir ini <b>tidak dapat dibuka dengan pembayaran</b>.\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\n📖 Baca ketentuan layanan: /rules`);
+    return { success: false, handled: true, result };
+  }
+  if (!result.success && sanctionError === 'admin_temp_block') {
+    const remaining = formatRemainingTime((result as any).blocked_until);
+    const reasonText = (result as any).blocked_message || 'Pelanggaran ketentuan layanan';
+    await sendTelegramMessage(botToken, userId,
+      `🚫 <b>AKUN DIBLOKIR SEMENTARA OLEH ADMIN</b>\n\nAlasan: ${escapeHtml(reasonText)}\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\nSelama diblokir, Anda tidak dapat mencari partner maupun membeli Premium. Sanggahan: @FizaTalkCS\n\n📖 Baca ketentuan layanan: /rules`);
     return { success: false, handled: true, result };
   }
   if (!result.success && (result as any).error === 'moderation_hold') {
@@ -4806,13 +4814,12 @@ Deno.serve(async (req) => {
         const { data: ag, error } = await supabase.rpc('accept_conduct_agreement', { p_user_id: userId });
         if (error) return new Response('Database Error', { status: 500 });
         if (!ag?.success) {
-          const until = ag?.lock_until ? formatDateTimeWIB(new Date(ag.lock_until)) : '-';
-          await answerCallbackQuery(botToken, query.id, `Masa kunci belum selesai. Coba lagi setelah ${until}.`, true);
+          await answerCallbackQuery(botToken, query.id, 'Kesepakatan tidak dapat diproses. Coba lagi.', true);
           return new Response('OK');
         }
         await answerCallbackQuery(botToken, query.id, 'Terima kasih, akun aktif kembali.');
         if (message) await tgCall(botToken, 'editMessageText', { chat_id: message.chat.id, message_id: message.message_id, parse_mode: 'HTML',
-          text: '✅ <b>Kesepakatan disetujui</b>\n\nAkun Anda aktif kembali. Ingat: 4 laporan lagi dalam 12 jam akan membuat akun diblokir.',
+          text: '✅ <b>Kesepakatan disetujui</b>\n\nAkun Anda aktif kembali. Patuhi ketentuan layanan (/rules) agar akun tidak dibatasi lagi.',
           reply_markup: { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] } });
         return new Response('OK');
       }
