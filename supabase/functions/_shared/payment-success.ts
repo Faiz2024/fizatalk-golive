@@ -78,7 +78,7 @@ export async function handlePremiumSuccess(supabase: any, botToken: string, requ
     premiumEndDate.setDate(premiumEndDate.getDate() + req.duration_days);
   }
 
-  const updatePayload: any = { premium_until: premiumEndDate.toISOString(), penalty_points: 0 };
+  const updatePayload: any = { premium_until: premiumEndDate.toISOString() };
   if (isSpecialPromo) {
     updatePayload.special_promo_purchased_at = new Date().toISOString();
   }
@@ -87,11 +87,6 @@ export async function handlePremiumSuccess(supabase: any, botToken: string, requ
     .from('telegram_users')
     .update(updatePayload)
     .eq('id', req.user_id);
-
-  await supabase
-    .from('blocked_users')
-    .update({ is_active: false })
-    .eq('user_id', req.user_id);
 
   await supabase
     .from('premium_requests')
@@ -187,6 +182,13 @@ export async function handleFineSuccess(supabase: any, botToken: string, request
 
   if (error || !req) {
     console.error('[CALLBACK] Fine not found:', requestId);
+    return;
+  }
+
+  const { data: eligible, error: eligibilityError } = await supabase.rpc('can_restore_account', { p_user_id: req.user_id });
+  if (eligibilityError) throw eligibilityError;
+  if (!eligible) {
+    await sendTelegramMessage(botToken, req.user_id, 'Pembayaran tidak dapat membuka pembatasan moderasi atau blokir permanen. Hubungi @FizaTalkCS untuk peninjauan pembayaran.');
     return;
   }
 
