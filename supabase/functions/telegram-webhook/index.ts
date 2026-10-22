@@ -2529,8 +2529,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
       // Gunakan UI Blokir Existing
       const blockedKeyboard = {
         inline_keyboard: [
-          [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }],
-          [{ text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }]
+          [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]
         ]
       };
       const blockedMsg = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ <b>Alasan:</b> Anda telah mencapai batas peringatan SPAM (4/4). Demi kenyamanan, akses chat Anda <b>dinonaktifkan</b>.\n\nPilih opsi di bawah untuk memulihkan akun:`;
@@ -3182,6 +3181,50 @@ async function postBonusChangeToChannel(botToken: string, oldAmount: number, new
   }
 }
 
+// === ADMIN: /ban | /blokir | /unban | /pulihkan <id|@username> [alasan] ===
+const ADMIN_BLOCK_CMD = /^\/(ban|blokir|unban|pulihkan)(@\S+)?(\s|$)/i;
+async function handleAdminBlockCommand(supabase: any, botToken: string, userId: number, text: string): Promise<Response | null> {
+  const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
+  if (!adminChatId || String(userId) !== String(adminChatId)) return null;
+  const m = text.trim().match(/^\/(ban|blokir|unban|pulihkan)(?:@\S+)?\s*(\S+)?\s*([\s\S]*)$/i)!;
+  const action = ['ban', 'blokir'].includes(m[1].toLowerCase()) ? 'ban' : 'unban';
+  if (!m[2]) {
+    await sendTelegramMessage(botToken, userId, `ℹ️ Format:\n<code>/ban &lt;id|@username&gt; [alasan]</code>\n<code>/unban &lt;id|@username&gt;</code>`);
+    return null;
+  }
+  const { data, error } = await supabase.rpc('admin_set_user_block', { p_target: m[2], p_action: action, p_admin_id: userId, p_reason: m[3] || null });
+  if (error) return new Response('Database Error', { status: 500 });
+  if (!data?.success) {
+    await sendTelegramMessage(botToken, userId, data?.error === 'user_not_found' ? `❌ Pengguna <code>${escapeHtml(m[2])}</code> tidak ditemukan.` : '❌ Input tidak valid.');
+    return null;
+  }
+  const when = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
+  const label = `${escapeHtml(data.first_name || '-')}${data.username ? ' (@' + escapeHtml(data.username) + ')' : ''} • <code>${data.user_id}</code>`;
+  if (action === 'ban') {
+    const reason = (m[3] || '').trim() || 'Pelanggaran ketentuan layanan';
+    await Promise.all([
+      sendTelegramMessage(botToken, userId, `🚫 <b>Diblokir</b>\n${label}\nAlasan: ${escapeHtml(reason)}\n🕒 ${when}`),
+      sendTelegramMessage(botToken, data.user_id, `🚫 <b>Akun Anda diblokir oleh admin.</b>\n\nAlasan: ${escapeHtml(reason)}\n\nSelama diblokir, Anda tidak dapat mencari partner maupun membeli Premium. Sanggahan: @FizaTalkCS`),
+      data.partner_id ? sendTelegramMessage(botToken, data.partner_id, '⚠️ Partner kamu telah meninggalkan obrolan.', { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] }) : Promise.resolve(),
+    ]);
+  } else {
+    await Promise.all([
+      sendTelegramMessage(botToken, userId, `✅ <b>Dipulihkan</b>\n${label}\n🕒 ${when}`),
+      sendTelegramMessage(botToken, data.user_id, '✅ <b>Akun Anda telah dipulihkan oleh admin.</b>\n\nAnda dapat kembali mencari partner. Patuhi ketentuan layanan.', { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] }),
+    ]);
+  }
+  return null;
+}
+
+// Tolak akses Premium (menu, paket, invoice) bagi pengguna terblokir / dalam moderasi
+async function denyPremiumIfBlocked(supabase: any, botToken: string, userId: number, queryId: string): Promise<Response | null> {
+  const { data, error } = await supabase.rpc('premium_purchase_allowed', { p_user_id: userId });
+  if (error) return new Response('Database Error', { status: 500 });
+  if (data === true) return null;
+  await answerCallbackQuery(botToken, queryId, '🚫 Akun Anda sedang diblokir/dibatasi. Premium tidak dapat dibeli selama pemblokiran aktif.', true);
+  return new Response('OK', { status: 200 });
+}
+
 // HELPER: Command admin /setbonus untuk mengubah nominal tarik bonus referal
 async function handleSetBonusCommand(supabase: any, botToken: string, userId: number, text: string): Promise<void> {
   const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
@@ -3510,9 +3553,6 @@ async function comprehensiveSearchAction(
       inline_keyboard: [
         [
           { text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }
-        ],
-        [
-          { text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }
         ]
       ]
     };
@@ -3563,9 +3603,6 @@ async function comprehensiveSearchAction(
       inline_keyboard: [
         [
           { text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }
-        ],
-        [
-          { text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }
         ]
       ]
     };
@@ -4711,8 +4748,8 @@ Deno.serve(async (req) => {
       let checkoutAllowed = true;
       try {
         const payload = JSON.parse(pcq.invoice_payload);
-        if (payload.t === 'f') {
-          const { data, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: pcq.from.id });
+        if (payload.t === 'f' || payload.t === 'p') {
+          const { data, error } = await supabase.rpc(payload.t === 'f' ? 'restoration_payment_allowed' : 'premium_purchase_allowed', { p_user_id: pcq.from.id });
           if (error) return new Response('Database Error', { status: 500 });
           checkoutAllowed = data === true;
         }
@@ -4720,7 +4757,7 @@ Deno.serve(async (req) => {
       await fetch(`${TELEGRAM_API}${botToken}/answerPreCheckoutQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pre_checkout_query_id: pcq.id, ok: checkoutAllowed, ...(!checkoutAllowed ? { error_message: 'Pembatasan moderasi tidak dapat dibuka dengan pembayaran.' } : {}) })
+        body: JSON.stringify({ pre_checkout_query_id: pcq.id, ok: checkoutAllowed, ...(!checkoutAllowed ? { error_message: 'Akun sedang diblokir/dibatasi. Pembayaran tidak dapat diproses.' } : {}) })
       });
       return new Response('OK', { status: 200 });
     }
@@ -5453,8 +5490,7 @@ Deno.serve(async (req) => {
           } else {
             payload.reply_markup = {
               inline_keyboard: [
-                [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }],
-                [{ text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }]
+                [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]
               ]
             };
             if (mediaField !== 'video_note') {
@@ -6023,8 +6059,7 @@ Deno.serve(async (req) => {
         } else if (isNonOrganic && !proc.is_premium) {
           const blockedKeyboard = {
             inline_keyboard: [
-              [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }],
-              [{ text: '💎 Upgrade Premium', callback_data: 'show_premium_offer_antibanned' }]
+              [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]
             ]
           };
           await sendTelegramMessage(botToken, proc.user_id,
@@ -6050,6 +6085,8 @@ Deno.serve(async (req) => {
 
 
       if (callbackData.startsWith('show_premium_offer')) {
+        const denied = await denyPremiumIfBlocked(supabase, botToken, userId, query.id);
+        if (denied) return denied;
 
         await answerCallbackQuery(botToken, query.id);
 
@@ -7067,6 +7104,8 @@ Deno.serve(async (req) => {
 
       // === UNIFIED PREMIUM PURCHASE HANDLER (semua buy_premium_* callbacks) ===
       if (BUY_PREMIUM_MAP[callbackData]) {
+        const denied = await denyPremiumIfBlocked(supabase, botToken, userId, query.id);
+        if (denied) return denied;
         const configKey = BUY_PREMIUM_MAP[callbackData];
 
         // Cek umur pesan khusus untuk paket promo (maksimal 1 jam)
@@ -7110,6 +7149,8 @@ Deno.serve(async (req) => {
 
       // === HANDLER PROSES PEMBAYARAN PREMIUM VIA SAKURUPIAH/STARS ===
       if (callbackData.startsWith('prem_pay_')) {
+        const denied = await denyPremiumIfBlocked(supabase, botToken, userId, query.id);
+        if (denied) return denied;
         const payload = callbackData.replace('prem_pay_', '');
         const lastUnderscore = payload.lastIndexOf('_');
         const configKey = payload.substring(0, lastUnderscore);
@@ -7436,6 +7477,11 @@ Deno.serve(async (req) => {
         // COMMAND /SETBONUS - Khusus admin, ubah nominal tarik bonus referal
         else if (text === '/setbonus' || text.startsWith('/setbonus ') || text === '/setnominal' || text.startsWith('/setnominal ')) {
           await handleSetBonusCommand(supabase, botToken, userId, text);
+          isCommand = true;
+        }
+        else if (ADMIN_BLOCK_CMD.test(text) && String(userId) === String(Deno.env.get('TELEGRAM_CS_CHAT_ID'))) {
+          const r = await handleAdminBlockCommand(supabase, botToken, userId, text);
+          if (r) return r;
           isCommand = true;
         }
         // COMMAND /LOKASI - Ubah lokasi (tidak memerlukan premium)
@@ -7765,6 +7811,10 @@ Deno.serve(async (req) => {
 
       else if (text === '/setbonus' || text.startsWith('/setbonus ') || text === '/setnominal' || text.startsWith('/setnominal ')) {
         await handleSetBonusCommand(supabase, botToken, userId, text);
+      }
+      else if (ADMIN_BLOCK_CMD.test(text)) {
+        const r = await handleAdminBlockCommand(supabase, botToken, userId, text);
+        if (r) return r;
       }
 
       else if (text === '/gift') {
