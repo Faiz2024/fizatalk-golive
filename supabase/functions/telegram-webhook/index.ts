@@ -3555,23 +3555,24 @@ async function comprehensiveSearchAction(
 
   // Handle jika user diblokir (dari blocked_users table)
   const sanctionError = (result as any).error;
+  const violationLine = (result as any).violation ? `\n\n📌 Jenis pelanggaran: <b>${escapeHtml((result as any).violation)}</b>` : '';
   if (!result.success && sanctionError === 'report_lock') {
     await sendTelegramMessage(botToken, userId,
-      `🔒 <b>AKUN DIBATASI</b>\n\nAkun Anda dibatasi karena laporan dari pengguna lain terhadap aktivitas Anda.\n\nTekan <b>Setuju</b> untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan.\n\n📖 Baca ketentuan layanan: /rules`,
+      `🔒 <b>AKUN DIBATASI</b>\n\nAkun Anda dibatasi karena laporan dari pengguna lain terhadap aktivitas Anda.${violationLine}\n\nTekan <b>Setuju</b> untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan.\n\n📖 Baca ketentuan layanan: /rules`,
       { inline_keyboard: [[{ text: '✅ Setuju, saya tidak akan mengulangi', callback_data: 'agree_conduct' }]] });
     return { success: false, handled: true, result };
   }
   if (!result.success && sanctionError === 'report_stage2') {
     const remaining = formatRemainingTime((result as any).blocked_until);
     await sendTelegramMessage(botToken, userId,
-      `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang terhadap ketentuan layanan.\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\nAnda dapat memulihkan akun lebih cepat dengan biaya <b>Rp 10.000</b> dan menyetujui untuk tidak mengulangi pelanggaran.\n\n⚠️ Jika kembali melanggar setelah pemulihan, blokir berikutnya <b>tidak dapat dibuka dengan pembayaran</b>.\n\n📖 Baca ketentuan layanan: /rules`,
+      `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang terhadap ketentuan layanan.${violationLine}\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\nAnda dapat memulihkan akun lebih cepat dengan biaya <b>Rp 10.000</b> dan menyetujui untuk tidak mengulangi pelanggaran.\n\n⚠️ Jika kembali melanggar setelah pemulihan, blokir berikutnya <b>tidak dapat dibuka dengan pembayaran</b>.\n\n📖 Baca ketentuan layanan: /rules`,
       { inline_keyboard: [[{ text: '✅ Setuju & Pulihkan Akun - Rp 10.000', callback_data: 'pay_fine' }]] });
     return { success: false, handled: true, result };
   }
   if (!result.success && sanctionError === 'report_permanent') {
     const remaining = formatRemainingTime((result as any).blocked_until);
     await sendTelegramMessage(botToken, userId,
-      `⛔ <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang setelah pemulihan sebelumnya. Blokir ini <b>tidak dapat dibuka dengan pembayaran</b>.\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\n📖 Baca ketentuan layanan: /rules`);
+      `⛔ <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang. Blokir ini <b>tidak dapat dibuka dengan pembayaran</b>.${violationLine}\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\n📖 Baca ketentuan layanan: /rules`);
     return { success: false, handled: true, result };
   }
   if (!result.success && sanctionError === 'admin_temp_block') {
