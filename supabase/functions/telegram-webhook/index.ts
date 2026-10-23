@@ -7614,7 +7614,8 @@ Deno.serve(async (req) => {
       // === DETEKSI SPAM UNTUK SEMUA JENIS PESAN ===
       let spamMarkup = undefined;
 
-      if (hasSpamEntities(message)) {
+      const hasLinkOrUsername = hasSpamEntities(message);
+      if (false) {
         spamMarkup = {
           inline_keyboard: [[{ text: '🚩 Laporkan Link / Username', callback_data: `reportspam_${userId}` }]]
         };
@@ -7649,6 +7650,10 @@ Deno.serve(async (req) => {
       }
 
       const isPartnerInTikTokMode = envelope?.partner_tiktok_mode || false;
+      // Tombol Laporkan Link / Username hanya pada 1 menit awal percakapan
+      if (hasLinkOrUsername && Number(envelope?.chat_seconds ?? 0) <= 60) {
+        spamMarkup = { inline_keyboard: [[{ text: '🚩 Laporkan Link / Username', callback_data: `reportspam_${userId}` }]] };
+      }
 
       // === LOGIKA HANDLER REPLY / BALAS PESAN (UPDATED) ===
 
@@ -7829,13 +7834,13 @@ Deno.serve(async (req) => {
               message_id: message.message_id,
               caption: finalCaption,
               parse_mode: 'HTML',
-              reply_markup: { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${userId}` }]] }
+              ...(spamMarkup ? { reply_markup: spamMarkup } : {})
             })
           });
         } else {
 
           // Bukan reply, copy biasa (mempertahankan caption asli user jika ada)
-          await copyTelegramMessage(botToken, partnerId, userId, message.message_id, { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${userId}` }]] });
+          await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
         }
       }
 
