@@ -7615,11 +7615,6 @@ Deno.serve(async (req) => {
       let spamMarkup = undefined;
 
       const hasLinkOrUsername = hasSpamEntities(message);
-      if (false) {
-        spamMarkup = {
-          inline_keyboard: [[{ text: '🚩 Laporkan Link / Username', callback_data: `reportspam_${userId}` }]]
-        };
-      }
 
 
 
