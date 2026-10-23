@@ -3555,23 +3555,24 @@ async function comprehensiveSearchAction(
 
   // Handle jika user diblokir (dari blocked_users table)
   const sanctionError = (result as any).error;
+  const violationLine = (result as any).violation ? `\n\n📌 Jenis pelanggaran: <b>${escapeHtml((result as any).violation)}</b>` : '';
   if (!result.success && sanctionError === 'report_lock') {
     await sendTelegramMessage(botToken, userId,
-      `🔒 <b>AKUN DIBATASI</b>\n\nAkun Anda dibatasi karena laporan dari pengguna lain terhadap aktivitas Anda.\n\nTekan <b>Setuju</b> untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan.\n\n📖 Baca ketentuan layanan: /rules`,
+      `🔒 <b>AKUN DIBATASI</b>\n\nAkun Anda dibatasi karena laporan dari pengguna lain terhadap aktivitas Anda.${violationLine}\n\nTekan <b>Setuju</b> untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan.\n\n📖 Baca ketentuan layanan: /rules`,
       { inline_keyboard: [[{ text: '✅ Setuju, saya tidak akan mengulangi', callback_data: 'agree_conduct' }]] });
     return { success: false, handled: true, result };
   }
   if (!result.success && sanctionError === 'report_stage2') {
     const remaining = formatRemainingTime((result as any).blocked_until);
     await sendTelegramMessage(botToken, userId,
-      `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang terhadap ketentuan layanan.\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\nAnda dapat memulihkan akun lebih cepat dengan biaya <b>Rp 10.000</b> dan menyetujui untuk tidak mengulangi pelanggaran.\n\n⚠️ Jika kembali melanggar setelah pemulihan, blokir berikutnya <b>tidak dapat dibuka dengan pembayaran</b>.\n\n📖 Baca ketentuan layanan: /rules`,
+      `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang terhadap ketentuan layanan.${violationLine}\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\nAnda dapat memulihkan akun lebih cepat dengan biaya <b>Rp 10.000</b> dan menyetujui untuk tidak mengulangi pelanggaran.\n\n⚠️ Jika kembali melanggar setelah pemulihan, blokir berikutnya <b>tidak dapat dibuka dengan pembayaran</b>.\n\n📖 Baca ketentuan layanan: /rules`,
       { inline_keyboard: [[{ text: '✅ Setuju & Pulihkan Akun - Rp 10.000', callback_data: 'pay_fine' }]] });
     return { success: false, handled: true, result };
   }
   if (!result.success && sanctionError === 'report_permanent') {
     const remaining = formatRemainingTime((result as any).blocked_until);
     await sendTelegramMessage(botToken, userId,
-      `⛔ <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang setelah pemulihan sebelumnya. Blokir ini <b>tidak dapat dibuka dengan pembayaran</b>.\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\n📖 Baca ketentuan layanan: /rules`);
+      `⛔ <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang. Blokir ini <b>tidak dapat dibuka dengan pembayaran</b>.${violationLine}\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\n📖 Baca ketentuan layanan: /rules`);
     return { success: false, handled: true, result };
   }
   if (!result.success && sanctionError === 'admin_temp_block') {
@@ -7613,11 +7614,7 @@ Deno.serve(async (req) => {
       // === DETEKSI SPAM UNTUK SEMUA JENIS PESAN ===
       let spamMarkup = undefined;
 
-      if (hasSpamEntities(message)) {
-        spamMarkup = {
-          inline_keyboard: [[{ text: '🚩 Laporkan Link / Username', callback_data: `reportspam_${userId}` }]]
-        };
-      }
+      const hasLinkOrUsername = hasSpamEntities(message);
 
 
 
@@ -7648,6 +7645,10 @@ Deno.serve(async (req) => {
       }
 
       const isPartnerInTikTokMode = envelope?.partner_tiktok_mode || false;
+      // Tombol Laporkan Link / Username hanya pada 1 menit awal percakapan
+      if (hasLinkOrUsername && Number(envelope?.chat_seconds ?? 0) <= 60) {
+        spamMarkup = { inline_keyboard: [[{ text: '🚩 Laporkan Link / Username', callback_data: `reportspam_${userId}` }]] };
+      }
 
       // === LOGIKA HANDLER REPLY / BALAS PESAN (UPDATED) ===
 
@@ -7828,13 +7829,13 @@ Deno.serve(async (req) => {
               message_id: message.message_id,
               caption: finalCaption,
               parse_mode: 'HTML',
-              reply_markup: { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${userId}` }]] }
+              ...(spamMarkup ? { reply_markup: spamMarkup } : {})
             })
           });
         } else {
 
           // Bukan reply, copy biasa (mempertahankan caption asli user jika ada)
-          await copyTelegramMessage(botToken, partnerId, userId, message.message_id, { inline_keyboard: [[{ text: '🚩 Laporkan Media', callback_data: `reportm_${userId}` }]] });
+          await copyTelegramMessage(botToken, partnerId, userId, message.message_id, spamMarkup);
         }
       }
 

@@ -3,6 +3,18 @@ type Dependencies = { db: any; call: (method: string, body: any) => Promise<any>
 const wib = (d: Date) => d.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
 const ok = () => new Response('OK');
 const fail = () => new Response('Database Error', { status: 500 });
+const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const STAGE_LABEL: Record<number, string> = { 1: '🔒 Tahap Kunci (wajib Setuju)', 2: '🚫 Blokir 14 hari — opsi pulihkan Rp10.000', 3: '⛔ Blokir 14 hari — tanpa opsi pulihkan' };
+export function escalationText(r: any, target: number, context: string, d: { now?: () => Date }) {
+ const prem = r.is_premium ? `🌟 PREMIUM (s/d ${wib(new Date(r.premium_until))})` : '⚪ Reguler';
+ return `🚨 <b>ESKALASI LAPORAN</b> (${Number(r.report_count||4)}x sejenis / 12 jam)\nTerlapor: <code>${target}</code>${r.username ? ` (@${esc(r.username)})` : ''}\nStatus: ${prem}\nKonteks: ${esc(context)}\nPelanggaran: <b>${esc(r.violation)}</b>\nTahap otomatis: ${STAGE_LABEL[Number(r.sanction_stage)] || '-'}\n${wib(d.now?.() || new Date())}`;
+}
+export function escalationKeyboard(target: number) {
+ return { inline_keyboard: [
+  [{ text: '🟢 Pulihkan', callback_data: `rpa_restore_${target}` }, { text: '🔒 Kunci Saja', callback_data: `rpa_lock_${target}` }],
+  [{ text: '🚫 Blokir 14 Hari (Tanpa Tebus)', callback_data: `rpa_block14_${target}` }],
+  [{ text: '⛔ Blokir Permanen', callback_data: `rpa_perm_${target}` }]] };
+}
 async function adminAllowed(q: any, d: Dependencies) {
  if (!d.adminChat || String(q.message?.chat?.id) !== d.adminChat) return false;
  if (Number(d.adminChat)>0) return q.from.id===Number(d.adminChat);
@@ -27,6 +39,23 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
   await answer('Tindakan tersimpan.');await edit({inline_keyboard:[]});
   await d.call('sendMessage',{chat_id:Number(adminAction[2]),text:action==='warn'?'⚠️ Admin memberikan peringatan pelanggaran. Aturan berlaku bagi semua pengguna, termasuk Premium.':'🚫 Akun dibatasi oleh admin karena pelanggaran. Hubungi @FizaTalkCS untuk sanggahan.'});return ok();
  }
+ const rpa=data.match(/^rpa_(restore|lock|block14|perm)_(\d+)$/);
+ if(rpa){
+  if(!m||!await adminAllowed(q,d)){await answer('Hanya admin berwenang.');return ok();}
+  const target=Number(rpa[2]);const act=rpa[1];
+  const {data:r,error}=await d.db.rpc('admin_report_action',{p_user_id:target,p_action:act,p_admin_id:user});
+  if(error)return fail();if(!r?.success){await answer('Tindakan tidak dapat diproses.');return ok();}
+  const label={restore:'🟢 Dipulihkan',lock:'🔒 Dikunci',block14:'🚫 Blokir 14 hari tanpa tebus',perm:'⛔ Blokir permanen'}[act];
+  await answer('Tindakan tersimpan.');await edit({inline_keyboard:[[{text:`${label} • ${wib(d.now?.()||new Date())}`,callback_data:'noop'}]]});
+  const v=`\n📌 Jenis pelanggaran: <b>${esc(r.violation)}</b>`;const until=wib(new Date(r.blocked_until||Date.now()));
+  const msg={restore:'✅ <b>Akun Anda dipulihkan oleh admin.</b> Anda dapat kembali mencari partner. Patuhi /rules.',
+   lock:`🔒 <b>Akun Anda dibatasi oleh admin.</b>${v}\n\nTekan Cari Partner lalu Setuju untuk berjanji tidak mengulangi dan langsung melanjutkan penggunaan. Baca /rules.`,
+   block14:`⛔ <b>Akun Anda diblokir 14 hari</b> tanpa opsi pemulihan.${v}\n⏳ Berakhir: <b>${until}</b>\n\nBaca /rules. Sanggahan: @FizaTalkCS.`,
+   perm:`⛔ <b>Akun Anda diblokir permanen.</b>${v}\n\nSanggahan: @FizaTalkCS.`}[act];
+  await d.call('sendMessage',{chat_id:target,parse_mode:'HTML',text:msg});
+  if(r.partner_id)await d.call('sendMessage',{chat_id:r.partner_id,text:'⚠️ Obrolan diakhiri oleh sistem.',reply_markup:{inline_keyboard:[[{text:'🔍 Cari Partner',callback_data:'search_partner'}]]}});
+  return ok();
+ }
  if (data.startsWith('mod_')) {
   if (!m || !await adminAllowed(q,d)) {await answer('Hanya admin berwenang.');return ok();}
   const match=data.match(/^mod_(ban|reject)_([a-f0-9-]{36})$/);if(!match)return ok();
@@ -34,7 +63,7 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
   if(error)return fail(); await answer(r?.success?'Keputusan tersimpan.':'Sudah diproses sebelumnya.');await edit({inline_keyboard:[]});
   if(r?.success){
    await d.call('sendMessage',{chat_id:m.chat.id,text:`Keputusan: ${match[1]==='ban'?'Blokir permanen':'Laporan ditolak'} • ${wib(d.now?.()||new Date())}`});
-   await d.call('sendMessage',{chat_id:r.target,text:match[1]==='ban'?'🚫 Akun diblokir permanen setelah peninjauan admin. Pembayaran tidak membuka blokir. Sanggahan: @FizaTalkCS.':'✅ Laporan ditolak. Pembatasan laporan ini dicabut tanpa biaya; akses normal jika tidak ada laporan lain menunggu. Masa Premium saat pembekuan diganti.'});
+   if(match[1]==='ban')await d.call('sendMessage',{chat_id:r.target,text:'🚫 Akun diblokir permanen setelah peninjauan admin. Pembayaran tidak membuka blokir. Sanggahan: @FizaTalkCS.'});
   }return ok();
  }
  if(data==='rc_cancel'){
@@ -58,9 +87,10 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
  const {data:r,error}=await d.db.rpc('submit_context_report',{p_reporter_id:user,p_reported_id:target,p_context:context,p_category:category});
  if(error)return fail();if(!r?.success){await answer('Laporan tidak diterima: partner tidak sesuai atau laporan tidak valid.');return ok();}
  await answer('Laporan diterima.');await edit({inline_keyboard:[]});
- if(!r.silent){
-  const stage=Number(r.sanction_stage||0);if(stage>0)await d.call('sendMessage',{chat_id:target,parse_mode:'HTML',text:stage===1?'🔒 <b>Akun Anda dibatasi</b> karena laporan dari pengguna lain. Tekan Cari Partner lalu Setuju untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan. Baca /rules.':stage===2?'🚫 <b>Akun Anda diblokir 14 hari</b> karena pelanggaran berulang terhadap ketentuan layanan. Tekan Cari Partner untuk melihat opsi pemulihan. Baca /rules.':'⛔ <b>Akun Anda diblokir 14 hari</b> tanpa opsi pemulihan karena pelanggaran berulang. Baca /rules.'});
-  if(d.adminChat){await d.call('sendMessage',{chat_id:d.adminChat,text:`LAPORAN ${context.toUpperCase()}\n${rule.label}\nTerlapor: ${target}\nPelapor: ${user}\n${wib(d.now?.()||new Date())}`,reply_markup:{inline_keyboard:[[{text:'⚠️ Peringatan',callback_data:`admin_warnm_${target}`},{text:'🚫 Blokir',callback_data:`admin_blockm_${target}`}]]}});
+ if(!r.silent&&r.reached_threshold){
+  const stage=Number(r.sanction_stage||0);const v=`\n📌 Jenis pelanggaran: <b>${esc(r.violation||rule.label)}</b>`;
+  await d.call('sendMessage',{chat_id:target,parse_mode:'HTML',text:stage===1?`🔒 <b>Akun Anda dibatasi</b> karena laporan dari pengguna lain.${v}\n\nTekan Cari Partner lalu Setuju untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan. Baca /rules.`:stage===2?`🚫 <b>Akun Anda diblokir 14 hari</b> karena pelanggaran berulang.${v}\n\nTekan Cari Partner untuk melihat opsi pemulihan. Baca /rules.`:`⛔ <b>Akun Anda diblokir 14 hari</b> tanpa opsi pemulihan karena pelanggaran berulang.${v}\n\nBaca /rules.`});
+  if(d.adminChat){await d.call('sendMessage',{chat_id:d.adminChat,parse_mode:'HTML',text:escalationText(r,target,context,d),reply_markup:escalationKeyboard(target)});
    if(context==='link'||(context==='media'&&category==='fraud'))await d.call('copyMessage',{chat_id:d.adminChat,from_chat_id:user,message_id:m.message_id});}
  }
  if(context!=='partner')await d.call('deleteMessage',{chat_id:user,message_id:m.message_id});return ok();
@@ -72,10 +102,10 @@ export async function handleReportEvidence(m:any,draft:any,d:Dependencies):Promi
  if(!d.adminChat)return fail();
  const {data:r,error}=await d.db.rpc('submit_context_report',{p_reporter_id:user,p_reported_id:Number(draft.target),p_context:draft.context,p_category:'danger',p_explanation:explanation,p_evidence:draft.context==='partner'?photo:null,p_source_id:Number(draft.source_id)});
  if(error)return fail();if(!r?.success){await d.call('sendMessage',{chat_id:user,text:'Laporan tidak dapat diproses. Buka laporan kembali.'});return ok();}
- const delivered=await d.call('sendMessage',{chat_id:d.adminChat,text:`🚸 PENINJAUAN PRIORITAS\nTerlapor: ${draft.target}\nPelapor: ${user}\nKonteks: ${draft.context}\nReferensi pesan: ${draft.source_id}\n${wib(d.now?.()||new Date())}\n\n${explanation}\n\nTinjau bukti sebelum blokir permanen. Hubungi pelapor untuk bukti aman; jangan teruskan konten seksual anak.`,reply_markup:{inline_keyboard:[[{text:'🚫 Terbukti: Blokir Permanen',callback_data:`mod_ban_${r.review_id}`}],[{text:'✅ Tidak Terbukti: Pulihkan',callback_data:`mod_reject_${r.review_id}`}]]}});
+ const prem=r.is_premium?`🌟 PREMIUM (s/d ${wib(new Date(r.premium_until))})`:'⚪ Reguler';
+ const delivered=await d.call('sendMessage',{chat_id:d.adminChat,text:`🚸 PENINJAUAN PRIORITAS\nTerlapor: ${draft.target}${r.username?` (@${r.username})`:''}\nStatus: ${prem}\nPelapor: ${user}\nKonteks: ${draft.context}\nReferensi pesan: ${draft.source_id}\n${wib(d.now?.()||new Date())}\n\n${explanation}\n\nAkun terlapor belum dibatasi. Tinjau bukti sebelum mengambil tindakan; jangan teruskan konten seksual anak.`,reply_markup:{inline_keyboard:[[{text:'🚫 Terbukti: Blokir Permanen',callback_data:`mod_ban_${r.review_id}`}],[{text:'✅ Tidak Terbukti: Tolak',callback_data:`mod_reject_${r.review_id}`}]]}});
  if(!delivered?.ok)return new Response('Admin notification failed',{status:500});
  // Never redistribute suspected child sexual material automatically. Safe screenshots remain referenced by file ID.
  const {error:clearError}=await d.db.rpc('cancel_report_draft',{p_user_id:user});if(clearError)return fail();
- await d.call('sendMessage',{chat_id:user,text:'✅ Penjelasan diterima untuk peninjauan admin. Akun terlapor dibatasi sementara; ini bukan keputusan bersalah.'});
- await d.call('sendMessage',{chat_id:draft.target,text:'⏳ Akun dibatasi sementara untuk peninjauan laporan serius. Ini bukan vonis bersalah. Sanggahan: @FizaTalkCS. Pembayaran tidak membuka pembatasan.'});return ok();
+ await d.call('sendMessage',{chat_id:user,text:'✅ Penjelasan diterima untuk peninjauan admin. Tindakan hanya diambil setelah admin meninjau bukti.'});return ok();
 }

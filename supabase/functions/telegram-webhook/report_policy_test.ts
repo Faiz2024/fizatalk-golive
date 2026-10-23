@@ -36,7 +36,29 @@ Deno.test('serious media evidence is reviewed without copying illegal material',
   assertEquals(response.status, 200);
   assertEquals(actions.includes('copyMessage'), false);
   assertEquals(actions.includes('sendPhoto'), false);
-  assertEquals(actions.filter(a => a === 'sendMessage').length, 3);
+  // admin + pelapor saja; terlapor tidak dibekukan/diberi tahu sebelum keputusan admin
+  assertEquals(actions.filter(a => a === 'sendMessage').length, 2);
+});
+Deno.test('ordinary report below threshold is not forwarded to admin', async () => {
+  const sent: any[] = [];
+  await handleReportCallback({ data: 'rc_partner_spam_200', from: { id: 100 }, message: { message_id: 5, chat: { id: 100 } } }, {
+    adminChat: '999', db: { rpc: () => Promise.resolve({ data: { success: true, silent: false, reached_threshold: false, sanction_stage: 0 } }) },
+    call: (method: string, body: any) => { if (method === 'sendMessage') sent.push(body); return Promise.resolve({ ok: true }); },
+  });
+  assertEquals(sent.length, 0);
+});
+Deno.test('fourth same-type report escalates to admin with premium flag, stage and 4 actions', async () => {
+  const sent: any[] = [];
+  await handleReportCallback({ data: 'rc_partner_spam_200', from: { id: 100 }, message: { message_id: 5, chat: { id: 100 } } }, {
+    adminChat: '999', db: { rpc: () => Promise.resolve({ data: { success: true, reached_threshold: true, sanction_stage: 2, violation: 'Spam / Iklan Berulang', is_premium: true, premium_until: new Date().toISOString(), report_count: 4 } }) },
+    call: (method: string, body: any) => { if (method === 'sendMessage') sent.push(body); return Promise.resolve({ ok: true }); },
+  });
+  const admin = sent.find(b => b.chat_id === '999');
+  assertEquals(admin.text.includes('PREMIUM'), true);
+  assertEquals(admin.text.includes('opsi pulihkan'), true);
+  assertEquals(admin.reply_markup.inline_keyboard.flat().map((b: any) => b.callback_data), ['rpa_restore_200', 'rpa_lock_200', 'rpa_block14_200', 'rpa_perm_200']);
+  const user = sent.find(b => b.chat_id === 200);
+  assertEquals(user.text.includes('Spam / Iklan Berulang'), true);
 });
 
 Deno.test('forged or missing Telegram webhook secrets cannot authorize updates', async () => {

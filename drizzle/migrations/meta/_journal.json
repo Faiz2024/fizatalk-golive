@@ -120,6 +120,13 @@
       "when": 1792650236457,
       "tag": "0016_fix_admin_ban_upsert_conflict",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792717207690,
+      "tag": "0017_report_same_type_threshold_admin_escalation",
+      "breakpoints": true
     }
   ]
 }
