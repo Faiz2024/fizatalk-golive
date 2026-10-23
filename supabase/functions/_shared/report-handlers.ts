@@ -3,6 +3,18 @@ type Dependencies = { db: any; call: (method: string, body: any) => Promise<any>
 const wib = (d: Date) => d.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
 const ok = () => new Response('OK');
 const fail = () => new Response('Database Error', { status: 500 });
+const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const STAGE_LABEL: Record<number, string> = { 1: '🔒 Tahap Kunci (wajib Setuju)', 2: '🚫 Blokir 14 hari — opsi pulihkan Rp10.000', 3: '⛔ Blokir 14 hari — tanpa opsi pulihkan' };
+export function escalationText(r: any, target: number, context: string, d: { now?: () => Date }) {
+ const prem = r.is_premium ? `🌟 PREMIUM (s/d ${wib(new Date(r.premium_until))})` : '⚪ Reguler';
+ return `🚨 <b>ESKALASI LAPORAN</b> (${Number(r.report_count||4)}x sejenis / 12 jam)\nTerlapor: <code>${target}</code>${r.username ? ` (@${esc(r.username)})` : ''}\nStatus: ${prem}\nKonteks: ${esc(context)}\nPelanggaran: <b>${esc(r.violation)}</b>\nTahap otomatis: ${STAGE_LABEL[Number(r.sanction_stage)] || '-'}\n${wib(d.now?.() || new Date())}`;
+}
+export function escalationKeyboard(target: number) {
+ return { inline_keyboard: [
+  [{ text: '🟢 Pulihkan', callback_data: `rpa_restore_${target}` }, { text: '🔒 Kunci Saja', callback_data: `rpa_lock_${target}` }],
+  [{ text: '🚫 Blokir 14 Hari (Tanpa Tebus)', callback_data: `rpa_block14_${target}` }],
+  [{ text: '⛔ Blokir Permanen', callback_data: `rpa_perm_${target}` }]] };
+}
 async function adminAllowed(q: any, d: Dependencies) {
  if (!d.adminChat || String(q.message?.chat?.id) !== d.adminChat) return false;
  if (Number(d.adminChat)>0) return q.from.id===Number(d.adminChat);
@@ -27,6 +39,23 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
   await answer('Tindakan tersimpan.');await edit({inline_keyboard:[]});
   await d.call('sendMessage',{chat_id:Number(adminAction[2]),text:action==='warn'?'⚠️ Admin memberikan peringatan pelanggaran. Aturan berlaku bagi semua pengguna, termasuk Premium.':'🚫 Akun dibatasi oleh admin karena pelanggaran. Hubungi @FizaTalkCS untuk sanggahan.'});return ok();
  }
+ const rpa=data.match(/^rpa_(restore|lock|block14|perm)_(\d+)$/);
+ if(rpa){
+  if(!m||!await adminAllowed(q,d)){await answer('Hanya admin berwenang.');return ok();}
+  const target=Number(rpa[2]);const act=rpa[1];
+  const {data:r,error}=await d.db.rpc('admin_report_action',{p_user_id:target,p_action:act,p_admin_id:user});
+  if(error)return fail();if(!r?.success){await answer('Tindakan tidak dapat diproses.');return ok();}
+  const label={restore:'🟢 Dipulihkan',lock:'🔒 Dikunci',block14:'🚫 Blokir 14 hari tanpa tebus',perm:'⛔ Blokir permanen'}[act];
+  await answer('Tindakan tersimpan.');await edit({inline_keyboard:[[{text:`${label} • ${wib(d.now?.()||new Date())}`,callback_data:'noop'}]]});
+  const v=`\n📌 Jenis pelanggaran: <b>${esc(r.violation)}</b>`;const until=wib(new Date(r.blocked_until||Date.now()));
+  const msg={restore:'✅ <b>Akun Anda dipulihkan oleh admin.</b> Anda dapat kembali mencari partner. Patuhi /rules.',
+   lock:`🔒 <b>Akun Anda dibatasi oleh admin.</b>${v}\n\nTekan Cari Partner lalu Setuju untuk berjanji tidak mengulangi dan langsung melanjutkan penggunaan. Baca /rules.`,
+   block14:`⛔ <b>Akun Anda diblokir 14 hari</b> tanpa opsi pemulihan.${v}\n⏳ Berakhir: <b>${until}</b>\n\nBaca /rules. Sanggahan: @FizaTalkCS.`,
+   perm:`⛔ <b>Akun Anda diblokir permanen.</b>${v}\n\nSanggahan: @FizaTalkCS.`}[act];
+  await d.call('sendMessage',{chat_id:target,parse_mode:'HTML',text:msg});
+  if(r.partner_id)await d.call('sendMessage',{chat_id:r.partner_id,text:'⚠️ Obrolan diakhiri oleh sistem.',reply_markup:{inline_keyboard:[[{text:'🔍 Cari Partner',callback_data:'search_partner'}]]}});
+  return ok();
+ }
  if (data.startsWith('mod_')) {
   if (!m || !await adminAllowed(q,d)) {await answer('Hanya admin berwenang.');return ok();}
   const match=data.match(/^mod_(ban|reject)_([a-f0-9-]{36})$/);if(!match)return ok();
@@ -34,7 +63,7 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
   if(error)return fail(); await answer(r?.success?'Keputusan tersimpan.':'Sudah diproses sebelumnya.');await edit({inline_keyboard:[]});
   if(r?.success){
    await d.call('sendMessage',{chat_id:m.chat.id,text:`Keputusan: ${match[1]==='ban'?'Blokir permanen':'Laporan ditolak'} • ${wib(d.now?.()||new Date())}`});
-   await d.call('sendMessage',{chat_id:r.target,text:match[1]==='ban'?'🚫 Akun diblokir permanen setelah peninjauan admin. Pembayaran tidak membuka blokir. Sanggahan: @FizaTalkCS.':'✅ Laporan ditolak. Pembatasan laporan ini dicabut tanpa biaya; akses normal jika tidak ada laporan lain menunggu. Masa Premium saat pembekuan diganti.'});
+   if(match[1]==='ban')await d.call('sendMessage',{chat_id:r.target,text:'🚫 Akun diblokir permanen setelah peninjauan admin. Pembayaran tidak membuka blokir. Sanggahan: @FizaTalkCS.'});
   }return ok();
  }
  if(data==='rc_cancel'){
