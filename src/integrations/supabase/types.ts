@@ -817,6 +817,7 @@ export type Database = {
           reports_decay_at: string | null
           sanction_counted_since: string | null
           sanction_level: number
+          sanction_violation: string | null
           shadowban_until: string | null
           spam_warning_until: string | null
           spam_warnings: number | null
@@ -876,6 +877,7 @@ export type Database = {
           reports_decay_at?: string | null
           sanction_counted_since?: string | null
           sanction_level?: number
+          sanction_violation?: string | null
           shadowban_until?: string | null
           spam_warning_until?: string | null
           spam_warnings?: number | null
@@ -935,6 +937,7 @@ export type Database = {
           reports_decay_at?: string | null
           sanction_counted_since?: string | null
           sanction_level?: number
+          sanction_violation?: string | null
           shadowban_until?: string | null
           spam_warning_until?: string | null
           spam_warnings?: number | null
@@ -1135,6 +1138,10 @@ export type Database = {
         Args: { p_action: string; p_sender_id: number }
         Returns: Json
       }
+      admin_report_action: {
+        Args: { p_action: string; p_admin_id: number; p_user_id: number }
+        Returns: Json
+      }
       admin_set_user_block: {
         Args: {
           p_action: string
@@ -1271,6 +1278,10 @@ export type Database = {
       reject_referral_cashout: {
         Args: { p_admin_id: number; p_reason: string; p_request_id: string }
         Returns: Json
+      }
+      report_violation_label: {
+        Args: { p_category: string; p_context: string }
+        Returns: string
       }
       report_weight: {
         Args: { p_category: string; p_context: string }
