@@ -460,7 +460,7 @@ const PREMIUM_PAY_CONFIG: Record<string, { days: number; price: number; label: s
   '365': { days: 365, price: 199000, label: 'PREMIUM 1 TAHUN (PROMO SPESIAL)' },
   '7': { days: 7, price: 19000, label: 'PREMIUM 7 HARI' },
   '3': { days: 3, price: 10000, label: 'PREMIUM 3 HARI' },
-  '1': { days: 1, price: 5000, label: 'PREMIUM 1 HARI' },
+  '1': { days: 1, price: 10000, label: 'PREMIUM 1 HARI' },
   'n7': { days: 7, price: 25000, label: 'PREMIUM 7 HARI' },
   'n30': { days: 30, price: 60000, label: 'PREMIUM 30 HARI' },
   'n365': { days: 365, price: 499000, label: 'PREMIUM 1 TAHUN' },
@@ -4275,8 +4275,7 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
       [{ text: '👑 1 Tahun / 𝑅̶𝑝̶4̶9̶9̶.̶0̶0̶0̶ ➡️ Rp 199.000 (Hemat 60%)', callback_data: 'buy_premium_365' }],
       [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 28.000', callback_data: 'buy_premium_30' }],
       [{ text: '📦 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 19.000', callback_data: 'buy_premium_7' }],
-      [{ text: '📅 3 Hari / Rp 10.000', callback_data: 'buy_premium_3' }],
-      [{ text: '⚡ 1 Hari / Rp 5.000', callback_data: 'buy_premium_1' }],
+      [{ text: '⚡ 1 Hari / Rp 10.000', callback_data: 'buy_premium_1' }],
       buildReferralButtonRow(),
 
       [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
