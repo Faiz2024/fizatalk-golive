@@ -459,8 +459,10 @@ const PREMIUM_PAY_CONFIG: Record<string, { days: number; price: number; label: s
   '30': { days: 30, price: 28000, label: 'PREMIUM 30 HARI (PROMO SPESIAL)' },
   '365': { days: 365, price: 199000, label: 'PREMIUM 1 TAHUN (PROMO SPESIAL)' },
   '7': { days: 7, price: 19000, label: 'PREMIUM 7 HARI' },
-  '3': { days: 3, price: 10000, label: 'PREMIUM 3 HARI' },
-  '1': { days: 1, price: 10000, label: 'PREMIUM 1 HARI' },
+  '3': { days: 3, price: 12000, label: 'PREMIUM 3 HARI' },
+  '1': { days: 1, price: 7000, label: 'PREMIUM 1 HARI' },
+  '35': { days: 35, price: 30000, label: 'PREMIUM 35 HARI' },
+  'n1': { days: 1, price: 10000, label: 'PREMIUM 1 HARI' },
   'n7': { days: 7, price: 25000, label: 'PREMIUM 7 HARI' },
   'n30': { days: 30, price: 60000, label: 'PREMIUM 30 HARI' },
   'n365': { days: 365, price: 499000, label: 'PREMIUM 1 TAHUN' },
@@ -475,6 +477,8 @@ const BUY_PREMIUM_MAP: Record<string, string> = {
   'buy_premium_7': '7',
   'buy_premium_3': '3',
   'buy_premium_1': '1',
+  'buy_premium_35': '35',
+  'buy_premium_normal_1': 'n1',
   'buy_premium_normal_7': 'n7',
   'buy_premium_normal_30': 'n30',
   'buy_premium_normal_365': 'n365',
@@ -2249,6 +2253,7 @@ const TOPUP_OPTIONS = [
 // ===============================
 const PREMIUM_PACKAGES = {
   normal: {
+    '1': { days: 1, price: 10000, label: '1 Hari' },
     '7': { days: 7, price: 25000, label: '1 Minggu' },
     '30': { days: 30, price: 60000, label: '1 Bulan' },
     '365': { days: 365, price: 499000, label: '1 Tahun' }
@@ -2293,6 +2298,7 @@ ${getPremiumBenefitsText()}
 function buildPremiumNormalKeyboard(): any {
   return {
     inline_keyboard: [
+      [{ text: `⚡ ${PREMIUM_PACKAGES.normal['1'].label} - Rp ${PREMIUM_PACKAGES.normal['1'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_1' }],
       [{ text: `📦 ${PREMIUM_PACKAGES.normal['7'].label} - Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_7' }],
       [{ text: `📦 ${PREMIUM_PACKAGES.normal['30'].label} - Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_30' }],
       [{ text: `👑 ${PREMIUM_PACKAGES.normal['365'].label} - Rp ${PREMIUM_PACKAGES.normal['365'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_365' }],
@@ -4275,7 +4281,9 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
       [{ text: '👑 1 Tahun / 𝑅̶𝑝̶4̶9̶9̶.̶0̶0̶0̶ ➡️ Rp 199.000 (Hemat 60%)', callback_data: 'buy_premium_365' }],
       [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 28.000', callback_data: 'buy_premium_30' }],
       [{ text: '📦 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 19.000', callback_data: 'buy_premium_7' }],
-      [{ text: '⚡ 1 Hari / Rp 10.000', callback_data: 'buy_premium_1' }],
+      [{ text: '⚡ 1 Hari / 𝑅̶𝑝̶1̶0̶.̶0̶0̶0̶ ➡️ Rp 7.000', callback_data: 'buy_premium_1' }],
+      [{ text: '💎 35 Hari / Rp 30.000', callback_data: 'buy_premium_35' }],
+      [{ text: '📦 3 Hari / Rp 12.000', callback_data: 'buy_premium_3' }],
       buildReferralButtonRow(),
 
       [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
@@ -4964,7 +4972,8 @@ Deno.serve(async (req) => {
         'buy_premium_365',
         'buy_premium_7',
         'buy_premium_3',
-        'buy_premium_1'
+        'buy_premium_1',
+        'buy_premium_35'
       ];
 
       const isLimitedPromoCallback = LIMITED_TIME_PROMOS.includes(callbackData) ||
