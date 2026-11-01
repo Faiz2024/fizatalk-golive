@@ -4253,17 +4253,8 @@ async function validatePromoExpiration(supabase: any, userId: number, configKey:
 // Helper Global untuk mengirim promo agar sinkron di semua fitur
 async function executePromoAction(supabase: any, botToken: string, userId: number) {
 
-  // 1. LOGIKA PEMILIHAN GAMBAR ACAK (Zero Cost & Fast)
-  let selectedPromoFileId: string | null = null;
-
-  if (PROMO_FILEID_LIST && PROMO_FILEID_LIST.length > 0) {
-    // Pilih satu secara acak dari list konstanta (Sangat Cepat)
-    const randomIndex = Math.floor(Math.random() * PROMO_FILEID_LIST.length);
-    selectedPromoFileId = PROMO_FILEID_LIST[randomIndex];
-  } else {
-    // Fallback: Jika list kosong, ambil dari setting database (agar Admin tetap punya kontrol via /set_promo)
-    selectedPromoFileId = null; // gambar promo dinonaktifkan
-  }
+  // Promo premium dikirim tanpa gambar (teks saja)
+  const selectedPromoFileId: string | null = null;
 
   const promoMessage = `🚨 <b>PROMO TERBATAS! HANYA 1 JAM!</b> 🚨
 
