@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'; // v
 import { createPakasirV2Invoice, type PakasirInvoiceResult } from '../_shared/pakasir.ts';
 import { handleReportCallback, handleReportEvidence } from '../_shared/report-handlers.ts';
 import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
+import { buildPremiumNormalKeyboard, buildPremiumPromoKeyboard } from '../_shared/premium-packages.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
