@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'; // v
 import { createPakasirV2Invoice, type PakasirInvoiceResult } from '../_shared/pakasir.ts';
 import { handleReportCallback, handleReportEvidence } from '../_shared/report-handlers.ts';
 import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
+import { buildPremiumNormalKeyboard as sharedPremiumNormalKeyboard, buildPremiumPromoKeyboard } from '../_shared/premium-packages.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -2248,21 +2249,6 @@ const TOPUP_OPTIONS = [
   { coins: 50000, price: 500000 },
 ];
 
-// ===============================
-// PREMIUM PACKAGE CONFIGURATION
-// ===============================
-const PREMIUM_PACKAGES = {
-  normal: {
-    '1': { days: 1, price: 10000, label: '1 Hari' },
-    '7': { days: 7, price: 25000, label: '1 Minggu' },
-    '30': { days: 30, price: 60000, label: '1 Bulan' },
-    '365': { days: 365, price: 499000, label: '1 Tahun' }
-  },
-  promo: {
-    '30': { days: 30, price: 5000, label: '1 Bulan' },
-    '90': { days: 90, price: 12000, label: '3 Bulan' }
-  }
-};
 
 // Helper function to get premium image file_id from database
 async function getPremiumFileId(supabase: any): Promise<string | null> {
@@ -2296,16 +2282,7 @@ ${getPremiumBenefitsText()}
 
 // Helper function to build premium purchase keyboard (normal prices)
 function buildPremiumNormalKeyboard(): any {
-  return {
-    inline_keyboard: [
-      [{ text: `⚡ ${PREMIUM_PACKAGES.normal['1'].label} - Rp ${PREMIUM_PACKAGES.normal['1'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_1' }],
-      [{ text: `📦 ${PREMIUM_PACKAGES.normal['7'].label} - Rp ${PREMIUM_PACKAGES.normal['7'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_7' }],
-      [{ text: `📦 ${PREMIUM_PACKAGES.normal['30'].label} - Rp ${PREMIUM_PACKAGES.normal['30'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_30' }],
-      [{ text: `👑 ${PREMIUM_PACKAGES.normal['365'].label} - Rp ${PREMIUM_PACKAGES.normal['365'].price.toLocaleString('id-ID')}`, callback_data: 'buy_premium_normal_365' }],
-      buildReferralButtonRow()
-
-    ]
-  };
+  return sharedPremiumNormalKeyboard(buildReferralButtonRow());
 }
 
 // Helper function to send premium offer with photo
@@ -4267,19 +4244,7 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 ━━━━━━━━━━━━━━━━━━━━
 💥 <b>HEMAT 53%!</b>`;
 
-  const promoKeyboard = {
-    inline_keyboard: [
-      [{ text: '👑 1 Tahun / 𝑅̶𝑝̶4̶9̶9̶.̶0̶0̶0̶ ➡️ Rp 199.000 (Hemat 60%)', callback_data: 'buy_premium_365' }],
-      [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 28.000', callback_data: 'buy_premium_30' }],
-      [{ text: '📦 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 19.000', callback_data: 'buy_premium_7' }],
-      [{ text: '⚡ 1 Hari / 𝑅̶𝑝̶1̶0̶.̶0̶0̶0̶ ➡️ Rp 7.000', callback_data: 'buy_premium_1' }],
-      [{ text: '💎 35 Hari / Rp 30.000', callback_data: 'buy_premium_35' }],
-      [{ text: '📦 3 Hari / Rp 12.000', callback_data: 'buy_premium_3' }],
-      buildReferralButtonRow(),
-
-      [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }]
-    ]
-  };
+  const promoKeyboard = buildPremiumPromoKeyboard();
 
   // Kirim menggunakan File ID yang terpilih
   return await sendPromoToUser(botToken, userId, promoMessage, selectedPromoFileId, promoKeyboard);
