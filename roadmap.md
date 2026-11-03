@@ -29,3 +29,8 @@
 - [ ] Buat proyek Lovable Cloud dan database voice baru — menunggu proyek baru dibuat.
 - [ ] Hubungkan bot Telegram voice baru — menunggu token dan username bot baru.
 - [ ] Aktifkan Mini App WebRTC dan TURN cadangan — menunggu proyek baru dan kredensial TURN.
+
+## Susunan paket Premium (2 Nov 2026)
+- [x] Hapus 1 Hari dan 1 Tahun dari menu Premium normal; sisakan 1 Minggu Rp25.000, 1 Bulan Rp60.000, Ajak Teman.
+- [x] Susun ulang promo 1 jam: 35 Hari Rp30.000, 30 Hari Rp28.000, 7 Hari Rp19.000, 3 Hari Rp12.000, 1 Hari Rp7.000, Abaikan; tanpa tombol referal dan tanpa 1 Tahun.
+- [x] Pindahkan kontrak paket ke `_shared/premium-packages.ts`, uji susunan/tombol, lalu deploy telegram-webhook.
