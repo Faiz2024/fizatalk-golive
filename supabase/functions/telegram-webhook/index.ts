@@ -7262,15 +7262,23 @@ Deno.serve(async (req) => {
     }
 
     if (dbUser?.report_draft) {
-      if (text === '/batal' || text === '/back') {
+      const draftExpired = new Date(dbUser.report_draft.expires_at).getTime() < Date.now();
+      // Draft basi (kedaluwarsa / user sudah chat lagi) dibersihkan diam-diam agar tidak mengganggu chat.
+      if (draftExpired || dbUser.state === 'chatting') {
         const { error } = await supabase.rpc('cancel_report_draft', { p_user_id: userId });
         if (error) return new Response('Database Error', { status: 500 });
-        await sendTelegramMessage(botToken, userId, '⬅️ Pengiriman laporan dibatalkan.');
-        return new Response('OK');
+        dbUser.report_draft = null;
+      } else {
+        if (text === '/batal' || text === '/back') {
+          const { error } = await supabase.rpc('cancel_report_draft', { p_user_id: userId });
+          if (error) return new Response('Database Error', { status: 500 });
+          await sendTelegramMessage(botToken, userId, '⬅️ Pengiriman laporan dibatalkan.');
+          return new Response('OK');
+        }
+        if (!text?.startsWith('/')) return await handleReportEvidence(message, dbUser.report_draft, {
+          db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID'),
+        });
       }
-      if (!text?.startsWith('/')) return await handleReportEvidence(message, dbUser.report_draft, {
-        db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID'),
-      });
     }
     if (dbUser?.moderation_state && dbUser.moderation_state !== 'normal' && !['/rules', '/tos', '/aturan'].includes(text || '')) {
       await sendTelegramMessage(botToken, userId, '⏳ Akun dibatasi oleh moderasi. Pembayaran tidak membuka pembatasan. Sanggahan: @FizaTalkCS.');
