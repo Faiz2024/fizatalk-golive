@@ -2801,7 +2801,7 @@ function buildEndChatKeyboard(partnerId: number): any {
         { text: '👍 Baik', callback_data: `rate_baik_${partnerId}` }
       ],
       [
-        ...(voiceBotUsername ? [{ text: '🎙️ Call Acak', url: `https://t.me/${voiceBotUsername}` }] : []),
+        ...(voiceBotUsername ? [{ text: '🎙️ Call Acak', style: 'success', url: `https://t.me/${voiceBotUsername}` }] : []),
         { text: '🔍 Cari Partner Baru', style: 'primary', callback_data: 'search_partner' }
       ],
       [
