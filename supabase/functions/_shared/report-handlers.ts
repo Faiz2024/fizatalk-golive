@@ -53,7 +53,7 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
    block14:`⛔ <b>Akun Anda diblokir 14 hari</b> tanpa opsi pemulihan.${v}\n⏳ Berakhir: <b>${until}</b>\n\nBaca /rules. Sanggahan: @FizaTalkCS.`,
    perm:`⛔ <b>Akun Anda diblokir permanen.</b>${v}\n\nSanggahan: @FizaTalkCS.`}[act];
   await d.call('sendMessage',{chat_id:target,parse_mode:'HTML',text:msg});
-  if(r.partner_id)await d.call('sendMessage',{chat_id:r.partner_id,text:'⚠️ Obrolan diakhiri oleh sistem.',reply_markup:{inline_keyboard:[[{text:'🔍 Cari Partner',callback_data:'search_partner'}]]}});
+  if(r.partner_id)await d.call('sendMessage',{chat_id:r.partner_id,text:'⚠️ Obrolan diakhiri oleh sistem.',reply_markup:{inline_keyboard:[[{text:'🔍 Cari Partner', style: 'primary',callback_data:'search_partner'}]]}});
   return ok();
  }
  if (data.startsWith('mod_')) {
@@ -68,7 +68,7 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
  }
  if(data==='rc_cancel'){
   const {error}=await d.db.rpc('cancel_report_draft',{p_user_id:user});if(error)return fail();await answer('Kembali.');
-  if(m)await edit({inline_keyboard:[[{text:'🔍 Cari Partner',callback_data:'search_partner'}]]});return ok();
+  if(m)await edit({inline_keyboard:[[{text:'🔍 Cari Partner', style: 'primary',callback_data:'search_partner'}]]});return ok();
  }
  const entry=data.match(/^(report_user|reportspam|reportm)_(\d+)$/);
  const back=data.match(/^rcback_(partner|link|media)_(\d+)$/);

@@ -225,7 +225,7 @@ export async function handleFineSuccess(supabase: any, botToken: string, request
   });
 
   const welcomeKeyboard = {
-    inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]]
+    inline_keyboard: [[{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }]]
   };
 
   await sendTelegramMessage(botToken, req.user_id,

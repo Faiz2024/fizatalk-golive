@@ -767,7 +767,7 @@ async function handleSuccessfulStarsPayment(
       });
 
       const welcomeKeyboard = {
-        inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]]
+        inline_keyboard: [[{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }]]
       };
 
       await sendTelegramMessage(botToken, userId,
@@ -1075,7 +1075,7 @@ ${link ? `<code>${link}</code>` : '<i>Link belum tersedia, coba lagi sebentar la
     { text: dayClaimable > 0 ? '✅ Klaim 1 Hari' : `🎁 1 Hari (${dayProgress}/10)`, callback_data: 'referral_claim_day' }
   ]);
   rows.push([{ text: cashoutButtonText, callback_data: 'cashout_start' }]);
-  rows.push([{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]);
+  rows.push([{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }]);
 
 
   const keyboard = { inline_keyboard: rows };
@@ -1489,7 +1489,7 @@ async function handleCSApproveReject(
       });
 
       const welcomeKeyboard = {
-        inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]]
+        inline_keyboard: [[{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }]]
       };
 
       await sendTelegramMessage(botToken, userId,
@@ -2802,7 +2802,7 @@ function buildEndChatKeyboard(partnerId: number): any {
       ],
       [
         ...(voiceBotUsername ? [{ text: '🎙️ Call Acak', url: `https://t.me/${voiceBotUsername}` }] : []),
-        { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
+        { text: '🔍 Cari Partner Baru', style: 'primary', callback_data: 'search_partner' }
       ],
       [
         { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${partnerId}` }
@@ -3198,12 +3198,12 @@ async function handleAdminBlockCommand(supabase: any, botToken: string, userId: 
       sendTelegramMessage(botToken, data.user_id, isTemp
         ? `🚫 <b>Akun Anda diblokir sementara oleh admin.</b>\n\nAlasan: ${escapeHtml(reason)}\n\n⏳ Blokir berakhir: <b>${until}</b>\n\nSelama diblokir, Anda tidak dapat mencari partner maupun membeli Premium. Sanggahan: @FizaTalkCS\n\n📖 Baca ketentuan layanan: /rules`
         : `🚫 <b>Akun Anda diblokir oleh admin.</b>\n\nAlasan: ${escapeHtml(reason)}\n\nSelama diblokir, Anda tidak dapat mencari partner maupun membeli Premium. Sanggahan: @FizaTalkCS`),
-      data.partner_id ? sendTelegramMessage(botToken, data.partner_id, '⚠️ Partner kamu telah meninggalkan obrolan.', { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] }) : Promise.resolve(),
+      data.partner_id ? sendTelegramMessage(botToken, data.partner_id, '⚠️ Partner kamu telah meninggalkan obrolan.', { inline_keyboard: [[{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }]] }) : Promise.resolve(),
     ]);
   } else {
     await Promise.all([
       sendTelegramMessage(botToken, userId, `✅ <b>Dipulihkan</b>\n${label}\n🕒 ${when}`),
-      sendTelegramMessage(botToken, data.user_id, '✅ <b>Akun Anda telah dipulihkan oleh admin.</b>\n\nAnda dapat kembali mencari partner. Patuhi ketentuan layanan.', { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] }),
+      sendTelegramMessage(botToken, data.user_id, '✅ <b>Akun Anda telah dipulihkan oleh admin.</b>\n\nAnda dapat kembali mencari partner. Patuhi ketentuan layanan.', { inline_keyboard: [[{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }]] }),
     ]);
   }
   return null;
@@ -3826,7 +3826,7 @@ async function autoSearchPartner(supabase: any, botToken: string, userId: number
   if (!data.success) {
     if (data.error === 'user_already_chatting') {
       const chatKeyboard = {
-        inline_keyboard: [[{ text: '🛑 Stop', callback_data: 'chat_stop' }, { text: '⏭️ Next', callback_data: 'chat_next' }]]
+        inline_keyboard: [[{ text: '🛑 Stop', style: 'primary', callback_data: 'chat_stop' }, { text: '⏭️ Next', style: 'primary', callback_data: 'chat_next' }]]
       };
       await sendTelegramMessage(botToken, userId, '⚠️ Kamu sudah memiliki partner aktif.', chatKeyboard);
     }
@@ -3857,8 +3857,8 @@ async function sendPairingNotifications(
   const buildChatKeyboard = (isPremium: boolean, partnerId: number) => ({
     inline_keyboard: [
       [
-        { text: '🛑 Stop', callback_data: `chat_stop_${partnerId}` },
-        { text: '⏭️ Next', callback_data: `chat_next_${partnerId}` }
+        { text: '🛑 Stop', style: 'primary', callback_data: `chat_stop_${partnerId}` },
+        { text: '⏭️ Next', style: 'primary', callback_data: `chat_next_${partnerId}` }
       ],
       [
         { text: '🎯 Filter Gender', callback_data: 'change_target' },
@@ -4350,7 +4350,7 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
       const startKeyboard = {
         inline_keyboard: [
           [
-            { text: '🔍 Cari Partner', callback_data: 'search_partner' }
+            { text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }
           ],
           [
             { text: '🎯 Filter Gender', callback_data: 'change_target' },
@@ -4599,7 +4599,7 @@ async function executeChatStop(supabase: any, botToken: string, userId: number, 
     const startKeyboard = {
       inline_keyboard: [
         [
-          { text: '🔍 Cari Partner', callback_data: 'search_partner' }
+          { text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }
         ],
         [
           { text: '🎯 Filter Gender', callback_data: 'change_target' },
@@ -4794,7 +4794,7 @@ Deno.serve(async (req) => {
         await answerCallbackQuery(botToken, query.id, 'Terima kasih, akun aktif kembali.');
         if (message) await tgCall(botToken, 'editMessageText', { chat_id: message.chat.id, message_id: message.message_id, parse_mode: 'HTML',
           text: '✅ <b>Kesepakatan disetujui</b>\n\nAkun Anda aktif kembali. Patuhi ketentuan layanan (/rules) agar akun tidak dibatasi lagi.',
-          reply_markup: { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] } });
+          reply_markup: { inline_keyboard: [[{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }]] } });
         return new Response('OK');
       }
       if (callbackData === 'pay_fine' || callbackData.startsWith('fine_pay_')) {
@@ -6144,10 +6144,10 @@ Deno.serve(async (req) => {
             inline_keyboard: [
               [
                 isChatting
-                  ? { text: '🛑 Stop', callback_data: `chat_stop_${userState?.partner_id || ''}` }
-                  : { text: '🔍 Cari Partner', callback_data: 'search_partner' },
+                  ? { text: '🛑 Stop', style: 'primary', callback_data: `chat_stop_${userState?.partner_id || ''}` }
+                  : { text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' },
                 isChatting
-                  ? { text: '⏭️ Next Partner', callback_data: `chat_next_${userState?.partner_id || ''}` }
+                  ? { text: '⏭️ Next Partner', style: 'primary', callback_data: `chat_next_${userState?.partner_id || ''}` }
                   : null
               ].filter(Boolean), // Filter akan otomatis membuang nilai null
               [
@@ -6200,10 +6200,10 @@ Deno.serve(async (req) => {
             inline_keyboard: [
               [
                 isChatting
-                  ? { text: '🛑 Stop', callback_data: `chat_stop_${userState?.partner_id || ''}` }
-                  : { text: '🔍 Cari Partner', callback_data: 'search_partner' },
+                  ? { text: '🛑 Stop', style: 'primary', callback_data: `chat_stop_${userState?.partner_id || ''}` }
+                  : { text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' },
                 isChatting
-                  ? { text: '⏭️ Next Partner', callback_data: `chat_next_${userState?.partner_id || ''}` }
+                  ? { text: '⏭️ Next Partner', style: 'primary', callback_data: `chat_next_${userState?.partner_id || ''}` }
                   : null
               ].filter(Boolean),
               [
@@ -6344,7 +6344,7 @@ Deno.serve(async (req) => {
         if (userData?.state !== 'chatting' || !userData?.partner_id) {
           await answerCallbackQuery(botToken, query.id, '❌ Sesi chat berakhir');
           // Tampilkan menu start jika user klik tombol lama saat sudah tidak chat
-          const startKeyboard = { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] };
+          const startKeyboard = { inline_keyboard: [[{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }]] };
           if (message) await sendTelegramMessage(botToken, userId, '⚠️ Kamu tidak sedang dalam chat.', startKeyboard);
           return new Response('OK', { status: 200 });
         }
@@ -6631,8 +6631,8 @@ Deno.serve(async (req) => {
             const chattingKeyboard = {
               inline_keyboard: [
                 [
-                  { text: '🛑 Stop', callback_data: 'chat_stop' },
-                  { text: '⏭️ Next', callback_data: 'chat_next' }
+                  { text: '🛑 Stop', style: 'primary', callback_data: 'chat_stop' },
+                  { text: '⏭️ Next', style: 'primary', callback_data: 'chat_next' }
                 ]
               ]
             };
@@ -6847,7 +6847,7 @@ Deno.serve(async (req) => {
                 text: `⏳ <b>Partner Sedang Sibuk</b>\n\nPartner sedang dalam percakapan lain. Kami akan memberitahu mereka segera setelah mereka selesai.\n\nAnda akan mendapat notifikasi jika mereka menerima.`,
                 parse_mode: 'HTML',
                 reply_markup: {
-                  inline_keyboard: [[{ text: '🔍 Cari Partner Lain', callback_data: 'search_partner' }]]
+                  inline_keyboard: [[{ text: '🔍 Cari Partner Lain', style: 'primary', callback_data: 'search_partner' }]]
                 }
               })
             });
@@ -6921,7 +6921,7 @@ Deno.serve(async (req) => {
               { text: '🔞 Sange', callback_data: `rate_sange_${reportPartnerId}` }
             ],
             [
-              { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
+              { text: '🔍 Cari Partner Baru', style: 'primary', callback_data: 'search_partner' }
             ]
           ]
         };
@@ -7023,7 +7023,7 @@ Deno.serve(async (req) => {
           const updatedKeyboard = {
             inline_keyboard: [
               [
-                { text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }
+                { text: '🔍 Cari Partner Baru', style: 'primary', callback_data: 'search_partner' }
               ],
               [
                 { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${reportedId}` }
@@ -7377,8 +7377,8 @@ Deno.serve(async (req) => {
             const chattingKeyboard = {
               inline_keyboard: [
                 [
-                  { text: '🛑 Stop', callback_data: 'chat_stop' },
-                  { text: '⏭️ Next', callback_data: 'chat_next' }
+                  { text: '🛑 Stop', style: 'primary', callback_data: 'chat_stop' },
+                  { text: '⏭️ Next', style: 'primary', callback_data: 'chat_next' }
                 ],
                 [
                   { text: '🎯 Filter Gender', callback_data: 'change_target' },
@@ -7610,7 +7610,7 @@ Deno.serve(async (req) => {
             .eq('state', 'chatting');
           await sendTelegramMessage(botToken, userId,
             '⚠️ Partner telah mengakhiri obrolan. Pesan kamu tidak terkirim.',
-            { inline_keyboard: [[{ text: '🔍 Cari Partner', callback_data: 'search_partner' }]] });
+            { inline_keyboard: [[{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }]] });
         }
         // reason 'not_chatting': state berubah di tengah jalan — abaikan pesan dengan aman.
         return new Response('OK', { status: 200 });
@@ -7844,7 +7844,7 @@ Deno.serve(async (req) => {
       else if (text === '/gift') {
         const startKeyboard = {
           inline_keyboard: [
-            [{ text: '🔍 Cari Partner', callback_data: 'search_partner' }],
+            [{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }],
             [
               { text: '🎯 Filter Gender', callback_data: 'change_target' },
               { text: '📍 Filter Lokasi', callback_data: 'change_location' }
@@ -7967,7 +7967,7 @@ Deno.serve(async (req) => {
         const mainMenuKeyboard = {
           inline_keyboard: [
             [
-              { text: '🔍 Cari Partner', callback_data: 'search_partner' }
+              { text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }
             ],
             [
               { text: '🎯 Filter Gender', callback_data: 'change_target' },
@@ -8144,7 +8144,7 @@ Deno.serve(async (req) => {
         const welcomeKeyboard = {
           inline_keyboard: [
             [
-              { text: '🔍 Cari Partner', callback_data: 'search_partner' }
+              { text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }
             ],
             [
               { text: '🎯 Filter Gender', callback_data: 'change_target' },
@@ -8355,7 +8355,7 @@ Deno.serve(async (req) => {
       const welcomeKeyboard = {
         inline_keyboard: [
           [
-            { text: '🔍 Cari Partner', callback_data: 'search_partner' }
+            { text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }
           ],
           [
             { text: '🎯 Filter Gender', callback_data: 'change_target' },

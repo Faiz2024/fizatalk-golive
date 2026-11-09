@@ -31,7 +31,7 @@ export function reportKeyboard(context: ReportContext, targetId: number) {
   const rows = context === 'partner' ? [buttons.slice(0, 2), buttons.slice(2)] : buttons.map(button => [button]);
   if (context === 'media') rows.push([{ text: '🗑️ Hapus Media dari Chat Saya', callback_data: 'rmdel' }]);
   rows.push(context === 'partner'
-    ? [{ text: '🔍 Cari Partner Baru', callback_data: 'search_partner' }, { text: '⬅️ Kembali', callback_data: `rcback_partner_${targetId}` }]
+    ? [{ text: '🔍 Cari Partner Baru', style: 'primary', callback_data: 'search_partner' }, { text: '⬅️ Kembali', callback_data: `rcback_partner_${targetId}` }]
     : [{ text: '⬅️ Kembali', callback_data: `rcback_${context}_${targetId}` }]);
   return { inline_keyboard: rows };
 }
