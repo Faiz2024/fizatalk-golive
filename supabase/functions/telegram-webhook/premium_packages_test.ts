@@ -58,3 +58,17 @@ Deno.test('promo 1 Hari button shows the plain price without strikethrough', () 
   assertEquals(oneDay.text.includes('\u0336'), false);
   assertEquals(oneDay.text, '⚡ 1 Hari / Rp 7.000');
 });
+
+Deno.test('every promo package button is green and the dismiss button is plain', () => {
+  const keyboard = buildPremiumPromoKeyboard();
+  const packageButtons = keyboard.inline_keyboard.slice(0, 5).flat();
+  assertEquals(packageButtons.length, 5);
+  assertEquals(packageButtons.map((button: any) => button.style), [
+    'success',
+    'success',
+    'success',
+    'success',
+    'success',
+  ]);
+  assertEquals(keyboard.inline_keyboard[5][0].style, undefined);
+});
