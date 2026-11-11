@@ -41,12 +41,13 @@ export function buildPremiumNormalKeyboard(referralRow: any[]): any {
 }
 
 // Susunan tombol promo terbatas 1 jam, berurutan dari paling menguntungkan.
-export const PREMIUM_PROMO_ROWS: Array<{ text: string; callback_data: string }> = [
-  { text: '💎 35 Hari / Rp 30.000', callback_data: 'buy_premium_35' },
-  { text: `🔥 30 Hari / ${strike('Rp60.000')} ➡️ Rp 28.000`, callback_data: 'buy_premium_30' },
-  { text: `📦 7 Hari / ${strike('Rp25.000')} ➡️ Rp 19.000`, callback_data: 'buy_premium_7' },
-  { text: '📦 3 Hari / Rp 12.000', callback_data: 'buy_premium_3' },
-  { text: '⚡ 1 Hari / Rp 7.000', callback_data: 'buy_premium_1' },
+// Semua tombol paket berwarna hijau (style: 'success'); tombol Abaikan tetap biasa.
+export const PREMIUM_PROMO_ROWS: Array<{ text: string; callback_data: string; style: string }> = [
+  { text: '💎 35 Hari / Rp 30.000', callback_data: 'buy_premium_35', style: 'success' },
+  { text: `🔥 30 Hari / ${strike('Rp60.000')} ➡️ Rp 28.000`, callback_data: 'buy_premium_30', style: 'success' },
+  { text: `📦 7 Hari / ${strike('Rp25.000')} ➡️ Rp 19.000`, callback_data: 'buy_premium_7', style: 'success' },
+  { text: '📦 3 Hari / Rp 12.000', callback_data: 'buy_premium_3', style: 'success' },
+  { text: '⚡ 1 Hari / Rp 7.000', callback_data: 'buy_premium_1', style: 'success' },
 ];
 
 export const PROMO_DISMISS_ROW = [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }];
