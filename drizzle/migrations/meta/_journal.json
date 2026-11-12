@@ -127,6 +127,13 @@
       "when": 1792717207690,
       "tag": "0017_report_same_type_threshold_admin_escalation",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794450245550,
+      "tag": "0018_profile_photo_mode_stage1",
+      "breakpoints": true
     }
   ]
 }

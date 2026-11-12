@@ -806,8 +806,11 @@ export type Database = {
           partner_id: number | null
           penalty_points: number | null
           pending_profile_photo_file_id: string | null
+          photo_match_daily_count: number
+          photo_match_daily_date: string | null
           premium_until: string | null
           profile_flow: string | null
+          profile_photo_enabled: boolean
           profile_photo_file_id: string | null
           referral_qualified_count: number
           referral_rewards_claimed: number
@@ -866,8 +869,11 @@ export type Database = {
           partner_id?: number | null
           penalty_points?: number | null
           pending_profile_photo_file_id?: string | null
+          photo_match_daily_count?: number
+          photo_match_daily_date?: string | null
           premium_until?: string | null
           profile_flow?: string | null
+          profile_photo_enabled?: boolean
           profile_photo_file_id?: string | null
           referral_qualified_count?: number
           referral_rewards_claimed?: number
@@ -926,8 +932,11 @@ export type Database = {
           partner_id?: number | null
           penalty_points?: number | null
           pending_profile_photo_file_id?: string | null
+          photo_match_daily_count?: number
+          photo_match_daily_date?: string | null
           premium_until?: string | null
           profile_flow?: string | null
+          profile_photo_enabled?: boolean
           profile_photo_file_id?: string | null
           referral_qualified_count?: number
           referral_rewards_claimed?: number
@@ -1370,6 +1379,7 @@ export type Database = {
         Returns: Json
       }
       submit_verification_video: { Args: { p_user_id: number }; Returns: Json }
+      toggle_profile_photo_mode: { Args: { p_user_id: number }; Returns: Json }
       toggle_tiktok_mode: { Args: { p_user_id: number }; Returns: Json }
       update_daily_eligible_count: { Args: never; Returns: undefined }
       update_last_active_daily: {
