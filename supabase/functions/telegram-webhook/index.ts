@@ -3531,6 +3531,18 @@ async function comprehensiveSearchAction(
 
   const result = data as ComprehensiveSearchResult;
 
+  // Batas harian mode foto profil (RPC sudah menonaktifkan mode & mengeluarkan dari antrian)
+  if ((result as any).action === 'photo_quota_exceeded') {
+    await sendTelegramMessage(botToken, userId,
+      `⚠️ <b>Batas Harian Foto Profil Tercapai</b>\n\nMode foto profil dinonaktifkan untuk hari ini.\n\n💎 Upgrade ke <b>Premium</b> untuk <b>unlimited foto profil</b> dan benefit lainnya.`,
+      { inline_keyboard: [
+        [{ text: '💎 Upgrade Premium', style: 'success', callback_data: 'show_premium_offer_foto' }],
+        [{ text: '🔍 Cari Tanpa Foto Profil', style: 'primary', callback_data: 'search_partner' }],
+        photoModeRow(false)
+      ] });
+    return { success: true, handled: true, result };
+  }
+
   // Notifikasi Ketentuan Penggunaan sekali seumur hidup (user lama). RPC sudah menandai agar tidak berulang.
   if (result.show_tos_notice) {
     await sendTelegramMessage(botToken, userId, TOS_UPDATE_NOTICE, TOS_KEYBOARD);
@@ -5882,6 +5894,51 @@ Deno.serve(async (req) => {
       }
 
       // === FOTO PROFIL (user) ===
+      if (callbackData === 'toggle_photo_mode') {
+        const { data: t, error: tErr } = await supabase.rpc('toggle_profile_photo_mode', { p_user_id: userId });
+        if (tErr) { answerCallbackQuery(botToken, query.id, 'Gagal, coba lagi.').catch(() => {}); return new Response('DB error', { status: 500 }); }
+        const act = t?.action;
+        const swapKb = (on: boolean) => {
+          const kb = message?.reply_markup?.inline_keyboard;
+          if (!kb) return;
+          const rows = kb.map((row: any[]) => row.some((b: any) => b.callback_data === 'toggle_photo_mode') ? photoModeRow(on) : row);
+          tgCall(botToken, 'editMessageReplyMarkup', { chat_id: userId, message_id: message.message_id, reply_markup: { inline_keyboard: rows } }).catch(() => {});
+        };
+        if (act === 'enabled' || act === 'disabled') {
+          swapKb(act === 'enabled');
+          await answerCallbackQuery(botToken, query.id, act === 'enabled'
+            ? '✅ Foto profil aktif. Kamu hanya dicocokkan dengan pengguna yang juga memakai foto profil.'
+            : 'Foto profil dinonaktifkan.', act === 'enabled');
+        } else if (act === 'quota_exceeded') {
+          answerCallbackQuery(botToken, query.id).catch(() => {});
+          await sendTelegramMessage(botToken, userId,
+            `⚠️ <b>Batas Harian Foto Profil Tercapai</b>\n\n💎 Upgrade ke <b>Premium</b> untuk <b>unlimited foto profil</b> dan benefit lainnya.`,
+            { inline_keyboard: [
+              [{ text: '💎 Upgrade Premium', style: 'success', callback_data: 'show_premium_offer_foto' }],
+              [{ text: '🔍 Cari Tanpa Foto Profil', style: 'primary', callback_data: 'search_partner' }]
+            ] });
+        } else if (act === 'pending_review') {
+          await answerCallbackQuery(botToken, query.id, '⏳ Video note verifikasimu sedang ditinjau admin. Tunggu hasilnya dulu ya.', true);
+        } else {
+          answerCallbackQuery(botToken, query.id).catch(() => {});
+          const { data: st } = await supabase.from('telegram_users').select('state').eq('id', userId).maybeSingle();
+          if (st?.state === 'chatting') {
+            await sendTelegramMessage(botToken, userId, '⚠️ Akhiri percakapan dulu untuk memasang dan memverifikasi foto profil.');
+          } else {
+            await supabase.rpc('set_profile_flow', { p_user_id: userId, p_flow: 'await_photo' });
+            const intro = act === 'rejected'
+              ? '❌ <b>Verifikasi sebelumnya ditolak.</b> Kirim ulang foto profil, lalu rekam video note baru.'
+              : act === 'need_video'
+                ? '🔐 <b>Foto profil belum terverifikasi.</b> Kirim foto profilmu, lalu kamu akan diminta merekam <b>video note</b> untuk verifikasi.'
+                : '📸 <b>Pasang Foto Profil dulu</b> untuk mengaktifkan mode foto profil.';
+            await sendTelegramMessage(botToken, userId,
+              `${intro}\n\n📷 <b>Kirim Foto Profil</b>\nKetentuan:\n• Ukuran maksimal <b>5 MB</b>\n• Kirim sebagai <b>Foto</b>, bukan file/dokumen\n• Wajah kamu sendiri, sopan, tanpa konten dewasa`,
+              { inline_keyboard: [[{ text: '⬅️ Batalkan', callback_data: 'pp_cancel' }]] });
+          }
+        }
+        return new Response('OK', { status: 200 });
+      }
+
       if (callbackData.startsWith('pp_')) {
         answerCallbackQuery(botToken, query.id).catch(() => {});
         const edit = (t: string, kb?: any) => tgCall(botToken, 'editMessageText', {
@@ -6124,6 +6181,8 @@ Deno.serve(async (req) => {
           customTitle = '💎 Upgrade Premium';
         } else if (callbackData === 'show_premium_offer_stiker') {
           customTitle = '💎 Upgrade Premium (Bebas Stiker)';
+        } else if (callbackData === 'show_premium_offer_foto') {
+          customTitle = '💎 Upgrade Premium (Unlimited Foto Profil)';
         } else if (callbackData === 'show_premium_offer_peringatan') {
           customTitle = '💎 Upgrade Premium (Bebas Peringatan)';
         }
