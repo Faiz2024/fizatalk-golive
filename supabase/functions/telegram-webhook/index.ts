@@ -3841,6 +3841,13 @@ async function autoSearchPartner(supabase: any, botToken: string, userId: number
 
 
 // HELPER: Kirim notifikasi setelah pairing berhasil
+// Tombol mode foto profil: hijau saat nonaktif, merah saat aktif
+function photoModeRow(enabled: boolean): any[] {
+  return enabled
+    ? [{ text: '🛑 Nonaktifkan Foto Profil', style: 'danger', callback_data: 'toggle_photo_mode' }]
+    : [{ text: '📸 Aktifkan Foto Profil', style: 'success', callback_data: 'toggle_photo_mode' }];
+}
+
 async function sendPairingNotifications(
   supabase: any,
   botToken: string,
@@ -3854,7 +3861,7 @@ async function sendPairingNotifications(
   const user2IsPremium = !!(user2PremiumUntil && new Date(user2PremiumUntil) > new Date());
 
   // Build chat action keyboard
-  const buildChatKeyboard = (isPremium: boolean, partnerId: number) => ({
+  const buildChatKeyboard = (isPremium: boolean, partnerId: number, photoOn = false) => ({
     inline_keyboard: [
       [
         { text: '🛑 Stop', style: 'primary', callback_data: `chat_stop_${partnerId}` },
@@ -3864,6 +3871,7 @@ async function sendPairingNotifications(
         { text: '🎯 Filter Gender', callback_data: 'change_target' },
         { text: '📍 Filter Lokasi', callback_data: 'change_location' }
       ],
+      photoModeRow(photoOn),
       [
         { text: '🎁 Kirim Gift', callback_data: 'open_gift_menu' }
       ]
@@ -3878,11 +3886,13 @@ async function sendPairingNotifications(
   let photoUser1: string | null = null;
   let fastUser1 = false; let fastUser2 = false;
   let photoUser2: string | null = null;
+  let photoOnUser1 = false;
+  let photoOnUser2 = false;
 
   try {
     const { data: usersData } = await supabase
       .from('telegram_users')
-      .select('id, gender, profile_photo_file_id, total_response_time_seconds, total_response_count')
+      .select('id, gender, profile_photo_file_id, profile_photo_enabled, total_response_time_seconds, total_response_count')
       .in('id', [user1Id, user2Id]);
 
     if (usersData) {
@@ -3892,6 +3902,8 @@ async function sendPairingNotifications(
       if (u2?.gender) genderUser2 = u2.gender;
       photoUser1 = u1?.profile_photo_file_id ?? null;
       photoUser2 = u2?.profile_photo_file_id ?? null;
+      photoOnUser1 = !!u1?.profile_photo_enabled;
+      photoOnUser2 = !!u2?.profile_photo_enabled;
       const isFast = (u: any) => (u?.total_response_count ?? 0) >= 30 && (u.total_response_time_seconds / u.total_response_count) < 25;
       fastUser1 = isFast(u1); fastUser2 = isFast(u2);
     }
@@ -3907,10 +3919,10 @@ async function sendPairingNotifications(
   await Promise.all([
     sendPairingMessage(botToken, user1Id,
       `✅ <b>Partner ditemukan!</b>${photoUser2 ? ' ✔️ <i>Terverifikasi</i>' : ''}${fastUser2 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
-      buildChatKeyboard(user1IsPremium, user2Id), photoUser2),
+      buildChatKeyboard(user1IsPremium, user2Id, photoOnUser1), photoUser2),
     sendPairingMessage(botToken, user2Id,
       `✅ <b>Partner ditemukan!</b>${photoUser1 ? ' ✔️ <i>Terverifikasi</i>' : ''}${fastUser1 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
-      buildChatKeyboard(user2IsPremium, user1Id), photoUser1)
+      buildChatKeyboard(user2IsPremium, user1Id, photoOnUser2), photoUser1)
   ]);
 }
 
@@ -4355,7 +4367,8 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
           [
             { text: '🎯 Filter Gender', callback_data: 'change_target' },
             { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-          ]
+          ],
+          photoModeRow(false)
         ]
       };
       await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam chat. Pilih aksi:', startKeyboard);
@@ -4586,7 +4599,7 @@ async function executeChatStop(supabase: any, botToken: string, userId: number, 
 
   const { data: stopUserData } = await supabase
     .from('telegram_users')
-    .select('state')
+    .select('state, profile_photo_enabled')
     .eq('id', userId)
     .single();
 
@@ -4604,7 +4617,8 @@ async function executeChatStop(supabase: any, botToken: string, userId: number, 
         [
           { text: '🎯 Filter Gender', callback_data: 'change_target' },
           { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-        ]
+        ],
+        photoModeRow(!!stopUserData?.profile_photo_enabled)
       ]
     };
     await sendTelegramMessage(botToken, userId, '👋 Kamu tidak dalam chat. Pilih aksi:', startKeyboard);
@@ -7246,7 +7260,7 @@ Deno.serve(async (req) => {
     // UBAH BAGIAN INI: Tambahkan retry sederhana atau error blocking
     const { data: dbUser, error: dbError } = await supabase
       .from('telegram_users')
-      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at, profile_flow, is_face_verified, verification_status, profile_photo_file_id, report_draft, moderation_state')
+      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at, profile_flow, is_face_verified, verification_status, profile_photo_file_id, report_draft, moderation_state, profile_photo_enabled')
       .eq('id', userId)
       .maybeSingle();
 
@@ -7383,7 +7397,8 @@ Deno.serve(async (req) => {
                 [
                   { text: '🎯 Filter Gender', callback_data: 'change_target' },
                   { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-                ]
+                ],
+                photoModeRow(!!dbUser?.profile_photo_enabled)
               ]
             };
             await sendTelegramMessage(botToken, userId, '⚠️ Kamu sedang dalam chat.\n\nPilih aksi:', chattingKeyboard);
@@ -7848,7 +7863,8 @@ Deno.serve(async (req) => {
             [
               { text: '🎯 Filter Gender', callback_data: 'change_target' },
               { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-            ]
+            ],
+            photoModeRow(!!dbUser?.profile_photo_enabled)
           ]
         };
         await sendTelegramMessage(botToken, userId, '⚠️ <b>Fitur Gift hanya tersedia saat chatting!</b>\n\nSilakan cari partner terlebih dahulu:', startKeyboard);
@@ -7972,7 +7988,8 @@ Deno.serve(async (req) => {
             [
               { text: '🎯 Filter Gender', callback_data: 'change_target' },
               { text: '📍 Filter Lokasi', callback_data: 'change_location_target' }
-            ]
+            ],
+            photoModeRow(!!dbUser?.profile_photo_enabled)
           ]
         };
 
@@ -8149,7 +8166,8 @@ Deno.serve(async (req) => {
             [
               { text: '🎯 Filter Gender', callback_data: 'change_target' },
               { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-            ]
+            ],
+            photoModeRow(!!dbUser?.profile_photo_enabled)
           ]
         };
         await sendTelegramMessage(botToken, userId, '👋 <b>Selamat datang di Fizatalk!</b>\n\nPilih aksi di bawah untuk memulai:', welcomeKeyboard);
@@ -8360,7 +8378,8 @@ Deno.serve(async (req) => {
           [
             { text: '🎯 Filter Gender', callback_data: 'change_target' },
             { text: '📍 Filter Lokasi', callback_data: 'change_location' }
-          ]
+          ],
+          photoModeRow(!!dbUser?.profile_photo_enabled)
         ]
       };
       await sendTelegramMessage(botToken, userId, '👋 <b>Selamat datang di Fizatalk!</b>\n\nPilih aksi di bawah untuk memulai:', welcomeKeyboard);
