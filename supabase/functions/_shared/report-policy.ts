@@ -28,7 +28,7 @@ export function reportKeyboard(context: ReportContext, targetId: number) {
   const buttons = Object.entries(REPORT_POLICY[context]).map(([category, rule]) => ({
     text: rule.label, callback_data: `rc_${context}_${category}_${targetId}`,
   }));
-  const rows = context === 'partner' ? [buttons.slice(0, 2), buttons.slice(2)] : buttons.map(button => [button]);
+  const rows: Array<Array<{ text: string; callback_data: string; style?: string }>> = context === 'partner' ? [buttons.slice(0, 2), buttons.slice(2)] : buttons.map(button => [button]);
   if (context === 'media') rows.push([{ text: '🗑️ Hapus Media dari Chat Saya', callback_data: 'rmdel' }]);
   rows.push(context === 'partner'
     ? [{ text: '🔍 Cari Partner Baru', style: 'primary', callback_data: 'search_partner' }, { text: '⬅️ Kembali', callback_data: `rcback_partner_${targetId}` }]

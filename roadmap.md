@@ -4,6 +4,7 @@
 - [x] Terapkan menu partner, link/username, dan media tanpa laporan diam/skip.
 - [x] Terapkan kategori, bukti, peninjauan admin, dan sanksi setara Premium melalui RPC.
 - [x] Lindungi penangguhan/permanen dari pembayaran pemulihan; uji aturan/RPC lalu deploy bot.
+- [x] Ubah pesan setelah laporan partner biasa dipilih menjadi konfirmasi dengan tombol Cari Partner Baru.
 - [ ] Verifikasi klik laporan → bukti → keputusan admin melalui Telegram nyata — menunggu interaksi akun Telegram pengguna/admin.
 
 ## Migrasi Pakasir API v2

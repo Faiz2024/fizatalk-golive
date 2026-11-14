@@ -86,7 +86,11 @@ export async function handleReportCallback(q: any,d: Dependencies): Promise<Resp
  }
  const {data:r,error}=await d.db.rpc('submit_context_report',{p_reporter_id:user,p_reported_id:target,p_context:context,p_category:category});
  if(error)return fail();if(!r?.success){await answer('Laporan tidak diterima: partner tidak sesuai atau laporan tidak valid.');return ok();}
- await answer('Laporan diterima.');await edit({inline_keyboard:[]});
+ await answer('Laporan diterima.');
+ if(context==='partner'){
+  const confirmation=await d.call('editMessageText',{chat_id:m.chat.id,message_id:m.message_id,text:'✅ Laporan Anda berhasil dikirim dan dicatat oleh sistem. Terima kasih telah membantu menjaga kenyamanan FizaTalk.',reply_markup:{inline_keyboard:[[{text:'🔍 Cari Partner Baru',style:'primary',callback_data:'search_partner'}]]}});
+  if(!confirmation?.ok)await edit({inline_keyboard:[[{text:'🔍 Cari Partner Baru',style:'primary',callback_data:'search_partner'}]]});
+ }else await edit({inline_keyboard:[]});
  if(!r.silent&&r.reached_threshold){
   const stage=Number(r.sanction_stage||0);const v=`\n📌 Jenis pelanggaran: <b>${esc(r.violation||rule.label)}</b>`;
   await d.call('sendMessage',{chat_id:target,parse_mode:'HTML',text:stage===1?`🔒 <b>Akun Anda dibatasi</b> karena laporan dari pengguna lain.${v}\n\nTekan Cari Partner lalu Setuju untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan. Baca /rules.`:stage===2?`🚫 <b>Akun Anda diblokir 14 hari</b> karena pelanggaran berulang.${v}\n\nTekan Cari Partner untuk melihat opsi pemulihan. Baca /rules.`:`⛔ <b>Akun Anda diblokir 14 hari</b> tanpa opsi pemulihan karena pelanggaran berulang.${v}\n\nBaca /rules.`});
