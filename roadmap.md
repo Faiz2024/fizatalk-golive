@@ -40,3 +40,7 @@
 - [x] Gabungkan pembacaan data pengguna dan validasi partner ke satu RPC `get_chat_envelope`.
 - [x] Uji konteks idle, pasangan valid, pasangan terputus, dan regresi bot.
 - [x] Deploy `telegram-webhook` dan verifikasi hasil aktif.
+
+## Penonaktifan event log bot (16 Nov 2026)
+- [x] Hapus seluruh pemanggilan `log_bot_event` dari fungsi bot tanpa mengubah alur utama atau respons error.
+- [x] Jalankan 39 tes regresi, deploy empat fungsi terdampak, dan verifikasi tidak ada pemanggilan tersisa.

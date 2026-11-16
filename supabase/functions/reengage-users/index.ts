@@ -234,12 +234,7 @@ Deno.serve(async (req) => {
       if (finErr) console.error("[Reengage] finish batch failed:", finErr.message);
     }
 
-    const logMessage = `Re-engagement batch completed. Sent: ${successCount}, Blocked: ${blockedCount}, Error: ${errorCount}`;
-    console.log(`[Reengage] ${logMessage}`);
-    supabase.rpc("log_bot_event", {
-      p_level: "info", p_source: "reengage-users", p_event: "batch_completed",
-      p_user_id: null, p_message: logMessage, p_context: { successCount, blockedCount, errorCount },
-    }).then(() => {}, () => {});
+    console.log(`[Reengage] Batch completed. Sent: ${successCount}, Blocked: ${blockedCount}, Error: ${errorCount}`);
 
     // 5. Lanjutkan sendiri jika antrean masih ada dan masih sebelum 21.00 WIB
     const wibHour = new Date(Date.now() + 7 * 3600_000).getUTCHours();
@@ -261,17 +256,6 @@ Deno.serve(async (req) => {
   } catch (e) {
     const msg = (e as Error).message;
     console.error("[reengage-users] major error:", e);
-    
-    try {
-      supabase.rpc("log_bot_event", {
-        p_level: "error",
-        p_source: "reengage-users",
-        p_event: "exception",
-        p_user_id: null,
-        p_message: msg,
-        p_context: { stack: (e as Error).stack ?? null }
-      }).then(() => {}, () => {});
-    } catch (_) { /* ignore */ }
 
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
