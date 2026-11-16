@@ -134,6 +134,13 @@
       "when": 1794450245550,
       "tag": "0018_profile_photo_mode_stage1",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794795057160,
+      "tag": "0019_single_rpc_message_context",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { createPakasirV2Invoice, type PakasirInvoiceResult } from '../_shared/pa
 import { handleReportCallback, handleReportEvidence } from '../_shared/report-handlers.ts';
 import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
 import { buildPremiumNormalKeyboard as sharedPremiumNormalKeyboard, buildPremiumPromoKeyboard } from '../_shared/premium-packages.ts';
+import { getMessageContext } from '../_shared/message-context.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -7316,17 +7317,13 @@ Deno.serve(async (req) => {
 
     let currentUser: { state: string; partner_id: number | null; cashout_draft?: any } | null = null;
 
-    // UBAH BAGIAN INI: Tambahkan retry sederhana atau error blocking
-    const { data: dbUser, error: dbError } = await supabase
-      .from('telegram_users')
-      .select('state, partner_id, premium_until, cashout_draft, target_gender, gender, coins, location, target_location, matched_at, profile_flow, is_face_verified, verification_status, profile_photo_file_id, report_draft, moderation_state, profile_photo_enabled')
-      .eq('id', userId)
-      .maybeSingle();
+    // Satu RPC membaca data pengguna sekaligus memvalidasi partner untuk relay chat.
+    const { envelope: messageEnvelope, user: dbUser, error: dbError } = await getMessageContext(supabase, userId);
 
-    // JIKA DB ERROR: Jangan lanjut ke logika Welcome! 
+    // JIKA DB ERROR: Jangan lanjut ke logika Welcome!
     // Return 500 agar Telegram mencoba mengirim ulang pesan (webhook retry)
     if (dbError) {
-      console.error('[CRITICAL] DB Error fetching user:', dbError.message);
+      console.error('[CRITICAL] DB Error fetching message context:', dbError.message);
       return new Response('Database Error', { status: 500 });
     }
 
@@ -7666,12 +7663,9 @@ Deno.serve(async (req) => {
 
 
 
-      // === VALIDASI PASANGAN + STATUS TIKTOK MODE PARTNER (1 RPC atomik) ===
-      // get_chat_envelope memvalidasi state timbal balik (u.partner_id = p.id AND p.partner_id = u.id)
-      // sekaligus mengambil mode Live partner — menggantikan RPC get_partner_settings terpisah.
-      const { data: envelope } = await supabase.rpc('get_chat_envelope', {
-        p_user_id: userId
-      });
+      // Data pengguna, validasi pasangan, dan mode Live partner sudah diambil
+      // bersama oleh get_chat_envelope di awal pesan; tidak ada panggilan DB kedua.
+      const envelope = messageEnvelope;
 
       if (!envelope?.ok) {
         if (envelope?.reason === 'partner_disconnected') {
