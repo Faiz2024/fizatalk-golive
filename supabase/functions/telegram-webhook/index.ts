@@ -3932,10 +3932,10 @@ async function sendPairingNotifications(
   // Send notifications in parallel (foto profil partner jika ada & terverifikasi)
   await Promise.all([
     sendPairingMessage(botToken, user1Id,
-      `✅ <b>Partner ditemukan!</b>${photoForUser1 ? ' ✔️ <i>Terverifikasi</i>' : ''}${fastUser2 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
+      `✅ <b>Partner ditemukan!</b>${fastUser2 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
       buildChatKeyboard(user1IsPremium, user2Id, photoOnUser1), photoForUser1),
     sendPairingMessage(botToken, user2Id,
-      `✅ <b>Partner ditemukan!</b>${photoForUser2 ? ' ✔️ <i>Terverifikasi</i>' : ''}${fastUser1 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
+      `✅ <b>Partner ditemukan!</b>${fastUser1 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
       buildChatKeyboard(user2IsPremium, user1Id, photoOnUser2), photoForUser2)
   ]);
 }
