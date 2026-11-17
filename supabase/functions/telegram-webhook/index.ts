@@ -428,17 +428,8 @@ function buildPaymentMethodKeyboard(
   // Derive Stars callback dari baseCallback
   const starsCallback = `${baseCallback}_STARS`;
 
-  const kb: any[][] = [
-    [{ text: '📱 QRIS (Scan Semua E-Wallet & Bank)', callback_data: `${baseCallback}_QRIS` }],
-    [
-      { text: '💙 DANA', callback_data: `${baseCallback}_DANA` },
-      { text: '🟢 GoPay', callback_data: `${baseCallback}_GOPAY` }
-    ]
-    // [
-    //   { text: '🟠 ShopeePay', callback_data: `${baseCallback}_SHOPEEPAY` },
-    //   { text: '💜 OVO', callback_data: `${baseCallback}_OVO` }
-    // ]
-  ];
+  // Hanya Telegram Stars (metode lain dinonaktifkan)
+  const kb: any[][] = [];
 
   // Tombol Stars
   if (amountIDR > 0) {
@@ -5658,6 +5649,11 @@ Deno.serve(async (req) => {
         // UBAH BARIS INI:
         const method = callbackData.replace('fine_pay_', '') as 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO' | 'STARS';
 
+        if (method !== 'STARS') {
+          await answerCallbackQuery(botToken, query.id, '⭐ Pembayaran kini hanya melalui Telegram Stars.', true);
+          return new Response('OK', { status: 200 });
+        }
+
         if (method === 'STARS') {
           await processStarsFinePayment(botToken, userId, query.id, message);
         } else {
@@ -6607,6 +6603,11 @@ Deno.serve(async (req) => {
         // UBAH BARIS INI:
         const method = parts[1] as 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO' | 'STARS';
 
+        if (method !== 'STARS') {
+          await answerCallbackQuery(botToken, query.id, '⭐ Pembayaran kini hanya melalui Telegram Stars.', true);
+          return new Response('OK', { status: 200 });
+        }
+
         if (method === 'STARS') {
           await processStarsTopupPayment(botToken, userId, amount, query.id, message);
         } else {
@@ -7251,6 +7252,11 @@ Deno.serve(async (req) => {
         const configKey = payload.substring(0, lastUnderscore);
         // UBAH BARIS INI:
         const method = payload.substring(lastUnderscore + 1) as 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO' | 'STARS';
+
+        if (method !== 'STARS') {
+          await answerCallbackQuery(botToken, query.id, '⭐ Pembayaran kini hanya melalui Telegram Stars.', true);
+          return new Response('OK', { status: 200 });
+        }
 
         // Cek kembali kadaluarsa promo saat metode pembayaran ditekan
         const isPromoValid = await validatePromoExpiration(supabase, userId, configKey);
