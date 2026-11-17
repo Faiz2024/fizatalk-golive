@@ -1,5 +1,10 @@
 # Roadmap
 
+## Fallback pembayaran berurutan (17 Nov 2026)
+- [ ] Alihkan DANA/GoPay gagal ke QRIS Sakurupiah pada transaksi yang sama.
+- [ ] Pertahankan fallback berikutnya ke QRIS Pakasir lalu QRIS manual untuk Premium, top-up, dan pemulihan akun.
+- [ ] Uji seluruh percabangan fallback, deploy bot, dan verifikasi transaksi nyata berikutnya.
+
 ## Tampilan foto partner (17 Nov 2026)
 - [x] Batasi foto dan badge verifikasi berdasarkan mode kedua pengguna serta verifikasi partner, termasuk sambung ulang, tanpa query tambahan.
 - [x] Jalankan 45 tes regresi (lulus) dan deploy aturan tampilan bot.

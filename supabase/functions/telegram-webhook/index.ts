@@ -5,6 +5,7 @@ import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-w
 import { buildPremiumNormalKeyboard as sharedPremiumNormalKeyboard, buildPremiumPromoKeyboard } from '../_shared/premium-packages.ts';
 import { getMessageContext } from '../_shared/message-context.ts';
 import { visiblePartnerPhoto } from '../_shared/profile-photo-visibility.ts';
+import { createSakurupiahWithQrisFallback, isSakurupiahInvoiceUsable } from '../_shared/sakurupiah-fallback.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -834,16 +835,20 @@ async function processSakurupiahPremiumPayment(
   const merchantRef = `p_${premReq.id}`;
   const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'FizaTalk User';
 
-  const invoice = await createSakurupiahInvoice({
+  const requestedMethod = method;
+  // Mencari callback_data original yang memicu menu payment method (misal: buy_premium_30)
+  const origCallback = Object.keys(BUY_PREMIUM_MAP).find(k => BUY_PREMIUM_MAP[k] === configKey) || 'cancel_premium';
+  const attempt = await createSakurupiahWithQrisFallback({
     method, amount: config.price, merchantRef,
     productName: config.label, customerName: userName, expired: 60,
-  });
+  }, createSakurupiahInvoice);
+  method = attempt.method;
+  const invoice = attempt.invoice;
 
-  if (!invoice.success) {
-    // Fallback 1: Pakasir (QRIS otomatis), Fallback 2: QRIS Manual
-    console.log(`[PREMIUM] Sakurupiah failed, fallback to Pakasir: ${invoice.error}`);
-    const origCallback = Object.keys(BUY_PREMIUM_MAP).find(k => BUY_PREMIUM_MAP[k] === configKey) || 'cancel_premium';
-    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'prem', premReq.id, config.price, config.label, origCallback, method);
+  if (!isSakurupiahInvoiceUsable(method, invoice)) {
+    // Fallback terakhir: Pakasir (QRIS otomatis), lalu QRIS Manual.
+    console.log(`[PREMIUM] Sakurupiah QRIS failed, fallback to Pakasir: ${invoice.error || 'invoice unusable'}`);
+    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'prem', premReq.id, config.price, config.label, origCallback, requestedMethod);
     if (!pakasirOk) {
       console.log('[PREMIUM] Pakasir failed, fallback to QRIS Manual');
       await sendManualQRISPayment(supabase, botToken, userId, 'prem', premReq.id, config.price, config.label, origCallback);
@@ -851,12 +856,8 @@ async function processSakurupiahPremiumPayment(
     return;
   }
 
-
   await supabase.from('premium_requests')
-    .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', premReq.id);
-
-  // Mencari callback_data original yang memicu menu payment method (misal: buy_premium_30)
-  const origCallback = Object.keys(BUY_PREMIUM_MAP).find(k => BUY_PREMIUM_MAP[k] === configKey) || 'cancel_premium';
+    .update({ sakurupiah_trx_id: invoice.trxId, payment_method: method }).eq('id', premReq.id);
   const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: origCallback }]] };
 
   if (method === 'QRIS' && invoice.qrString) {
@@ -1985,16 +1986,19 @@ async function processSakurupiahTopupPayment(
     .select('username, first_name').eq('id', userId).single();
   const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'FizaTalk User';
 
-  const invoice = await createSakurupiahInvoice({
+  const requestedMethod = method;
+  const attempt = await createSakurupiahWithQrisFallback({
     method, amount: totalPrice, merchantRef,
     productName: `Top-up ${amount} Koin`, customerName: userName, expired: 60,
-  });
+  }, createSakurupiahInvoice);
+  method = attempt.method;
+  const invoice = attempt.invoice;
 
-  if (!invoice.success) {
-    // Fallback 1: Pakasir (QRIS otomatis), Fallback 2: QRIS Manual
-    console.log(`[TOPUP] Sakurupiah failed, fallback to Pakasir: ${invoice.error}`);
+  if (!isSakurupiahInvoiceUsable(method, invoice)) {
+    // Fallback terakhir: Pakasir (QRIS otomatis), lalu QRIS Manual.
+    console.log(`[TOPUP] Sakurupiah QRIS failed, fallback to Pakasir: ${invoice.error || 'invoice unusable'}`);
     const label = `Top-up ${amount.toLocaleString('id-ID')} Koin`;
-    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'topup', topupReq.id, totalPrice, label, `init_topup_${amount}`, method);
+    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'topup', topupReq.id, totalPrice, label, `init_topup_${amount}`, requestedMethod);
     if (!pakasirOk) {
       console.log('[TOPUP] Pakasir failed, fallback to QRIS Manual');
       await sendManualQRISPayment(supabase, botToken, userId, 'topup', topupReq.id, totalPrice, label, `init_topup_${amount}`);
@@ -2002,9 +2006,8 @@ async function processSakurupiahTopupPayment(
     return;
   }
 
-
   await supabase.from('topup_requests')
-    .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', topupReq.id);
+    .update({ sakurupiah_trx_id: invoice.trxId, payment_method: method }).eq('id', topupReq.id);
 
   const cancelKb = { inline_keyboard: [[{ text: '🔙 Kembali', callback_data: `init_topup_${amount}` }]] };
 
@@ -2119,22 +2122,24 @@ async function processSakurupiahFinePayment(
     .select('username, first_name').eq('id', userId).single();
   const userName = userData?.username ? `@${userData.username}` : userData?.first_name || 'FizaTalk User';
 
-  const invoice = await createSakurupiahInvoice({
+  const requestedMethod = method;
+  const attempt = await createSakurupiahWithQrisFallback({
     method, amount: FINE_AMOUNT, merchantRef,
     productName: 'Biaya Pemulihan Akun', customerName: userName, expired: 60,
-  });
+  }, createSakurupiahInvoice);
+  method = attempt.method;
+  const invoice = attempt.invoice;
 
-  if (!invoice.success) {
-    // Fallback 1: Pakasir (QRIS otomatis), Fallback 2: QRIS Manual
-    console.log(`[FINE] Sakurupiah failed, fallback to Pakasir: ${invoice.error}`);
-    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Biaya Pemulihan Akun', 'pay_fine', method);
+  if (!isSakurupiahInvoiceUsable(method, invoice)) {
+    // Fallback terakhir: Pakasir (QRIS otomatis), lalu QRIS Manual.
+    console.log(`[FINE] Sakurupiah QRIS failed, fallback to Pakasir: ${invoice.error || 'invoice unusable'}`);
+    const pakasirOk = await sendPakasirQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Biaya Pemulihan Akun', 'pay_fine', requestedMethod);
     if (!pakasirOk) {
       console.log('[FINE] Pakasir failed, fallback to QRIS Manual');
       await sendManualQRISPayment(supabase, botToken, userId, 'fine', fineReq.id, FINE_AMOUNT, 'Biaya Pemulihan Akun', 'pay_fine');
     }
     return;
   }
-
 
   await supabase.from('pending_transactions')
     .update({ sakurupiah_trx_id: invoice.trxId }).eq('id', fineReq.id);
