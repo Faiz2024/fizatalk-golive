@@ -423,7 +423,8 @@ function buildPaymentMethodKeyboard(
   baseCallback: string,
   cancelCallback: string,
   amountIDR: number = 0,
-  starsInvoiceUrl?: string
+  starsInvoiceUrl?: string,
+  starsOverride?: number
 ): any {
   // Derive Stars callback dari baseCallback
   const starsCallback = `${baseCallback}_STARS`;
@@ -433,7 +434,7 @@ function buildPaymentMethodKeyboard(
 
   // Tombol Stars
   if (amountIDR > 0) {
-    const starsPrice = calculateStarsPrice(amountIDR);
+    const starsPrice = starsOverride ?? calculateStarsPrice(amountIDR);
     kb.push([starsInvoiceUrl
       ? { text: `⭐ Telegram Stars (${starsPrice} ⭐)`, url: starsInvoiceUrl }
       : { text: `⭐ Telegram Stars (${starsPrice} ⭐)`, callback_data: starsCallback }
@@ -450,20 +451,20 @@ function buildPaymentMethodKeyboard(
 }
 
 // === PREMIUM PAYMENT CONFIG (Sakurupiah) ===
-const PREMIUM_PAY_CONFIG: Record<string, { days: number; price: number; label: string }> = {
-  '30': { days: 30, price: 28000, label: 'PREMIUM 30 HARI (PROMO SPESIAL)' },
+const PREMIUM_PAY_CONFIG: Record<string, { days: number; price: number; label: string; stars?: number }> = {
+  '30': { days: 30, price: 28000, label: 'PREMIUM 30 HARI (PROMO SPESIAL)', stars: 229 },
   '365': { days: 365, price: 199000, label: 'PREMIUM 1 TAHUN (PROMO SPESIAL)' },
-  '7': { days: 7, price: 19000, label: 'PREMIUM 7 HARI' },
-  '3': { days: 3, price: 12000, label: 'PREMIUM 3 HARI' },
-  '1': { days: 1, price: 7000, label: 'PREMIUM 1 HARI' },
-  '35': { days: 35, price: 30000, label: 'PREMIUM 35 HARI' },
+  '7': { days: 7, price: 19000, label: 'PREMIUM 7 HARI', stars: 149 },
+  '3': { days: 3, price: 12000, label: 'PREMIUM 3 HARI', stars: 99 },
+  '1': { days: 1, price: 7000, label: 'PREMIUM 1 HARI', stars: 49 },
+  '35': { days: 35, price: 30000, label: 'PREMIUM 35 HARI', stars: 249 },
   'n1': { days: 1, price: 10000, label: 'PREMIUM 1 HARI' },
-  'n7': { days: 7, price: 25000, label: 'PREMIUM 7 HARI' },
-  'n30': { days: 30, price: 60000, label: 'PREMIUM 30 HARI' },
+  'n7': { days: 7, price: 25000, label: 'PREMIUM 7 HARI', stars: 249 },
+  'n30': { days: 30, price: 60000, label: 'PREMIUM 30 HARI', stars: 499 },
   'n365': { days: 365, price: 499000, label: 'PREMIUM 1 TAHUN' },
-  'sp30': { days: 30, price: 15000, label: 'PREMIUM 30 HARI (PROMO HARI INI)' },
-  'sp7': { days: 7, price: 10000, label: 'PREMIUM 7 HARI (PROMO HARI INI)' },
-  'sp365': { days: 365, price: 99000, label: 'PREMIUM 1 TAHUN (PROMO HARI INI)' },
+  'sp30': { days: 30, price: 15000, label: 'PREMIUM 30 HARI (PROMO HARI INI)', stars: 99 },
+  'sp7': { days: 7, price: 10000, label: 'PREMIUM 7 HARI (PROMO HARI INI)', stars: 74 },
+  'sp365': { days: 365, price: 99000, label: 'PREMIUM 1 TAHUN (PROMO HARI INI)', stars: 749 },
 };
 
 const BUY_PREMIUM_MAP: Record<string, string> = {
@@ -490,6 +491,11 @@ const STARS_NET_VALUE_IDR = 125;
 
 function calculateStarsPrice(priceIDR: number): number {
   return Math.ceil(priceIDR / STARS_NET_VALUE_IDR);
+}
+
+// Harga Stars tetap per paket, disesuaikan dengan paket beli Stars Telegram (-1 ⭐).
+function premiumStarsPrice(config: { price: number; stars?: number }): number {
+  return config.stars ?? calculateStarsPrice(config.price);
 }
 
 async function createStarsInvoiceLink(
@@ -533,13 +539,13 @@ async function processStarsPremiumPayment(
     return;
   }
 
-  const starsPrice = calculateStarsPrice(config.price);
+  const starsPrice = premiumStarsPrice(config);
   const payload = JSON.stringify({ t: 'p', k: configKey, u: userId });
 
   const invoiceLink = await createStarsInvoiceLink(
     botToken,
     config.label,
-    `Premium ${config.days} hari - Rp ${config.price.toLocaleString('id-ID')}`,
+    `Premium ${config.days} hari - ${starsPrice} ⭐`,
     payload, starsPrice
   );
 
@@ -4262,9 +4268,9 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 🎁 <b>PENAWARAN EKSKLUSIF:</b>
 ━━━━━━━━━━━━━━━━━━━━
 📦 <b>PREMIUM 30 HARI</b>
-<s>Rp 60.000</s> → <b>HANYA Rp 28.000!</b>
+<b>HANYA 229 ⭐!</b>
 ━━━━━━━━━━━━━━━━━━━━
-💥 <b>HEMAT 53%!</b>`;
+💥 <b>HARGA SPESIAL!</b>`;
 
   const promoKeyboard = buildPremiumPromoKeyboard();
 
@@ -4290,9 +4296,9 @@ Anda adalah 1 dari 50 pengguna yang berhak mendapatkan <b>PENAWARAN SPESIAL 1 KA
 
   const promoKeyboard = {
     inline_keyboard: [
-      [{ text: '👑 1 Tahun / 𝑅̶𝑝̶4̶9̶9̶.̶0̶0̶0̶ ➡️ Rp 99.000 (Hemat 80%)', callback_data: 'special_buy_premium_365' }],
-      [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 15.000 (1x)', callback_data: 'special_buy_premium_30' }],
-      [{ text: '🔥 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 10.000 (1x)', callback_data: 'special_buy_premium_7' }],
+      [{ text: '👑 1 Tahun / 749 ⭐', callback_data: 'special_buy_premium_365' }],
+      [{ text: '🔥 30 Hari / 99 ⭐', callback_data: 'special_buy_premium_30' }],
+      [{ text: '🔥 7 Hari / 74 ⭐', callback_data: 'special_buy_premium_7' }],
       buildReferralButtonRow()
 
     ]
@@ -5069,7 +5075,7 @@ Deno.serve(async (req) => {
 
         } else if (callbackData === 'cancel_premium') {
           // Kembali ke penawaran premium
-          backText = `💎 <b>Upgrade ke Premium</b>\n\n✨ <b>KEUNTUNGAN PREMIUM:</b>\n• 🎯 Pilih target gender chat\n• 📍 Pilih target lokasi chat\n• ⭐ Badge Premium\n• 🚀 Prioritas matching\n\n💰 <b>HARGA PREMIUM:</b>\n📦 <b>1 MINGGU:</b> Rp 25.000\n📦 <b>1 BULAN:</b> Rp 60.000\n\nPilih paket di bawah ini:`;
+          backText = `💎 <b>Upgrade ke Premium</b>\n\n✨ <b>KEUNTUNGAN PREMIUM:</b>\n• 🎯 Pilih target gender chat\n• 📍 Pilih target lokasi chat\n• ⭐ Badge Premium\n• 🚀 Prioritas matching\n\n💰 <b>HARGA PREMIUM:</b>\n📦 <b>1 MINGGU:</b> 249 ⭐\n📦 <b>1 BULAN:</b> 499 ⭐\n\nPilih paket di bawah ini:`;
           backKeyboard = buildPremiumNormalKeyboard();
 
         } else if (callbackData === 'cancel_fine') {
@@ -7224,21 +7230,21 @@ Deno.serve(async (req) => {
           await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
         }
 
-        const premiumStarsPrice = calculateStarsPrice(config.price);
+        const premiumStars = premiumStarsPrice(config);
         const premiumStarsPayload = JSON.stringify({ t: 'p', k: configKey, u: userId });
         const premiumStarsInvoiceLink = await createStarsInvoiceLink(
           botToken,
           config.label,
-          `Premium ${config.days} hari - Rp ${config.price.toLocaleString('id-ID')}`,
+          `Premium ${config.days} hari - ${premiumStars} ⭐`,
           premiumStarsPayload,
-          premiumStarsPrice
+          premiumStars
         );
         console.log(`[STARS] premium payment button mode: ${premiumStarsInvoiceLink ? 'url' : 'callback_fallback'} (${configKey})`);
 
         // Tampilkan pilihan metode pembayaran beserta harga Stars
         await sendTelegramMessage(botToken, userId,
-          `💎 <b>${config.label}</b>\n\n💰 Harga: <b>Rp ${config.price.toLocaleString('id-ID')}</b>\n📅 Durasi: <b>${config.days} hari</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard(`prem_pay_${configKey}`, 'cancel_premium', config.price, premiumStarsInvoiceLink || undefined)
+          `💎 <b>${config.label}</b>\n\n⭐ Harga: <b>${premiumStars} Stars</b>\n📅 Durasi: <b>${config.days} hari</b>\n\nPilih metode pembayaran:`,
+          buildPaymentMethodKeyboard(`prem_pay_${configKey}`, 'cancel_premium', config.price, premiumStarsInvoiceLink || undefined, premiumStars)
         );
         return new Response('OK', { status: 200 });
       }
