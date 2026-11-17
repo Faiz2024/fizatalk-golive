@@ -1,5 +1,10 @@
 # Roadmap
 
+## Tampilan foto partner (17 Nov 2026)
+- [x] Batasi foto dan badge verifikasi berdasarkan mode kedua pengguna serta verifikasi partner, termasuk sambung ulang, tanpa query tambahan.
+- [x] Jalankan 45 tes regresi (lulus) dan deploy aturan tampilan bot.
+- [ ] Verifikasi tampilan melalui Telegram nyata — menunggu interaksi dua akun Telegram.
+
 ## Pelaporan kontekstual bot Telegram
 - [x] Terapkan menu partner, link/username, dan media tanpa laporan diam/skip.
 - [x] Terapkan kategori, bukti, peninjauan admin, dan sanksi setara Premium melalui RPC.

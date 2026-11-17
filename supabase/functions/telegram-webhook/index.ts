@@ -4,6 +4,7 @@ import { handleReportCallback, handleReportEvidence } from '../_shared/report-ha
 import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
 import { buildPremiumNormalKeyboard as sharedPremiumNormalKeyboard, buildPremiumPromoKeyboard } from '../_shared/premium-packages.ts';
 import { getMessageContext } from '../_shared/message-context.ts';
+import { visiblePartnerPhoto } from '../_shared/profile-photo-visibility.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -3896,16 +3897,16 @@ async function sendPairingNotifications(
   let genderUser1 = 'cowok';
   let genderUser2 = 'cowok';
 
-  let photoUser1: string | null = null;
+  let photoForUser1: string | null = null;
   let fastUser1 = false; let fastUser2 = false;
-  let photoUser2: string | null = null;
+  let photoForUser2: string | null = null;
   let photoOnUser1 = false;
   let photoOnUser2 = false;
 
   try {
     const { data: usersData } = await supabase
       .from('telegram_users')
-      .select('id, gender, profile_photo_file_id, profile_photo_enabled, total_response_time_seconds, total_response_count')
+      .select('id, gender, profile_photo_file_id, profile_photo_enabled, is_face_verified, total_response_time_seconds, total_response_count')
       .in('id', [user1Id, user2Id]);
 
     if (usersData) {
@@ -3913,8 +3914,8 @@ async function sendPairingNotifications(
       const u2 = usersData.find((u: any) => u.id === user2Id);
       if (u1?.gender) genderUser1 = u1.gender;
       if (u2?.gender) genderUser2 = u2.gender;
-      photoUser1 = u1?.profile_photo_file_id ?? null;
-      photoUser2 = u2?.profile_photo_file_id ?? null;
+      photoForUser1 = visiblePartnerPhoto(u1, u2);
+      photoForUser2 = visiblePartnerPhoto(u2, u1);
       photoOnUser1 = !!u1?.profile_photo_enabled;
       photoOnUser2 = !!u2?.profile_photo_enabled;
       const isFast = (u: any) => (u?.total_response_count ?? 0) >= 30 && (u.total_response_time_seconds / u.total_response_count) < 25;
@@ -3931,11 +3932,11 @@ async function sendPairingNotifications(
   // Send notifications in parallel (foto profil partner jika ada & terverifikasi)
   await Promise.all([
     sendPairingMessage(botToken, user1Id,
-      `✅ <b>Partner ditemukan!</b>${photoUser2 ? ' ✔️ <i>Terverifikasi</i>' : ''}${fastUser2 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
-      buildChatKeyboard(user1IsPremium, user2Id, photoOnUser1), photoUser2),
+      `✅ <b>Partner ditemukan!</b>${photoForUser1 ? ' ✔️ <i>Terverifikasi</i>' : ''}${fastUser2 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser1}"</i>`,
+      buildChatKeyboard(user1IsPremium, user2Id, photoOnUser1), photoForUser1),
     sendPairingMessage(botToken, user2Id,
-      `✅ <b>Partner ditemukan!</b>${photoUser1 ? ' ✔️ <i>Terverifikasi</i>' : ''}${fastUser1 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
-      buildChatKeyboard(user2IsPremium, user1Id, photoOnUser2), photoUser1)
+      `✅ <b>Partner ditemukan!</b>${photoForUser2 ? ' ✔️ <i>Terverifikasi</i>' : ''}${fastUser1 ? '\n⚡ <b>Fast Respon</b>' : ''}\nMulai ngobrol sekarang.\n\n<i>"${warningUser2}"</i>`,
+      buildChatKeyboard(user2IsPremium, user1Id, photoOnUser2), photoForUser2)
   ]);
 }
 
