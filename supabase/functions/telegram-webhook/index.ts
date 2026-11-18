@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'; // v
 import { createPakasirV2Invoice, type PakasirInvoiceResult } from '../_shared/pakasir.ts';
 import { handleReportCallback, handleReportEvidence } from '../_shared/report-handlers.ts';
 import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
-import { buildPremiumNormalKeyboard as sharedPremiumNormalKeyboard, buildPremiumPromoKeyboard } from '../_shared/premium-packages.ts';
+import { buildPremiumNormalKeyboard as sharedPremiumNormalKeyboard, buildPremiumPromoKeyboard, PREMIUM_PAY_CONFIG } from '../_shared/premium-packages.ts';
 import { getMessageContext } from '../_shared/message-context.ts';
 import { visiblePartnerPhoto } from '../_shared/profile-photo-visibility.ts';
 import { createSakurupiahWithQrisFallback, isSakurupiahInvoiceUsable } from '../_shared/sakurupiah-fallback.ts';
@@ -451,22 +451,7 @@ function buildPaymentMethodKeyboard(
   return { inline_keyboard: kb };
 }
 
-// === PREMIUM PAYMENT CONFIG (Sakurupiah) ===
-const PREMIUM_PAY_CONFIG: Record<string, { days: number; price: number; label: string; stars?: number }> = {
-  '30': { days: 30, price: 28000, label: 'PREMIUM 30 HARI (PROMO SPESIAL)', stars: 119 },
-  '365': { days: 365, price: 199000, label: 'PREMIUM 1 TAHUN (PROMO SPESIAL)' },
-  '7': { days: 7, price: 19000, label: 'PREMIUM 7 HARI', stars: 79 },
-  '3': { days: 3, price: 12000, label: 'PREMIUM 3 HARI', stars: 49 },
-  '1': { days: 1, price: 7000, label: 'PREMIUM 1 HARI', stars: 29 },
-  '35': { days: 35, price: 30000, label: 'PREMIUM 35 HARI', stars: 129 },
-  'n1': { days: 1, price: 10000, label: 'PREMIUM 1 HARI' },
-  'n7': { days: 7, price: 25000, label: 'PREMIUM 7 HARI', stars: 99 },
-  'n30': { days: 30, price: 60000, label: 'PREMIUM 30 HARI', stars: 249 },
-  'n365': { days: 365, price: 499000, label: 'PREMIUM 1 TAHUN' },
-  'sp30': { days: 30, price: 15000, label: 'PREMIUM 30 HARI (PROMO HARI INI)', stars: 99 },
-  'sp7': { days: 7, price: 10000, label: 'PREMIUM 7 HARI (PROMO HARI INI)', stars: 74 },
-  'sp365': { days: 365, price: 99000, label: 'PREMIUM 1 TAHUN (PROMO HARI INI)', stars: 749 },
-};
+// Kontrak harga Premium dipusatkan di _shared/premium-packages.ts.
 
 const BUY_PREMIUM_MAP: Record<string, string> = {
   'buy_premium_30': '30',
@@ -4248,8 +4233,9 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 
 🎁 <b>PENAWARAN EKSKLUSIF:</b>
 ━━━━━━━━━━━━━━━━━━━━
-📦 <b>PREMIUM 30 HARI</b>
-<b>HANYA 119 ⭐!</b>
+🔥 <b>PREMIUM 35 HARI</b>
+<b>HANYA 149 ⭐!</b>
+<i>Rekomendasi🔥</i>
 ━━━━━━━━━━━━━━━━━━━━
 💥 <b>HARGA SPESIAL!</b>`;
 

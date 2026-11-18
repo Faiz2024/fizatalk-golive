@@ -1,5 +1,11 @@
 # Roadmap
 
+## Revisi harga dan label paket Premium (18 Nov 2026)
+- [x] Samakan harga Stars pada tombol dan invoice untuk seluruh paket normal/promo yang direvisi.
+- [x] Tambahkan coretan harga normal pada promo 30/7 hari, api hanya pada 35/7 hari, serta label miring Rekomendasi🔥 pada 35 hari.
+- [x] Jalankan 59 tes regresi dan deploy bot.
+- [ ] Verifikasi tampilan melalui Telegram nyata — menunggu interaksi akun Telegram.
+
 ## Pemusatan notifikasi admin ke @FizaTalkCS (18 Nov 2026)
 - [x] Alihkan tujuan notifikasi pembayaran, review stiker, moderasi, verifikasi, dan notifikasi admin lainnya ke akun @FizaTalkCS (Telegram ID 7567529103).
 - [x] Deploy ulang telegram-webhook, pakasir-callback, dan sakurupiah-callback; build OK.
