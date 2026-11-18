@@ -1,5 +1,10 @@
 # Roadmap
 
+## Tombol Coba Wola pada pesan akhir chat (18 Nov 2026)
+- [x] Tambahkan tombol hijau "🚀Coba Wola - Chat Bot!" ke @WolaChatBot di bawah Call Acak dan Cari Partner Baru pada pesan mengakhiri chat.
+- [x] Tampilkan tombol yang sama di bawah baris penilaian partner pada pesan mencari partner baru saat Next.
+- [ ] Deploy fungsi bot dan verifikasi tampilan tombol melalui Telegram nyata.
+
 ## Fallback pembayaran berurutan (17 Nov 2026)
 - [ ] Alihkan DANA/GoPay gagal ke QRIS Sakurupiah pada transaksi yang sama.
 - [ ] Pertahankan fallback berikutnya ke QRIS Pakasir lalu QRIS manual untuk Premium, top-up, dan pemulihan akun.

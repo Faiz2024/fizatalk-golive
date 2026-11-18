@@ -6,6 +6,7 @@ import { buildPremiumNormalKeyboard as sharedPremiumNormalKeyboard, buildPremium
 import { getMessageContext } from '../_shared/message-context.ts';
 import { visiblePartnerPhoto } from '../_shared/profile-photo-visibility.ts';
 import { createSakurupiahWithQrisFallback, isSakurupiahInvoiceUsable } from '../_shared/sakurupiah-fallback.ts';
+import { buildEndChatKeyboard as sharedEndChatKeyboard, buildNextRatingRows } from '../_shared/end-chat-keyboard.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -2796,23 +2797,7 @@ async function sendChannelInviteMessage(botToken: string, userId: number, source
 
 // Helper: Build end chat keyboard with rating buttons
 function buildEndChatKeyboard(partnerId: number): any {
-  const voiceBotUsername = getVoiceBotUsername();
-  return {
-    inline_keyboard: [
-      [
-        { text: '🚩 Laporkan', callback_data: `report_user_${partnerId}` },
-        { text: '😎 Asik', callback_data: `rate_asik_${partnerId}` },
-        { text: '👍 Baik', callback_data: `rate_baik_${partnerId}` }
-      ],
-      [
-        ...(voiceBotUsername ? [{ text: '🎙️ Call Acak', style: 'success', url: `https://t.me/${voiceBotUsername}` }] : []),
-        { text: '🔍 Cari Partner Baru', style: 'primary', callback_data: 'search_partner' }
-      ],
-      [
-        { text: '🔄 Hubungi Kembali', callback_data: `reconnect_${partnerId}` }
-      ]
-    ]
-  };
+  return sharedEndChatKeyboard(partnerId, getVoiceBotUsername());
 }
 
 // ============================================
@@ -3744,11 +3729,7 @@ async function handleComprehensiveSearchResult(
 
   // Jika user menekan Next dan penalti < 40, tampilkan tombol rating
   if (isNext && result.old_partner_id && penaltyPoints < 40) {
-    inlineKeyboard.push([
-      { text: '🚩 Laporkan', callback_data: `report_user_${result.old_partner_id}` },
-      { text: '😎 Asik', callback_data: `rate_asik_${result.old_partner_id}` },
-      { text: '👍 Baik', callback_data: `rate_baik_${result.old_partner_id}` }
-    ]);
+    inlineKeyboard.push(...buildNextRatingRows(result.old_partner_id));
   }
 
   // Jika penalty >= 40, tampilkan tombol Upgrade Premium
@@ -4538,11 +4519,7 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
       
       // Jika user sedang chatting dan penalti < 40, tambahkan tombol rating untuk partner lamanya
       if (isActuallyChatting && preNextData?.partner_id && penaltyPoints < 40) {
-        inlineKeyboard.push([
-          { text: '🚩 Laporkan', callback_data: `report_user_${preNextData.partner_id}` },
-          { text: '😎 Asik', callback_data: `rate_asik_${preNextData.partner_id}` },
-          { text: '👍 Baik', callback_data: `rate_baik_${preNextData.partner_id}` }
-        ]);
+        inlineKeyboard.push(...buildNextRatingRows(preNextData.partner_id));
       }
       
       // Jika penalty >= 40, tambahkan tombol Upgrade Premium
