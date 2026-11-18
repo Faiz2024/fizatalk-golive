@@ -2,8 +2,12 @@ import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   buildPremiumNormalKeyboard,
   buildPremiumPromoKeyboard,
+  isPremiumPromoExpired,
   PREMIUM_NORMAL_PACKAGES,
   PREMIUM_PAY_CONFIG,
+  PREMIUM_PROMO_DURATION_MS,
+  PREMIUM_PROMO_MESSAGE,
+  premiumChangePackageCallback,
 } from '../_shared/premium-packages.ts';
 
 const referralRow = [{ text: '🎁 Premium Gratis dari Ajak Teman', callback_data: 'referral_menu' }];
@@ -12,10 +16,10 @@ Deno.test('normal premium menu sells only 1 Minggu 149 Stars and 1 Bulan 249 Sta
   const keyboard = buildPremiumNormalKeyboard(referralRow);
   assertEquals(keyboard.inline_keyboard.length, 3);
   assertEquals(keyboard.inline_keyboard[0], [
-    { text: '📦 1 Minggu - 149 ⭐', callback_data: 'buy_premium_normal_7' },
+    { text: '📦 1 Minggu - ⭐ 149', callback_data: 'buy_premium_normal_7' },
   ]);
   assertEquals(keyboard.inline_keyboard[1], [
-    { text: '📦 1 Bulan - 249 ⭐', callback_data: 'buy_premium_normal_30' },
+    { text: '📦 1 Bulan - ⭐ 249', callback_data: 'buy_premium_normal_30' },
   ]);
   assertEquals(keyboard.inline_keyboard[2], referralRow);
 });
@@ -38,11 +42,11 @@ Deno.test('promo premium menu keeps revised prices in the agreed order', () => {
     'buy_premium_1',
     'dismiss_promo_search',
   ]);
-  assertEquals(keyboard.inline_keyboard[0][0].text, '🔥 35 Hari / 149 ⭐ • 𝘙𝘦𝘬𝘰𝘮𝘦𝘯𝘥𝘢𝘴𝘪🔥');
-  assertEquals(keyboard.inline_keyboard[1][0].text, '💎 30 Hari / 2̶4̶9̶ ⭐ ➡️ 139 ⭐');
-  assertEquals(keyboard.inline_keyboard[2][0].text, '🔥 7 Hari / 1̶4̶9̶ ⭐ ➡️ 99 ⭐');
-  assertEquals(keyboard.inline_keyboard[3][0].text, '📦 3 Hari / 59 ⭐');
-  assertEquals(keyboard.inline_keyboard[4][0].text, '⚡ 1 Hari / 29 ⭐');
+  assertEquals(keyboard.inline_keyboard[0][0].text, '🔥 35 Hari / ⭐ 149 • (𝘏𝘦𝘮𝘢𝘵)🔥');
+  assertEquals(keyboard.inline_keyboard[1][0].text, '💎 30 Hari / ⭐ 2̶4̶9̶ ➡️ ⭐ 139');
+  assertEquals(keyboard.inline_keyboard[2][0].text, '🔥 7 Hari / ⭐ 1̶4̶9̶ ➡️ ⭐ 99');
+  assertEquals(keyboard.inline_keyboard[3][0].text, '📦 3 Hari / ⭐ 59');
+  assertEquals(keyboard.inline_keyboard[4][0].text, '⚡ 1 Hari / ⭐ 29');
 });
 
 Deno.test('promo premium menu has no referral button and no 1 Tahun package', () => {
@@ -57,7 +61,7 @@ Deno.test('promo premium menu has no referral button and no 1 Tahun package', ()
 Deno.test('promo 1 Hari button shows the plain price without strikethrough', () => {
   const oneDay = buildPremiumPromoKeyboard().inline_keyboard[4][0];
   assertEquals(oneDay.text.includes('̶'), false);
-  assertEquals(oneDay.text, '⚡ 1 Hari / 29 ⭐');
+  assertEquals(oneDay.text, '⚡ 1 Hari / ⭐ 29');
 });
 
 Deno.test('only promo 35 Hari and 7 Hari use fire emoji', () => {
@@ -68,9 +72,10 @@ Deno.test('only promo 35 Hari and 7 Hari use fire emoji', () => {
   assertEquals(fireCallbacks, ['buy_premium_35', 'buy_premium_7']);
 });
 
-Deno.test('35 Hari recommendation label is visibly italic without unsupported button HTML', () => {
+Deno.test('35 Hari Hemat label is visibly italic without unsupported button HTML', () => {
   const bestPackage = buildPremiumPromoKeyboard().inline_keyboard[0][0];
-  assertEquals(bestPackage.text.includes('𝘙𝘦𝘬𝘰𝘮𝘦𝘯𝘥𝘢𝘴𝘪🔥'), true);
+  assertEquals(bestPackage.text.includes('(𝘏𝘦𝘮𝘢𝘵)🔥'), true);
+  assertEquals(bestPackage.text.includes('𝘙𝘦𝘬𝘰𝘮𝘦𝘯𝘥𝘢𝘴𝘪'), false);
   assertEquals(bestPackage.text.includes('<i>'), false);
 });
 
@@ -104,4 +109,28 @@ Deno.test('promo Stars invoice amounts match every revised promo button', () => 
 Deno.test('no premium package button shows Rupiah', () => {
   const buttons = [...buildPremiumPromoKeyboard().inline_keyboard, ...buildPremiumNormalKeyboard(referralRow).inline_keyboard].flat();
   assertEquals(buttons.some((b: any) => b.text.includes('Rp')), false);
+});
+
+Deno.test('Ganti Paket returns regular promo purchases to the promo menu only', () => {
+  assertEquals(premiumChangePackageCallback('35'), 'change_premium_promo');
+  assertEquals(premiumChangePackageCallback('30'), 'change_premium_promo');
+  assertEquals(premiumChangePackageCallback('7'), 'change_premium_promo');
+  assertEquals(premiumChangePackageCallback('3'), 'change_premium_promo');
+  assertEquals(premiumChangePackageCallback('1'), 'change_premium_promo');
+  assertEquals(premiumChangePackageCallback('n7'), 'cancel_premium');
+  assertEquals(premiumChangePackageCallback('n30'), 'cancel_premium');
+  assertEquals(premiumChangePackageCallback('sp30'), 'cancel_premium');
+});
+
+Deno.test('regular promo validity remains exactly one hour', () => {
+  const sentAt = Date.UTC(2026, 10, 18, 4, 0, 0);
+  assertEquals(PREMIUM_PROMO_DURATION_MS, 3_600_000);
+  assertEquals(isPremiumPromoExpired(sentAt, sentAt + PREMIUM_PROMO_DURATION_MS), false);
+  assertEquals(isPremiumPromoExpired(sentAt, sentAt + PREMIUM_PROMO_DURATION_MS + 1), true);
+});
+
+Deno.test('returning to the promo reuses the Hemat message without a new timestamp', () => {
+  assertEquals(PREMIUM_PROMO_MESSAGE.includes('<i>(Hemat)🔥</i>'), true);
+  assertEquals(PREMIUM_PROMO_MESSAGE.includes('HANYA ⭐ 149!'), true);
+  assertEquals(PREMIUM_PROMO_MESSAGE.includes('1 jam sejak pesan promo pertama dikirim'), true);
 });

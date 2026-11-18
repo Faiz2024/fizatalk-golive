@@ -43,22 +43,22 @@ export function buildPremiumNormalKeyboard(referralRow: any[]): any {
   const month = PREMIUM_NORMAL_PACKAGES['30'];
   return {
     inline_keyboard: [
-      [{ text: `📦 ${week.label} - ${week.stars} ⭐`, callback_data: 'buy_premium_normal_7' }],
-      [{ text: `📦 ${month.label} - ${month.stars} ⭐`, callback_data: 'buy_premium_normal_30' }],
+      [{ text: `📦 ${week.label} - ⭐ ${week.stars}`, callback_data: 'buy_premium_normal_7' }],
+      [{ text: `📦 ${month.label} - ⭐ ${month.stars}`, callback_data: 'buy_premium_normal_30' }],
       referralRow,
     ],
   };
 }
 
 // Susunan tombol promo terbatas 1 jam, berurutan dari paling menguntungkan.
-// Telegram tidak mendukung HTML pada teks tombol; label rekomendasi memakai Unicode miring.
+// Telegram tidak mendukung HTML pada teks tombol; label Hemat memakai Unicode miring.
 // Semua tombol paket berwarna hijau (style: 'success'); tombol Abaikan tetap biasa.
 export const PREMIUM_PROMO_ROWS: Array<{ text: string; callback_data: string; style: string }> = [
-  { text: '🔥 35 Hari / 149 ⭐ • 𝘙𝘦𝘬𝘰𝘮𝘦𝘯𝘥𝘢𝘴𝘪🔥', callback_data: 'buy_premium_35', style: 'success' },
-  { text: '💎 30 Hari / 2̶4̶9̶ ⭐ ➡️ 139 ⭐', callback_data: 'buy_premium_30', style: 'success' },
-  { text: '🔥 7 Hari / 1̶4̶9̶ ⭐ ➡️ 99 ⭐', callback_data: 'buy_premium_7', style: 'success' },
-  { text: '📦 3 Hari / 59 ⭐', callback_data: 'buy_premium_3', style: 'success' },
-  { text: '⚡ 1 Hari / 29 ⭐', callback_data: 'buy_premium_1', style: 'success' },
+  { text: '🔥 35 Hari / ⭐ 149 • (𝘏𝘦𝘮𝘢𝘵)🔥', callback_data: 'buy_premium_35', style: 'success' },
+  { text: '💎 30 Hari / ⭐ 2̶4̶9̶ ➡️ ⭐ 139', callback_data: 'buy_premium_30', style: 'success' },
+  { text: '🔥 7 Hari / ⭐ 1̶4̶9̶ ➡️ ⭐ 99', callback_data: 'buy_premium_7', style: 'success' },
+  { text: '📦 3 Hari / ⭐ 59', callback_data: 'buy_premium_3', style: 'success' },
+  { text: '⚡ 1 Hari / ⭐ 29', callback_data: 'buy_premium_1', style: 'success' },
 ];
 
 export const PROMO_DISMISS_ROW = [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }];
@@ -67,4 +67,30 @@ export function buildPremiumPromoKeyboard(): any {
   return {
     inline_keyboard: [...PREMIUM_PROMO_ROWS.map((row) => [row]), PROMO_DISMISS_ROW],
   };
+}
+
+export const PREMIUM_PROMO_DURATION_MS = 60 * 60 * 1000;
+
+// Dipakai oleh promo awal dan tombol Ganti Paket; timestamp promo tidak diperbarui saat kembali.
+export const PREMIUM_PROMO_MESSAGE = `🚨 <b>PROMO TERBATAS! HANYA 1 JAM!</b> 🚨
+
+⏰ <b>Berlaku 1 jam sejak pesan promo pertama dikirim!</b> - Jangan sampai kelewatan!
+
+🎁 <b>PENAWARAN EKSKLUSIF:</b>
+━━━━━━━━━━━━━━━━━━━━
+🔥 <b>PREMIUM 35 HARI</b>
+<b>HANYA ⭐ 149!</b>
+<i>(Hemat)🔥</i>
+━━━━━━━━━━━━━━━━━━━━
+💥 <b>HARGA SPESIAL!</b>`;
+
+export function premiumChangePackageCallback(configKey: string): string {
+  return configKey.startsWith('n') || configKey.startsWith('sp')
+    ? 'cancel_premium'
+    : 'change_premium_promo';
+}
+
+export function isPremiumPromoExpired(sentAtMs: number, nowMs: number): boolean {
+  if (!Number.isFinite(sentAtMs) || !Number.isFinite(nowMs)) return true;
+  return nowMs - sentAtMs > PREMIUM_PROMO_DURATION_MS;
 }

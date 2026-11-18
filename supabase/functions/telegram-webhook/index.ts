@@ -2,7 +2,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'; // v
 import { createPakasirV2Invoice, type PakasirInvoiceResult } from '../_shared/pakasir.ts';
 import { handleReportCallback, handleReportEvidence } from '../_shared/report-handlers.ts';
 import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
-import { buildPremiumNormalKeyboard as sharedPremiumNormalKeyboard, buildPremiumPromoKeyboard, PREMIUM_PAY_CONFIG } from '../_shared/premium-packages.ts';
+import {
+  buildPremiumNormalKeyboard as sharedPremiumNormalKeyboard,
+  buildPremiumPromoKeyboard,
+  isPremiumPromoExpired,
+  PREMIUM_PAY_CONFIG,
+  PREMIUM_PROMO_DURATION_MS,
+  PREMIUM_PROMO_MESSAGE,
+  premiumChangePackageCallback,
+} from '../_shared/premium-packages.ts';
 import { getMessageContext } from '../_shared/message-context.ts';
 import { visiblePartnerPhoto } from '../_shared/profile-photo-visibility.ts';
 import { createSakurupiahWithQrisFallback, isSakurupiahInvoiceUsable } from '../_shared/sakurupiah-fallback.ts';
@@ -3017,7 +3025,7 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('reconnect_')) return 'reconnect';
   if (callbackData === 'pay_fine') return 'pay_fine';
   if (callbackData === 'cancel_topup') return 'cancel_topup';
-  if (callbackData === 'cancel_premium') return 'cancel_premium';
+  if (callbackData === 'cancel_premium' || callbackData === 'change_premium_promo') return 'cancel_premium';
   if (callbackData === 'cancel_fine') return 'cancel_fine';
   if (callbackData.startsWith('gender_') || callbackData.startsWith('set_gender_')) return 'gender';
   if (callbackData.startsWith('target_')) return 'target';
@@ -4215,9 +4223,8 @@ async function validatePromoExpiration(supabase: any, userId: number, configKey:
     }
     return false;
   } else {
-    // Promo Biasa: Kadaluarsa 1 jam
-    const ageHours = (currentTimeMs - lastPromoTimeMs) / (1000 * 60 * 60);
-    return ageHours <= 1;
+    // Promo Biasa: Kadaluarsa 1 jam; kembali ke menu tidak mengubah last_promo_sent_at.
+    return !isPremiumPromoExpired(lastPromoTimeMs, currentTimeMs);
   }
 }
 
@@ -4226,19 +4233,7 @@ async function executePromoAction(supabase: any, botToken: string, userId: numbe
 
   // Promo premium dikirim tanpa gambar (teks saja)
   const selectedPromoFileId: string | null = null;
-
-  const promoMessage = `🚨 <b>PROMO TERBATAS! HANYA 1 JAM!</b> 🚨
-
-⏰ <b>Berakhir dalam 1 jam dari sekarang!</b> - Jangan sampai kelewatan!
-
-🎁 <b>PENAWARAN EKSKLUSIF:</b>
-━━━━━━━━━━━━━━━━━━━━
-🔥 <b>PREMIUM 35 HARI</b>
-<b>HANYA 149 ⭐!</b>
-<i>Rekomendasi🔥</i>
-━━━━━━━━━━━━━━━━━━━━
-💥 <b>HARGA SPESIAL!</b>`;
-
+  const promoMessage = PREMIUM_PROMO_MESSAGE;
   const promoKeyboard = buildPremiumPromoKeyboard();
 
   // Kirim menggunakan File ID yang terpilih
@@ -4922,7 +4917,8 @@ Deno.serve(async (req) => {
         'buy_premium_7',
         'buy_premium_3',
         'buy_premium_1',
-        'buy_premium_35'
+        'buy_premium_35',
+        'change_premium_promo'
       ];
 
       const isLimitedPromoCallback = LIMITED_TIME_PROMOS.includes(callbackData) ||
@@ -4936,7 +4932,7 @@ Deno.serve(async (req) => {
         if (messageDate) {
           const nowSeconds = Math.floor(Date.now() / 1000);
           const diffSeconds = nowSeconds - messageDate;
-          const ONE_HOUR = 3600; // 3600 detik
+          const ONE_HOUR = PREMIUM_PROMO_DURATION_MS / 1000; // 3600 detik
 
           // Jika umur pesan lebih dari 1 jam (tambah buffer 60 detik untuk toleransi delay jaringan)
           if (diffSeconds > (ONE_HOUR + 60)) {
@@ -4968,7 +4964,7 @@ Deno.serve(async (req) => {
               const promoSentTime = new Date(dateStr).getTime();
               const nowMs = Date.now();
               const diffMs = nowMs - promoSentTime;
-              const ONE_HOUR_MS = 3600 * 1000 + 60 * 1000; // 1 jam + 60 detik buffer
+              const ONE_HOUR_MS = PREMIUM_PROMO_DURATION_MS + 60 * 1000; // 1 jam + 60 detik buffer
 
               if (diffMs > ONE_HOUR_MS) {
                 promoExpired = true;
@@ -5015,7 +5011,7 @@ Deno.serve(async (req) => {
       // (awaiting_payment check DIHAPUS - pembayaran otomatis via callback)
 
       // --- LOGIKA PEMBATALAN SEMUA TRANSAKSI (UNIFIED & OPTIMIZED) ---
-      const paymentAllowedCallbacks = ['cancel_topup', 'cancel_premium', 'cancel_fine'];
+      const paymentAllowedCallbacks = ['cancel_topup', 'cancel_premium', 'change_premium_promo', 'cancel_fine'];
       if (paymentAllowedCallbacks.includes(callbackData)) {
         await answerCallbackQuery(botToken, query.id, '🔄 Kembali ke menu...');
 
@@ -5036,9 +5032,14 @@ Deno.serve(async (req) => {
           backText = `➕ <b>Top Up Saldo Koin</b>\n\n💰 Saldo saat ini: <b>${balance} koin</b>\n\nSilakan pilih nominal top up (100 koin = Rp 1.000):`;
           backKeyboard = buildTopupKeyboard();
 
+        } else if (callbackData === 'change_premium_promo') {
+          // Validasi promo sudah dilakukan di STEP 1.5; jangan reset last_promo_sent_at.
+          backText = PREMIUM_PROMO_MESSAGE;
+          backKeyboard = buildPremiumPromoKeyboard();
+
         } else if (callbackData === 'cancel_premium') {
-          // Kembali ke penawaran premium
-          backText = `💎 <b>Upgrade ke Premium</b>\n\n✨ <b>KEUNTUNGAN PREMIUM:</b>\n• 🎯 Pilih target gender chat\n• 📍 Pilih target lokasi chat\n• ⭐ Badge Premium\n• 🚀 Prioritas matching\n\n💰 <b>HARGA PREMIUM:</b>\n📦 <b>1 MINGGU:</b> 99 ⭐\n📦 <b>1 BULAN:</b> 249 ⭐\n\nPilih paket di bawah ini:`;
+          // Kembali ke penawaran premium normal.
+          backText = `💎 <b>Upgrade ke Premium</b>\n\n✨ <b>KEUNTUNGAN PREMIUM:</b>\n• 🎯 Pilih target gender chat\n• 📍 Pilih target lokasi chat\n• ⭐ Badge Premium\n• 🚀 Prioritas matching\n\n💰 <b>HARGA PREMIUM:</b>\n📦 <b>1 MINGGU:</b> ⭐ 149\n📦 <b>1 BULAN:</b> ⭐ 249\n\nPilih paket di bawah ini:`;
           backKeyboard = buildPremiumNormalKeyboard();
 
         } else if (callbackData === 'cancel_fine') {
@@ -7211,7 +7212,7 @@ Deno.serve(async (req) => {
             [premiumStarsInvoiceLink
               ? { text: `⭐ Bayar ${premiumStars} Stars`, url: premiumStarsInvoiceLink, style: 'success' }
               : { text: `⭐ Bayar ${premiumStars} Stars`, callback_data: `prem_pay_${configKey}_STARS`, style: 'success' }],
-            [{ text: '🔙 Ganti Paket', callback_data: 'cancel_premium' }],
+            [{ text: '🔙 Ganti Paket', callback_data: premiumChangePackageCallback(configKey) }],
           ] }
         );
         return new Response('OK', { status: 200 });

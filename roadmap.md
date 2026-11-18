@@ -1,5 +1,12 @@
 # Roadmap
 
+## Label Hemat dan navigasi Ganti Paket promo (18 Nov 2026)
+- [x] Ubah label 35 hari menjadi (Hemat) miring dan pindahkan ⭐ ke kiri nominal paket.
+- [x] Arahkan Ganti Paket pada konfirmasi promo kembali ke menu promo tanpa mereset masa berlaku satu jam.
+- [x] Jalankan 62 tes regresi termasuk batas tepat satu jam; seluruhnya lulus.
+- [x] Deploy telegram-webhook dan jalankan ulang tes pada fungsi aktif.
+- [ ] Verifikasi tampilan dan klik melalui Telegram nyata — menunggu interaksi akun Telegram.
+
 ## Revisi harga dan label paket Premium (18 Nov 2026)
 - [x] Samakan harga Stars pada tombol dan invoice untuk seluruh paket normal/promo yang direvisi.
 - [x] Tambahkan coretan harga normal pada promo 30/7 hari, api hanya pada 35/7 hari, serta label miring Rekomendasi🔥 pada 35 hari.
