@@ -41,8 +41,8 @@ Deno.test('promo premium menu keeps revised prices in the agreed order', () => {
   assertEquals(keyboard.inline_keyboard[0][0].text, '🔥 35 Hari / 149 ⭐ • 𝘙𝘦𝘬𝘰𝘮𝘦𝘯𝘥𝘢𝘴𝘪🔥');
   assertEquals(keyboard.inline_keyboard[1][0].text, '💎 30 Hari / 2̶4̶9̶ ⭐ ➡️ 139 ⭐');
   assertEquals(keyboard.inline_keyboard[2][0].text, '🔥 7 Hari / 1̶4̶9̶ ⭐ ➡️ 99 ⭐');
-  assertEquals(keyboard.inline_keyboard[3][0].text, '📦 3 Hari / 79 ⭐');
-  assertEquals(keyboard.inline_keyboard[4][0].text, '⚡ 1 Hari / 49 ⭐');
+  assertEquals(keyboard.inline_keyboard[3][0].text, '📦 3 Hari / 59 ⭐');
+  assertEquals(keyboard.inline_keyboard[4][0].text, '⚡ 1 Hari / 29 ⭐');
 });
 
 Deno.test('promo premium menu has no referral button and no 1 Tahun package', () => {
@@ -57,7 +57,7 @@ Deno.test('promo premium menu has no referral button and no 1 Tahun package', ()
 Deno.test('promo 1 Hari button shows the plain price without strikethrough', () => {
   const oneDay = buildPremiumPromoKeyboard().inline_keyboard[4][0];
   assertEquals(oneDay.text.includes('̶'), false);
-  assertEquals(oneDay.text, '⚡ 1 Hari / 49 ⭐');
+  assertEquals(oneDay.text, '⚡ 1 Hari / 29 ⭐');
 });
 
 Deno.test('only promo 35 Hari and 7 Hari use fire emoji', () => {
@@ -97,8 +97,8 @@ Deno.test('promo Stars invoice amounts match every revised promo button', () => 
   assertEquals(PREMIUM_PAY_CONFIG['35'].stars, 149);
   assertEquals(PREMIUM_PAY_CONFIG['30'].stars, 139);
   assertEquals(PREMIUM_PAY_CONFIG['7'].stars, 99);
-  assertEquals(PREMIUM_PAY_CONFIG['3'].stars, 79);
-  assertEquals(PREMIUM_PAY_CONFIG['1'].stars, 49);
+  assertEquals(PREMIUM_PAY_CONFIG['3'].stars, 59);
+  assertEquals(PREMIUM_PAY_CONFIG['1'].stars, 29);
 });
 
 Deno.test('no premium package button shows Rupiah', () => {
