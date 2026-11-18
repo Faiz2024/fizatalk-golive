@@ -1,5 +1,9 @@
 # Roadmap
 
+## Pemusatan notifikasi admin ke @FizaTalkCS (18 Nov 2026)
+- [ ] Alihkan tujuan notifikasi pembayaran, review stiker, moderasi, verifikasi, dan notifikasi admin lainnya ke akun @FizaTalkCS.
+- [ ] Deploy ulang fungsi terkait dan verifikasi konfigurasi tujuan admin.
+
 ## Tombol Coba Wola pada pesan akhir chat (18 Nov 2026)
 - [x] Tambahkan tombol hijau "🚀Coba Wola - Chat Bot!" ke @WolaChatBot di bawah Call Acak dan Cari Partner Baru pada pesan mengakhiri chat.
 - [x] Tampilkan tombol yang sama di bawah baris penilaian partner pada pesan mencari partner baru saat Next.
