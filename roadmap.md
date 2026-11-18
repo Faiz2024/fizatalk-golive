@@ -1,8 +1,9 @@
 # Roadmap
 
 ## Pemusatan notifikasi admin ke @FizaTalkCS (18 Nov 2026)
-- [ ] Alihkan tujuan notifikasi pembayaran, review stiker, moderasi, verifikasi, dan notifikasi admin lainnya ke akun @FizaTalkCS.
-- [ ] Deploy ulang fungsi terkait dan verifikasi konfigurasi tujuan admin.
+- [x] Alihkan tujuan notifikasi pembayaran, review stiker, moderasi, verifikasi, dan notifikasi admin lainnya ke akun @FizaTalkCS (Telegram ID 7567529103).
+- [x] Deploy ulang telegram-webhook, pakasir-callback, dan sakurupiah-callback; build OK.
+- [ ] Verifikasi penerimaan notifikasi nyata berikutnya di akun @FizaTalkCS.
 
 ## Tombol Coba Wola pada pesan akhir chat (18 Nov 2026)
 - [x] Tambahkan tombol hijau "🚀Coba Wola - Chat Bot!" ke @WolaChatBot di bawah Call Acak dan Cari Partner Baru pada pesan mengakhiri chat.
