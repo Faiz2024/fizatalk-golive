@@ -7,14 +7,14 @@ import {
 
 const referralRow = [{ text: '🎁 Premium Gratis dari Ajak Teman', callback_data: 'referral_menu' }];
 
-Deno.test('normal premium menu sells only 1 Minggu 249 Stars and 1 Bulan 499 Stars', () => {
+Deno.test('normal premium menu sells only 1 Minggu 99 Stars and 1 Bulan 249 Stars', () => {
   const keyboard = buildPremiumNormalKeyboard(referralRow);
   assertEquals(keyboard.inline_keyboard.length, 3);
   assertEquals(keyboard.inline_keyboard[0], [
-    { text: '📦 1 Minggu - 249 ⭐', callback_data: 'buy_premium_normal_7' },
+    { text: '📦 1 Minggu - 99 ⭐', callback_data: 'buy_premium_normal_7' },
   ]);
   assertEquals(keyboard.inline_keyboard[1], [
-    { text: '📦 1 Bulan - 499 ⭐', callback_data: 'buy_premium_normal_30' },
+    { text: '📦 1 Bulan - 249 ⭐', callback_data: 'buy_premium_normal_30' },
   ]);
   assertEquals(keyboard.inline_keyboard[2], referralRow);
 });
@@ -37,11 +37,11 @@ Deno.test('promo premium menu keeps current prices in the agreed order', () => {
     'buy_premium_1',
     'dismiss_promo_search',
   ]);
-  assertEquals(keyboard.inline_keyboard[0][0].text, '💎 35 Hari / 249 ⭐');
-  assertEquals(keyboard.inline_keyboard[1][0].text.includes('229 ⭐'), true);
-  assertEquals(keyboard.inline_keyboard[2][0].text.includes('149 ⭐'), true);
-  assertEquals(keyboard.inline_keyboard[3][0].text, '📦 3 Hari / 99 ⭐');
-  assertEquals(keyboard.inline_keyboard[4][0].text, '⚡ 1 Hari / 49 ⭐');
+  assertEquals(keyboard.inline_keyboard[0][0].text, '💎 35 Hari / 129 ⭐');
+  assertEquals(keyboard.inline_keyboard[1][0].text.includes('119 ⭐'), true);
+  assertEquals(keyboard.inline_keyboard[2][0].text.includes('79 ⭐'), true);
+  assertEquals(keyboard.inline_keyboard[3][0].text, '📦 3 Hari / 49 ⭐');
+  assertEquals(keyboard.inline_keyboard[4][0].text, '⚡ 1 Hari / 29 ⭐');
 });
 
 Deno.test('promo premium menu has no referral button and no 1 Tahun package', () => {
@@ -56,7 +56,7 @@ Deno.test('promo premium menu has no referral button and no 1 Tahun package', ()
 Deno.test('promo 1 Hari button shows the plain price without strikethrough', () => {
   const oneDay = buildPremiumPromoKeyboard().inline_keyboard[4][0];
   assertEquals(oneDay.text.includes('\u0336'), false);
-  assertEquals(oneDay.text, '⚡ 1 Hari / 49 ⭐');
+  assertEquals(oneDay.text, '⚡ 1 Hari / 29 ⭐');
 });
 
 Deno.test('every promo package button is green and the dismiss button is plain', () => {
