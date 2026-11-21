@@ -14,6 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_report_cards: {
+        Row: {
+          admin_message_id: number | null
+          created_at: string
+          first_name: string | null
+          is_premium: boolean
+          last_action: string | null
+          premium_until: string | null
+          report_count: number
+          resolved_at: string | null
+          resolved_by: number | null
+          sanction_stage: number
+          sanction_violation: string | null
+          snippets: Json
+          status: string
+          target_user_id: number
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          admin_message_id?: number | null
+          created_at?: string
+          first_name?: string | null
+          is_premium?: boolean
+          last_action?: string | null
+          premium_until?: string | null
+          report_count?: number
+          resolved_at?: string | null
+          resolved_by?: number | null
+          sanction_stage?: number
+          sanction_violation?: string | null
+          snippets?: Json
+          status?: string
+          target_user_id: number
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          admin_message_id?: number | null
+          created_at?: string
+          first_name?: string | null
+          is_premium?: boolean
+          last_action?: string | null
+          premium_until?: string | null
+          report_count?: number
+          resolved_at?: string | null
+          resolved_by?: number | null
+          sanction_stage?: number
+          sanction_violation?: string | null
+          snippets?: Json
+          status?: string
+          target_user_id?: number
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
       blocked_users: {
         Row: {
           blocked_at: string | null
@@ -1161,6 +1218,17 @@ export type Database = {
         }
         Returns: Json
       }
+      append_admin_report_card: {
+        Args: {
+          p_category: string
+          p_context: string
+          p_detail: string
+          p_label: string
+          p_source_id: number
+          p_target_user_id: number
+        }
+        Returns: Json
+      }
       apply_daily_penalty_decay: { Args: never; Returns: number }
       begin_report_draft: {
         Args: {
@@ -1213,6 +1281,10 @@ export type Database = {
       }
       create_chat_call_invite: {
         Args: { p_requester_id: number }
+        Returns: Json
+      }
+      current_admin_report_card: {
+        Args: { p_target_user_id: number }
         Returns: Json
       }
       decay_negative_reports: { Args: { p_user_id: number }; Returns: number }
@@ -1298,6 +1370,10 @@ export type Database = {
       }
       request_referral_cashout: { Args: { p_user_id: number }; Returns: Json }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }
+      resolve_admin_report_card: {
+        Args: { p_action: string; p_admin_id: number; p_target_user_id: number }
+        Returns: Json
+      }
       resolve_chat_call_invite: {
         Args: { p_action: string; p_actor_id: number; p_invite_id: string }
         Returns: Json
@@ -1327,6 +1403,14 @@ export type Database = {
           p_username?: string
         }
         Returns: Json
+      }
+      set_admin_report_card_message: {
+        Args: {
+          p_expected_message_id: number
+          p_new_message_id: number
+          p_target_user_id: number
+        }
+        Returns: boolean
       }
       set_profile_flow: {
         Args: { p_flow: string; p_user_id: number }
@@ -1358,6 +1442,7 @@ export type Database = {
         Args: {
           p_category: string
           p_context: string
+          p_detail?: string
           p_evidence?: string
           p_explanation?: string
           p_reported_id: number

@@ -1,5 +1,12 @@
 # Roadmap
 
+## Kartu laporan gabungan di chat admin (21 Nov 2026)
+- [x] Tambahkan penyimpanan ringkas kartu admin per terlapor dan cuplikan bukti yang aman melalui RPC atomik.
+- [x] Kirim/edit satu pesan admin per terlapor dengan hitungan, jenis laporan, cuplikan, dan tindakan admin.
+- [x] Sematkan ulang saat ada pembaruan; Abaikan hanya melepas sematan tanpa mengubah pesan.
+- [x] Uji aturan agregasi, deduplikasi, tindakan admin, dan regresi bot; lalu deploy.
+- [ ] Verifikasi laporan dan klik admin melalui Telegram nyata — menunggu interaksi akun Telegram.
+
 ## Label Hemat dan navigasi Ganti Paket promo (18 Nov 2026)
 - [x] Ubah label 35 hari menjadi (Hemat) miring dan pindahkan ⭐ ke kiri nominal paket.
 - [x] Arahkan Ganti Paket pada konfirmasi promo kembali ke menu promo tanpa mereset masa berlaku satu jam.

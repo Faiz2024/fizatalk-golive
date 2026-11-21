@@ -1,64 +1,135 @@
-import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { evidenceValid, reportRule, reportableMedia } from '../_shared/report-policy.ts';
 import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
 import { handleReportCallback, handleReportEvidence } from '../_shared/report-handlers.ts';
 
-Deno.test('partner report callback submits selected context to the authoritative RPC', async () => {
+const activeCard = (overrides: any = {}) => ({
+  target_user_id: 200,
+  admin_message_id: 777,
+  report_count: 1,
+  snippets: [{ context: 'partner', category: 'spam', label: 'Spam / Iklan Berulang', detail: 'Dilaporkan saat sesi chat berakhir', at: new Date().toISOString() }],
+  status: 'pending', username: 'target', is_premium: false, updated_at: new Date().toISOString(), sanction_stage: 0,
+  ...overrides,
+});
+const telegramCall = (actions: any[] = []) => (method: string, body: any) => {
+  actions.push({ method, body });
+  return Promise.resolve(method === 'sendMessage' ? { ok: true, result: { message_id: 888 } } : { ok: true });
+};
+
+Deno.test('partner report callback submits selected context and safe excerpt to the authoritative RPC', async () => {
   const calls: any[] = [];
   const response = await handleReportCallback({ data: 'rc_partner_spam_200', from: { id: 100 }, message: { message_id: 5, chat: { id: 100 } } }, {
     adminChat: undefined,
     db: { rpc: (name: string, params: any) => { calls.push({ name, params }); return Promise.resolve({ data: { success: true, silent: true } }); } },
-    call: () => Promise.resolve({ ok: true }),
+    call: telegramCall(),
   });
   assertEquals(response?.status, 200);
-  assertEquals(calls[0], { name: 'submit_context_report', params: { p_reporter_id: 100, p_reported_id: 200, p_context: 'partner', p_category: 'spam' } });
+  assertEquals(calls[0], { name: 'submit_context_report', params: {
+    p_reporter_id: 100, p_reported_id: 200, p_context: 'partner', p_category: 'spam', p_source_id: 5,
+    p_detail: 'Dilaporkan saat sesi chat berakhir',
+  } });
 });
+
 Deno.test('database failure returns HTTP 500 so Telegram retries', async () => {
   const response = await handleReportCallback({ data: 'rc_media_sexual_200', from: { id: 100 }, message: { message_id: 5, chat: { id: 100 } } }, {
-    adminChat: undefined, db: { rpc: () => Promise.resolve({ error: { message: 'unavailable' } }) }, call: () => Promise.resolve({ ok: true }),
+    adminChat: undefined, db: { rpc: () => Promise.resolve({ error: { message: 'unavailable' } }) }, call: telegramCall(),
   });
   assertEquals(response?.status, 500);
 });
+
 Deno.test('ordinary user cannot approve a permanent moderation decision', async () => {
   let writes = 0;
   const response = await handleReportCallback({ data: 'mod_ban_12345678-1234-1234-1234-123456789012', from: { id: 100 }, message: { message_id: 5, chat: { id: 999 } } }, {
-    adminChat: '999', db: { rpc: () => { writes++; return Promise.resolve({ data: { success: true } }); } }, call: () => Promise.resolve({ ok: true }),
+    adminChat: '999', db: { rpc: () => { writes++; return Promise.resolve({ data: { success: true } }); } }, call: telegramCall(),
   });
   assertEquals(response?.status, 200);
   assertEquals(writes, 0);
 });
+
 Deno.test('serious media evidence is reviewed without copying illegal material', async () => {
-  const actions: string[] = [];
+  const actions: any[] = [];
   const response = await handleReportEvidence({ from: { id: 100 }, text: 'Penjelasan kejadian lengkap' }, { target: 200, context: 'media', source_id: 5, expires_at: new Date(Date.now() + 60000).toISOString() }, {
-    adminChat: '999', db: { rpc: () => Promise.resolve({ data: { success: true, review_id: 'review' } }) },
-    call: (method: string) => { actions.push(method); return Promise.resolve({ ok: true }); },
+    adminChat: '999',
+    db: { rpc: (name: string) => Promise.resolve({ data: name === 'set_admin_report_card_message' ? true : { success: true, review_id: 'review', report_card: activeCard({ admin_message_id: null, snippets: [] }) } }) },
+    call: telegramCall(actions),
   });
   assertEquals(response.status, 200);
-  assertEquals(actions.includes('copyMessage'), false);
-  assertEquals(actions.includes('sendPhoto'), false);
-  // admin + pelapor saja; terlapor tidak dibekukan/diberi tahu sebelum keputusan admin
-  assertEquals(actions.filter(a => a === 'sendMessage').length, 2);
+  assertEquals(actions.some(action => action.method === 'copyMessage'), false);
+  assertEquals(actions.some(action => action.method === 'sendPhoto'), false);
+  assertEquals(actions.filter(action => action.method === 'pinChatMessage').length, 1);
+  // Kartu gabungan + peninjauan prioritas untuk admin + konfirmasi pelapor.
+  assertEquals(actions.filter(action => action.method === 'sendMessage').length, 3);
 });
-Deno.test('ordinary report below threshold is not forwarded to admin', async () => {
-  const sent: any[] = [];
+
+Deno.test('first ordinary report is aggregated to admin even below sanction threshold', async () => {
+  const actions: any[] = [];
   await handleReportCallback({ data: 'rc_partner_spam_200', from: { id: 100 }, message: { message_id: 5, chat: { id: 100 } } }, {
-    adminChat: '999', db: { rpc: () => Promise.resolve({ data: { success: true, silent: false, reached_threshold: false, sanction_stage: 0 } }) },
-    call: (method: string, body: any) => { if (method === 'sendMessage') sent.push(body); return Promise.resolve({ ok: true }); },
+    adminChat: '999',
+    db: { rpc: () => Promise.resolve({ data: { success: true, silent: false, reached_threshold: false, sanction_stage: 0, report_card: activeCard() } }) },
+    call: telegramCall(actions),
   });
-  assertEquals(sent.length, 0);
+  const adminEdit = actions.find(action => action.method === 'editMessageText' && action.body.chat_id === '999');
+  assert(adminEdit.body.text.includes('Total Laporan: <b>1x</b>'));
+  assertEquals(adminEdit.body.reply_markup.inline_keyboard.flat().map((button: any) => button.callback_data), [
+    'rpa_restore_200', 'rpa_lock_200', 'rpa_block14_200', 'rpa_perm_200', 'rpa_ignore_200',
+  ]);
+  assertEquals(actions.some(action => action.method === 'pinChatMessage' && action.body.message_id === 777), true);
+  assertEquals(actions.some(action => action.method === 'sendMessage' && action.body.chat_id === 200), false);
 });
-Deno.test('fourth same-type report escalates to admin with premium flag, stage and 4 actions', async () => {
-  const sent: any[] = [];
+
+Deno.test('fourth same-type report updates the same card with premium flag, stage and user violation', async () => {
+  const actions: any[] = [];
   await handleReportCallback({ data: 'rc_partner_spam_200', from: { id: 100 }, message: { message_id: 5, chat: { id: 100 } } }, {
-    adminChat: '999', db: { rpc: () => Promise.resolve({ data: { success: true, reached_threshold: true, sanction_stage: 2, violation: 'Spam / Iklan Berulang', is_premium: true, premium_until: new Date().toISOString(), report_count: 4 } }) },
-    call: (method: string, body: any) => { if (method === 'sendMessage') sent.push(body); return Promise.resolve({ ok: true }); },
+    adminChat: '999',
+    db: { rpc: () => Promise.resolve({ data: {
+      success: true, reached_threshold: true, sanction_stage: 2, violation: 'Spam / Iklan Berulang', report_count: 4,
+      report_card: activeCard({ report_count: 4, is_premium: true, premium_until: new Date().toISOString(), sanction_stage: 2, sanction_violation: 'Spam / Iklan Berulang' }),
+    } }) },
+    call: telegramCall(actions),
   });
-  const admin = sent.find(b => b.chat_id === '999');
-  assertEquals(admin.text.includes('PREMIUM'), true);
-  assertEquals(admin.text.includes('opsi pulihkan'), true);
-  assertEquals(admin.reply_markup.inline_keyboard.flat().map((b: any) => b.callback_data), ['rpa_restore_200', 'rpa_lock_200', 'rpa_block14_200', 'rpa_perm_200']);
-  const user = sent.find(b => b.chat_id === 200);
-  assertEquals(user.text.includes('Spam / Iklan Berulang'), true);
+  const admin = actions.find(action => action.method === 'editMessageText' && action.body.chat_id === '999');
+  assert(admin.body.text.includes('PREMIUM'));
+  assert(admin.body.text.includes('Tahap sanksi saat ini: <b>2</b>'));
+  const user = actions.find(action => action.method === 'sendMessage' && action.body.chat_id === 200);
+  assert(user.body.text.includes('Spam / Iklan Berulang'));
+  assertEquals(actions.some(action => action.method === 'copyMessage'), false);
+});
+
+Deno.test('ignore only unpins the admin card and never edits its text or writes to the database', async () => {
+  const actions: any[] = [];
+  let writes = 0;
+  const response = await handleReportCallback({ data: 'rpa_ignore_200', from: { id: 999 }, message: { message_id: 777, chat: { id: 999 } } }, {
+    adminChat: '999',
+    db: { rpc: () => { writes++; return Promise.resolve({ data: true }); } },
+    call: telegramCall(actions),
+  });
+  assertEquals(response?.status, 200);
+  assertEquals(writes, 0);
+  assertEquals(actions.map(action => action.method), ['unpinChatMessage', 'answerCallbackQuery']);
+  assertEquals(actions[0].body, { chat_id: 999, message_id: 777 });
+});
+
+Deno.test('non-admin cannot unpin another chat report', async () => {
+  const actions: any[] = [];
+  await handleReportCallback({ data: 'rpa_ignore_200', from: { id: 100 }, message: { message_id: 777, chat: { id: 999 } } }, {
+    adminChat: '999', db: { rpc: () => Promise.resolve({ data: true }) }, call: telegramCall(actions),
+  });
+  assertEquals(actions.map(action => action.method), ['answerCallbackQuery']);
+});
+
+Deno.test('admin sanction closes and unpins the same aggregated card', async () => {
+  const actions: any[] = [];
+  const resolvedCard = activeCard({ status: 'resolved', last_action: 'block14', resolved_at: new Date().toISOString() });
+  await handleReportCallback({ data: 'rpa_block14_200', from: { id: 999 }, message: { message_id: 777, chat: { id: 999 } } }, {
+    adminChat: '999',
+    db: { rpc: () => Promise.resolve({ data: { success: true, violation: 'Spam / Iklan Berulang', blocked_until: new Date().toISOString(), report_card: resolvedCard } }) },
+    call: telegramCall(actions),
+  });
+  const adminEdit = actions.find(action => action.method === 'editMessageText' && action.body.chat_id === '999');
+  assert(adminEdit.body.text.includes('SELESAI'));
+  assertEquals(adminEdit.body.reply_markup, { inline_keyboard: [] });
+  assertEquals(actions.some(action => action.method === 'unpinChatMessage' && action.body.message_id === 777), true);
+  assertEquals(actions.some(action => action.method === 'pinChatMessage'), false);
 });
 
 Deno.test('forged or missing Telegram webhook secrets cannot authorize updates', async () => {

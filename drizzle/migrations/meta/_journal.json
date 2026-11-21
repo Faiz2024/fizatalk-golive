@@ -141,6 +141,27 @@
       "when": 1794795057160,
       "tag": "0019_single_rpc_message_context",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795220265998,
+      "tag": "0020_aggregate_admin_report_cards",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795220347585,
+      "tag": "0021_sync_resolved_report_card_stage",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795220378750,
+      "tag": "0022_harden_report_card_message_binding",
+      "breakpoints": true
     }
   ]
 }
