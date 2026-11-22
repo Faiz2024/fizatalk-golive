@@ -18,9 +18,9 @@ export const REPORT_POLICY = {
   },
   link: {
     fraud: { label: '💳 Penipuan / Phishing / Judi', review: false, threshold: 2, sanction: 'block14' },
-    sexual: { label: '🔞 Grup Porno / VCS', review: false, threshold: 3, sanction: 'lock_twice' },
+    sexual: { label: '🔞 Grup Porno / VCS', review: false, threshold: 2, sanction: 'block14' },
     promotion: { label: '📢 Promosi Toko / Channel', review: false, threshold: 3, sanction: 'block14' },
-    doxxing: { label: '🆔 Penyebaran Data Pribadi', review: false, threshold: 2, sanction: 'block14' },
+    doxxing: { label: '🆔 Penyebaran Data Pribadi', review: false, threshold: 3, sanction: 'block14' },
   },
   media: {
     danger: { label: '🚸 Dugaan Eksploitasi Seksual Anak', review: true, threshold: null, sanction: 'review' },

@@ -154,7 +154,7 @@ Deno.test('silent partner and quick skip are not violations', () => {
 });
 for (const [context, category, threshold, sanction] of [
   ['partner', 'fraud', 2, 'block14'], ['partner', 'harassment', 3, 'lock_twice'], ['partner', 'spam', 3, 'block14'],
-  ['link', 'fraud', 2, 'block14'], ['link', 'sexual', 3, 'lock_twice'], ['link', 'promotion', 3, 'block14'], ['link', 'doxxing', 2, 'block14'],
+  ['link', 'fraud', 2, 'block14'], ['link', 'sexual', 2, 'block14'], ['link', 'promotion', 3, 'block14'], ['link', 'doxxing', 3, 'block14'],
   ['media', 'sexual', 3, 'lock_twice'], ['media', 'fraud', 2, 'block14'],
 ] as const) {
   Deno.test(`${context}/${category} requires ${threshold} distinct reporters and ${sanction}`, () => {

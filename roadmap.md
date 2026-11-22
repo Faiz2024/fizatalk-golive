@@ -1,5 +1,11 @@
 # Roadmap
 
+## Penyesuaian dua laporan tautan (22 Nov 2026)
+- [x] Ubah Grup Porno/VCS menjadi 2 pelapor berbeda langsung blokir 14 hari bisa tebus.
+- [x] Ubah Penyebaran Data Pribadi menjadi 3 pelapor berbeda langsung blokir 14 hari bisa tebus.
+- [x] Pertahankan rentang 12 jam dan aturan kategori lain; 76 regresi dan simulasi database lulus, bot aktif, data uji sudah dibersihkan.
+- [ ] Verifikasi melalui Telegram nyata — menunggu interaksi akun Telegram.
+
 ## Penyesuaian sanksi per jenis laporan (22 Nov 2026)
 - [x] Terapkan blokir langsung untuk fraud/doxxing (2 pelapor) dan spam/promosi (3 pelapor).
 - [x] Terapkan dua kunci sebelum blokir untuk sexual/harassment dan eskalasi tanpa tebus pada pengulangan berikutnya.

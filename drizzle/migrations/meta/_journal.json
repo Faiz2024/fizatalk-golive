@@ -183,6 +183,13 @@
       "when": 1795317302814,
       "tag": "0025_track_locks_before_report_blocks",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795318066643,
+      "tag": "0026_adjust_link_report_thresholds",
+      "breakpoints": true
     }
   ]
 }
