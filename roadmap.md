@@ -4,9 +4,11 @@
 - [x] Pisahkan handler HTTP dari titik masuk Supabase tanpa mengubah logika bot, pembayaran, call, atau re-engagement.
 - [x] Siapkan satu server Railway, Dockerfile, health check, konfigurasi callback, dan panduan environment tanpa memindahkan webhook aktif.
 - [x] Uji routing, autentikasi webhook, 86 regresi bot, dan server lokal dengan kredensial dummy; health 200, webhook palsu 403, path asing 404.
-- [ ] Deploy Railway dan sambungkan Lovable ke Supabase mandiri — menunggu akun/kredensial tujuan.
-- [ ] Siapkan dan jalankan sinkronisasi delta terakhir tepat sebelum cutover — menunggu jadwal cutover.
-- [ ] Alihkan webhook dan verifikasi Telegram nyata — menunggu Railway siap dan delta selesai.
+- [x] Deploy Railway di `fizatalk-golive-production.up.railway.app`; health 200, path asing 404, webhook palsu 403, dan autentikasi webhook sah 200.
+- [ ] Sambungkan Lovable ke Supabase mandiri — menunggu koneksi proyek eksternal.
+- [x] Jalankan delta awal 22 Nov 2026 pukul 19.32 WIB: 4.754 upsert dan 8 penghapusan; 22 tabel serta 254.540 baris tercakup terverifikasi identik dengan snapshot sumber.
+- [ ] Jalankan sinkronisasi delta terakhir tepat sebelum cutover — menunggu jadwal cutover.
+- [ ] Alihkan webhook dan verifikasi Telegram nyata — menunggu jadwal cutover dan delta final.
 
 ## Skrip migrasi ke Supabase mandiri (22 Nov 2026)
 - [x] Buat satu DDL ringkas langsung dari katalog aktif dan validasi seluruh objek pada PostgreSQL terisolasi: 22 tabel, 274 kolom termasuk view, 60 constraint, 79 indeks, 85 fungsi, 18 policy, 7 trigger, dan 760 grant identik; impor serta pengaman eksekusi ulang lulus.
@@ -18,7 +20,6 @@
 - [x] Siapkan impor transaksional dengan urutan relasi, pengaman target kosong, pemulihan sequence, dan validasi jumlah baris.
 - [x] Uji ekspor-impor pada PostgreSQL terisolasi serta siapkan panduan sinkronisasi akhir sebelum webhook dipindahkan; 254.379 baris dan seluruh nilai 22 tabel terverifikasi identik.
 - [x] Jalankan impor nyata pada Supabase mandiri: 254.379 baris dalam 22 tabel; jumlah dan sidik seluruh tabel identik dengan snapshot, 2.775 blokir aktif, sequence dan trigger moderasi terverifikasi.
-- [ ] Siapkan dan jalankan sinkronisasi delta terakhir sebelum cutover — menunggu jadwal cutover; webhook/bot aktif belum dipindahkan.
 
 ## Pembersihan database hemat biaya (22 Nov 2026)
 - [x] Audit satu kueri untuk indeks dan riwayat lama.
