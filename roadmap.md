@@ -9,7 +9,8 @@
 - [x] Ekspor snapshot data inti per tabel tanpa mengubah database aktif; kecualikan riwayat laporan, log bot, dan klik re-engagement sesuai pilihan pengguna.
 - [x] Siapkan impor transaksional dengan urutan relasi, pengaman target kosong, pemulihan sequence, dan validasi jumlah baris.
 - [x] Uji ekspor-impor pada PostgreSQL terisolasi serta siapkan panduan sinkronisasi akhir sebelum webhook dipindahkan; 254.379 baris dan seluruh nilai 22 tabel terverifikasi identik.
-- [ ] Jalankan impor nyata pada Supabase baru dan sinkronisasi delta terakhir — menunggu kredensial target digunakan pengguna serta jadwal cutover.
+- [x] Jalankan impor nyata pada Supabase mandiri: 254.379 baris dalam 22 tabel; jumlah dan sidik seluruh tabel identik dengan snapshot, 2.775 blokir aktif, sequence dan trigger moderasi terverifikasi.
+- [ ] Siapkan dan jalankan sinkronisasi delta terakhir sebelum cutover — menunggu jadwal cutover; webhook/bot aktif belum dipindahkan.
 
 ## Pembersihan database hemat biaya (22 Nov 2026)
 - [x] Audit satu kueri untuk indeks dan riwayat lama.
