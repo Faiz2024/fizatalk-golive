@@ -15,6 +15,7 @@ import { getMessageContext } from '../_shared/message-context.ts';
 import { visiblePartnerPhoto } from '../_shared/profile-photo-visibility.ts';
 import { createSakurupiahWithQrisFallback, isSakurupiahInvoiceUsable } from '../_shared/sakurupiah-fallback.ts';
 import { buildEndChatKeyboard as sharedEndChatKeyboard, buildNextRatingRows } from '../_shared/end-chat-keyboard.ts';
+import { RECOVERY_PRICE_LABEL, RECOVERY_STARS, searchReportLockMessage, validRecoveryPayment } from '../_shared/recovery-policy.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -442,7 +443,7 @@ function buildPaymentMethodKeyboard(
   const kb: any[][] = [];
 
   // Tombol Stars
-  if (amountIDR > 0) {
+  if (amountIDR > 0 || starsOverride !== undefined) {
     const starsPrice = starsOverride ?? calculateStarsPrice(amountIDR);
     kb.push([starsInvoiceUrl
       ? { text: `⭐ Telegram Stars (${starsPrice} ⭐)`, url: starsInvoiceUrl }
@@ -580,16 +581,13 @@ async function processStarsFinePayment(
   botToken: string, userId: number,
   queryId: string, message: any
 ): Promise<void> {
-  const FINE_AMOUNT = 10000;
-
-  const starsPrice = calculateStarsPrice(FINE_AMOUNT);
   const payload = JSON.stringify({ t: 'f', u: userId });
 
   const invoiceLink = await createStarsInvoiceLink(
     botToken,
     'Biaya Pemulihan Akun',
-    `Biaya Pemulihan Rp ${FINE_AMOUNT.toLocaleString('id-ID')}`,
-    payload, starsPrice
+    `Biaya Pemulihan ${RECOVERY_PRICE_LABEL}`,
+    payload, RECOVERY_STARS
   );
 
   if (invoiceLink) {
@@ -726,6 +724,11 @@ async function handleSuccessfulStarsPayment(
 
     } else if (type === 'f') {
       // FINE PAYMENT
+      if (!validRecoveryPayment(payload.u, userId, starsAmount)) {
+        await tgCall(botToken, 'refundStarPayment', { user_id: userId, telegram_payment_charge_id: chargeId });
+        await sendTelegramMessage(botToken, userId, 'Nominal pembayaran pemulihan tidak sesuai. Permintaan pengembalian Stars dikirim. Hubungi @FizaTalkCS.');
+        return;
+      }
       const { data: eligible, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: userId });
       if (error) throw error;
       if (!eligible) {
@@ -776,7 +779,7 @@ async function handleSuccessfulStarsPayment(
       const csChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
       if (csChatId) {
         await sendTelegramMessage(botToken, parseInt(csChatId),
-          `✅ <b>PEMULIHAN AKUN DIBAYAR VIA STARS</b>\n\n🆔 User: <code>${userId}</code>\n⭐ Stars: ${starsAmount}\n💰 Biaya Pemulihan: Rp ${FINE_AMOUNT.toLocaleString('id-ID')}\n\n✅ Auto-approved`
+          `✅ <b>PEMULIHAN AKUN DIBAYAR VIA STARS</b>\n\n🆔 User: <code>${userId}</code>\n⭐ Stars: ${starsAmount}\n💰 Biaya Pemulihan: ${RECOVERY_PRICE_LABEL}\n\n✅ Auto-approved`
         );
       }
     }
@@ -2510,7 +2513,7 @@ async function handleAdminSpamAction(supabase: any, botToken: string, targetId: 
       // Gunakan UI Blokir Existing
       const blockedKeyboard = {
         inline_keyboard: [
-          [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]
+          [{ text: '💸 Pemulihan Akun - ⭐ 99', callback_data: 'pay_fine' }]
         ]
       };
       const blockedMsg = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ <b>Alasan:</b> Anda telah mencapai batas peringatan SPAM (4/4). Demi kenyamanan, akses chat Anda <b>dinonaktifkan</b>.\n\nPilih opsi di bawah untuk memulihkan akun:`;
@@ -3535,15 +3538,15 @@ async function comprehensiveSearchAction(
   const violationLine = (result as any).violation ? `\n\n📌 Jenis pelanggaran: <b>${escapeHtml((result as any).violation)}</b>` : '';
   if (!result.success && sanctionError === 'report_lock') {
     await sendTelegramMessage(botToken, userId,
-      `🔒 <b>AKUN DIBATASI</b>\n\nAkun Anda dibatasi karena laporan dari pengguna lain terhadap aktivitas Anda.${violationLine}\n\nTekan <b>Setuju</b> untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan.\n\n📖 Baca ketentuan layanan: /rules`,
+      searchReportLockMessage(violationLine),
       { inline_keyboard: [[{ text: '✅ Setuju, saya tidak akan mengulangi', callback_data: 'agree_conduct' }]] });
     return { success: false, handled: true, result };
   }
   if (!result.success && sanctionError === 'report_stage2') {
     const remaining = formatRemainingTime((result as any).blocked_until);
     await sendTelegramMessage(botToken, userId,
-      `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang terhadap ketentuan layanan.${violationLine}\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\nAnda dapat memulihkan akun lebih cepat dengan biaya <b>Rp 10.000</b> dan menyetujui untuk tidak mengulangi pelanggaran.\n\n⚠️ Jika kembali melanggar setelah pemulihan, blokir berikutnya <b>tidak dapat dibuka dengan pembayaran</b>.\n\n📖 Baca ketentuan layanan: /rules`,
-      { inline_keyboard: [[{ text: '✅ Setuju & Pulihkan Akun - Rp 10.000', callback_data: 'pay_fine' }]] });
+      `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\nAkun Anda diblokir selama 14 hari karena pelanggaran berulang terhadap ketentuan layanan.${violationLine}\n\n⏳ Sisa waktu pemblokiran: <b>${remaining}</b>\n\nAnda dapat memulihkan akun lebih cepat dengan biaya <b>⭐ 99</b> dan menyetujui untuk tidak mengulangi pelanggaran.\n\n⚠️ Jika kembali melanggar setelah pemulihan, blokir berikutnya <b>tidak dapat dibuka dengan pembayaran</b>.\n\n📖 Baca ketentuan layanan: /rules`,
+      { inline_keyboard: [[{ text: '✅ Setuju & Pulihkan Akun - ⭐ 99', callback_data: 'pay_fine' }]] });
     return { success: false, handled: true, result };
   }
   if (!result.success && sanctionError === 'report_permanent') {
@@ -3567,7 +3570,7 @@ async function comprehensiveSearchAction(
     const blockedKeyboard = {
       inline_keyboard: [
         [
-          { text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }
+          { text: '💸 Pemulihan Akun - ⭐ 99', callback_data: 'pay_fine' }
         ]
       ]
     };
@@ -3582,7 +3585,7 @@ async function comprehensiveSearchAction(
   🔓 <b>CARA MEMBUKA BLOKIR:</b>
 
   1️⃣ <b>Biaya Pemulihan Akun</b>
-  Aktifkan kembali akun dengan biaya administrasi pemulihan sebesar <b>Rp 10.000</b>.
+  Aktifkan kembali akun dengan biaya administrasi pemulihan sebesar <b>⭐ 99</b>.
 
   2️⃣ <b>Upgrade ke Premium</b>
   Nikmati filter gender & lokasi, prioritas matching, dan fitur eksklusif lainnya. Premium tetap wajib mematuhi Ketentuan Penggunaan.
@@ -3617,7 +3620,7 @@ async function comprehensiveSearchAction(
     const blockedKeyboard = {
       inline_keyboard: [
         [
-          { text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }
+          { text: '💸 Pemulihan Akun - ⭐ 99', callback_data: 'pay_fine' }
         ]
       ]
     };
@@ -3632,7 +3635,7 @@ async function comprehensiveSearchAction(
   🔓 <b>CARA MEMBUKA BLOKIR:</b>
 
   1️⃣ <b>Biaya Pemulihan Akun</b>
-  Aktifkan kembali akun dengan biaya administrasi pemulihan sebesar <b>Rp 10.000</b>.
+  Aktifkan kembali akun dengan biaya administrasi pemulihan sebesar <b>⭐ 99</b>.
 
   2️⃣ <b>Upgrade ke Premium</b>
   Nikmati filter gender & lokasi, prioritas matching, dan fitur eksklusif lainnya. Premium tetap wajib mematuhi Ketentuan Penggunaan.
@@ -4740,7 +4743,7 @@ Deno.serve(async (req) => {
         if (payload.t === 'f' || payload.t === 'p') {
           const { data, error } = await supabase.rpc(payload.t === 'f' ? 'restoration_payment_allowed' : 'premium_purchase_allowed', { p_user_id: pcq.from.id });
           if (error) return new Response('Database Error', { status: 500 });
-          checkoutAllowed = data === true;
+          checkoutAllowed = data === true && (payload.t !== 'f' || validRecoveryPayment(payload.u, pcq.from.id, pcq.total_amount));
         }
       } catch { checkoutAllowed = false; }
       await fetch(`${TELEGRAM_API}${botToken}/answerPreCheckoutQuery`, {
@@ -5044,8 +5047,8 @@ Deno.serve(async (req) => {
 
         } else if (callbackData === 'cancel_fine') {
           // Kembali ke halaman peringatan blokir
-          backText = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ Akses chat Anda dinonaktifkan karena pelanggaran.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ <b>Biaya Pemulihan Akun</b>\nBiaya administrasi pemulihan sebesar <b>Rp 10.000</b>.`;
-          backKeyboard = { inline_keyboard: [[{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]] };
+          backText = `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n⚠️ Akses chat Anda dinonaktifkan karena pelanggaran.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ <b>Biaya Pemulihan Akun</b>\nBiaya administrasi pemulihan sebesar <b>⭐ 99</b>.`;
+          backKeyboard = { inline_keyboard: [[{ text: '💸 Pemulihan Akun - ⭐ 99', callback_data: 'pay_fine' }]] };
         }
 
         // 2. Eksekusi Pengubahan UI
@@ -5499,7 +5502,7 @@ Deno.serve(async (req) => {
           } else {
             payload.reply_markup = {
               inline_keyboard: [
-                [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]
+                [{ text: '💸 Pemulihan Akun - ⭐ 99', callback_data: 'pay_fine' }]
               ]
             };
             if (mediaField !== 'video_note') {
@@ -5595,21 +5598,19 @@ Deno.serve(async (req) => {
         await answerCallbackQuery(botToken, query.id);
         if (message) await deleteTelegramMessage(botToken, message.chat.id, message.message_id);
 
-        const FINE_AMOUNT = 10000; // Pastikan sesuai nominal denda
-        const fineStarsPrice = calculateStarsPrice(FINE_AMOUNT);
         const fineStarsPayload = JSON.stringify({ t: 'f', u: userId });
         const fineStarsInvoiceLink = await createStarsInvoiceLink(
           botToken,
           'Biaya Pemulihan Akun',
-          `Biaya Pemulihan Rp ${FINE_AMOUNT.toLocaleString('id-ID')}`,
+          `Biaya Pemulihan ${RECOVERY_PRICE_LABEL}`,
           fineStarsPayload,
-          fineStarsPrice
+          RECOVERY_STARS
         );
         console.log(`[STARS] fine payment button mode: ${fineStarsInvoiceLink ? 'url' : 'callback_fallback'}`);
 
         await sendTelegramMessage(botToken, userId,
-          `💸 <b>BIAYA PEMULIHAN AKUN</b>\n\n💰 Total: <b>Rp ${FINE_AMOUNT.toLocaleString('id-ID')}</b>\n\nPilih metode pembayaran:`,
-          buildPaymentMethodKeyboard('fine_pay', 'cancel_fine', FINE_AMOUNT, fineStarsInvoiceLink || undefined)
+          `💸 <b>BIAYA PEMULIHAN AKUN</b>\n\n💰 Total: <b>${RECOVERY_PRICE_LABEL}</b>\n\nPilih metode pembayaran:`,
+          buildPaymentMethodKeyboard('fine_pay', 'cancel_fine', 0, fineStarsInvoiceLink || undefined, RECOVERY_STARS)
         );
         return new Response('OK', { status: 200 });
       }
@@ -6118,11 +6119,11 @@ Deno.serve(async (req) => {
         } else if (isNonOrganic && !proc.is_premium) {
           const blockedKeyboard = {
             inline_keyboard: [
-              [{ text: '💸 Pemulihan Akun - Rp 10.000', callback_data: 'pay_fine' }]
+              [{ text: '💸 Pemulihan Akun - ⭐ 99', callback_data: 'pay_fine' }]
             ]
           };
           await sendTelegramMessage(botToken, proc.user_id,
-            `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n❌ Penarikan bonus ditolak karena teman yang diundang terdeteksi <b>tidak valid/tidak organik</b>.\n\n🗑 Seluruh akun hasil undangan langsung Anda telah dihapus. Akses bot Anda diblokir untuk menjaga keamanan program referal.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ Biaya administrasi pemulihan akun sebesar <b>Rp 10.000</b>.\n2️⃣ Upgrade ke <b>Premium</b>.`,
+            `🚫 <b>AKUN ANDA DIBLOKIR</b>\n\n❌ Penarikan bonus ditolak karena teman yang diundang terdeteksi <b>tidak valid/tidak organik</b>.\n\n🗑 Seluruh akun hasil undangan langsung Anda telah dihapus. Akses bot Anda diblokir untuk menjaga keamanan program referal.\n\n🔓 <b>CARA MEMBUKA BLOKIR:</b>\n\n1️⃣ Biaya administrasi pemulihan akun sebesar <b>⭐ 99</b>.\n2️⃣ Upgrade ke <b>Premium</b>.`,
             blockedKeyboard);
         } else if (isNonOrganic) {
           await sendTelegramMessage(botToken, proc.user_id,

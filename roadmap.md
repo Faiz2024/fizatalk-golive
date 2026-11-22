@@ -1,5 +1,12 @@
 # Roadmap
 
+## Pesan kunci dan pemulihan 99 Stars (22 Nov 2026)
+- [x] Tambahkan `⚠️ Hindari pelanggaran berulang untuk mencegah pemblokiran akun.` tepat di atas instruksi “Tekan” pada tiga pesan kunci, tanpa mengubah teks lain.
+- [x] Ganti seluruh keterangan dan tombol pemulihan Rp10.000 menjadi ⭐ 99 serta tetapkan invoice pemulihan 99 Stars.
+- [x] Tolak pembayaran pemulihan dengan nominal atau pemilik payload yang tidak sesuai.
+- [x] Tambahkan dan jalankan 81 tes aturan/regresi, deploy bot, dan pastikan 71 tes fungsi aktif lulus.
+- [ ] Verifikasi tampilan dan pembayaran melalui Telegram nyata — menunggu interaksi akun Telegram.
+
 ## Penyesuaian dua laporan tautan (22 Nov 2026)
 - [x] Ubah Grup Porno/VCS menjadi 2 pelapor berbeda langsung blokir 14 hari bisa tebus.
 - [x] Ubah Penyebaran Data Pribadi menjadi 3 pelapor berbeda langsung blokir 14 hari bisa tebus.

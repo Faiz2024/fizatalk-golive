@@ -1,5 +1,6 @@
 import { evidenceValid, reportKeyboard, reportRule, type ReportContext } from './report-policy.ts';
 import { adminReportKeyboard, renderAdminReportCard, reportSnippet, reportWib, syncAdminReportCard } from './admin-report-card.ts';
+import { adminReportLockMessage, automaticReportLockMessage } from './recovery-policy.ts';
 
 type Dependencies = { db: any; call: (method: string, body: any) => Promise<any>; adminChat: string | undefined; now?: () => Date };
 const ok = () => new Response('OK');
@@ -82,7 +83,7 @@ export async function handleReportCallback(q: any, d: Dependencies): Promise<Res
     const until = wib(new Date(r.blocked_until || Date.now()));
     const message = {
       restore: '✅ <b>Akun Anda dipulihkan oleh admin.</b> Anda dapat kembali mencari partner. Patuhi /rules.',
-      lock: `🔒 <b>Akun Anda dibatasi oleh admin.</b>${violation}\n\nTekan Cari Partner lalu Setuju untuk berjanji tidak mengulangi dan langsung melanjutkan penggunaan. Baca /rules.`,
+      lock: adminReportLockMessage(violation),
       block14: `⛔ <b>Akun Anda diblokir 14 hari</b> tanpa opsi pemulihan.${violation}\n⏳ Berakhir: <b>${until}</b>\n\nBaca /rules. Sanggahan: @FizaTalkCS.`,
       perm: `⛔ <b>Akun Anda diblokir permanen.</b>${violation}\n\nSanggahan: @FizaTalkCS.`,
     }[action];
@@ -200,7 +201,7 @@ export async function handleReportCallback(q: any, d: Dependencies): Promise<Res
       chat_id: target,
       parse_mode: 'HTML',
       text: stage === 1
-        ? `🔒 <b>Akun Anda dibatasi</b> karena laporan dari pengguna lain.${violation}\n\nTekan Cari Partner lalu Setuju untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan. Baca /rules.`
+        ? automaticReportLockMessage(violation)
         : stage === 2
           ? `🚫 <b>Akun Anda diblokir 14 hari</b> karena pelanggaran ketentuan layanan.${violation}\n\nTekan Cari Partner untuk melihat opsi pemulihan. Baca /rules.`
           : `⛔ <b>Akun Anda diblokir 14 hari</b> tanpa opsi pemulihan karena pelanggaran berulang.${violation}\n\nBaca /rules.`,
