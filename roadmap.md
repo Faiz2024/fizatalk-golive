@@ -1,5 +1,13 @@
 # Roadmap
 
+## Runtime hybrid Railway + Supabase mandiri (22 Nov 2026)
+- [x] Pisahkan handler HTTP dari titik masuk Supabase tanpa mengubah logika bot, pembayaran, call, atau re-engagement.
+- [x] Siapkan satu server Railway, Dockerfile, health check, konfigurasi callback, dan panduan environment tanpa memindahkan webhook aktif.
+- [x] Uji routing, autentikasi webhook, 86 regresi bot, dan server lokal dengan kredensial dummy; health 200, webhook palsu 403, path asing 404.
+- [ ] Deploy Railway dan sambungkan Lovable ke Supabase mandiri — menunggu akun/kredensial tujuan.
+- [ ] Siapkan dan jalankan sinkronisasi delta terakhir tepat sebelum cutover — menunggu jadwal cutover.
+- [ ] Alihkan webhook dan verifikasi Telegram nyata — menunggu Railway siap dan delta selesai.
+
 ## Skrip migrasi ke Supabase mandiri (22 Nov 2026)
 - [x] Buat satu DDL ringkas langsung dari katalog aktif dan validasi seluruh objek pada PostgreSQL terisolasi: 22 tabel, 274 kolom termasuk view, 60 constraint, 79 indeks, 85 fungsi, 18 policy, 7 trigger, dan 760 grant identik; impor serta pengaman eksekusi ulang lulus.
 - [x] Bagi skema menjadi dua berkas di bawah batas SQL Editor dan validasi eksekusi berurutan tanpa mengubah database aktif.

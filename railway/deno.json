@@ -1,0 +1,6 @@
+{
+  "tasks": {
+    "start": "deno run --allow-net --allow-env server.ts",
+    "test": "deno test --no-config --allow-env server_test.ts"
+  }
+}

@@ -9,3 +9,4 @@
 - Keep suspected child sexual material as restricted references rather than automatically redistributing media; request safe explanatory evidence for review.
 - Derive Telegram webhook authentication from the bot credential in one shared helper and register the same secret with Telegram; reject forged updates before database access.
 - Filter partner photos through the shared visibility policy in pairing notifications for both search and reconnect; reuse the existing batch query to avoid additional database calls.
+- Keep HTTP handlers independent from Supabase and Railway entrypoints so both runtimes execute the same bot logic without parallel implementations.
