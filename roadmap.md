@@ -1,5 +1,11 @@
 # Roadmap
 
+## Pembersihan database hemat biaya (22 Nov 2026)
+- [x] Audit satu kueri untuk indeks dan riwayat lama.
+- [x] Hapus tiga indeks telegram_users yang tidak terpakai dan tumpang tindih; indeks re-engagement aktif tetap ada.
+- [x] Hapus 653.520 laporan, 48.615 log, dan 89.487 klik berusia lebih dari 30 hari tanpa menyentuh pengguna atau sanksi aktif.
+- [x] Verifikasi seluruh riwayat lama bersih dan ukuran database turun dari 866 MB menjadi 577 MB; tanpa VACUUM FULL.
+
 ## Pesan kunci dan pemulihan 99 Stars (22 Nov 2026)
 - [x] Tambahkan `⚠️ Hindari pelanggaran berulang untuk mencegah pemblokiran akun.` tepat di atas instruksi “Tekan” pada tiga pesan kunci, tanpa mengubah teks lain.
 - [x] Ganti seluruh keterangan dan tombol pemulihan Rp10.000 menjadi ⭐ 99 serta tetapkan invoice pemulihan 99 Stars.

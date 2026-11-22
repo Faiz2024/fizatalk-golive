@@ -190,6 +190,13 @@
       "when": 1795318066643,
       "tag": "0026_adjust_link_report_thresholds",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795336738531,
+      "tag": "0027_remove_redundant_reengagement_indexes",
+      "breakpoints": true
     }
   ]
 }
