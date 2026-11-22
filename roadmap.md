@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Skrip migrasi ke Supabase mandiri (22 Nov 2026)
+- [x] Buat satu DDL ringkas langsung dari katalog aktif dan validasi seluruh objek pada PostgreSQL terisolasi: 22 tabel, 274 kolom termasuk view, 60 constraint, 79 indeks, 85 fungsi, 18 policy, 7 trigger, dan 760 grant identik; impor serta pengaman eksekusi ulang lulus.
 - [x] Bagi skema menjadi dua berkas di bawah batas SQL Editor dan validasi eksekusi berurutan tanpa mengubah database aktif.
 - [x] Ekspor skema publik aktif: 22 tabel, 274 kolom, 85 RPC/fungsi, 79 indeks, 7 trigger, view, relasi, dan RLS.
 - [x] Susun satu berkas SQL untuk proyek Supabase kosong dengan pengaman transaksi, WIB, pembatasan akses, dan petunjuk penggunaan.
