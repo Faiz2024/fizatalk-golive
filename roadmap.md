@@ -1,5 +1,10 @@
 # Roadmap
 
+## Skrip migrasi ke Supabase mandiri (22 Nov 2026)
+- [x] Ekspor skema publik aktif: 22 tabel, 274 kolom, 85 RPC/fungsi, 79 indeks, 7 trigger, view, relasi, dan RLS.
+- [x] Susun satu berkas SQL untuk proyek Supabase kosong dengan pengaman transaksi, WIB, pembatasan akses, dan petunjuk penggunaan.
+- [x] Validasi impor PostgreSQL terisolasi, eksekusi ulang aman, checksum katalog, 85 fungsi identik, dan pemindaian kredensial tanpa mengubah database aktif.
+
 ## Pembersihan database hemat biaya (22 Nov 2026)
 - [x] Audit satu kueri untuk indeks dan riwayat lama.
 - [x] Hapus tiga indeks telegram_users yang tidak terpakai dan tumpang tindih; indeks re-engagement aktif tetap ada.
