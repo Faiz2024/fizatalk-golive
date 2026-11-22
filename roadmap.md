@@ -10,7 +10,7 @@
 - [x] Jalankan delta final 22 Nov 2026 pukul 19.41 WIB: 546 upsert dan 6 penghapusan; 22 tabel serta 254.537 baris tercakup terverifikasi identik sebelum webhook dialihkan.
 - [x] Alihkan webhook resmi ke Railway tanpa membuang antrean; URL dan allowed updates cocok, tidak ada error Telegram, dan aktivitas pengguna nyata sudah masuk ke database tujuan.
 - [x] Aktifkan empat pekerjaan terjadwal pada database tujuan dengan re-engagement menuju Railway; seluruh pekerjaan terjadwal backend lama sudah dihentikan.
-- [ ] Verifikasi `/start` dan interaksi menu melalui akun Telegram pengguna — menunggu hasil uji manual.
+- [x] Verifikasi `/start` melalui akun Telegram pengguna pada 22 Nov 2026 pukul 19.46 WIB; bot merespons dan menu utama muncul seperti biasa melalui Railway.
 
 ## Skrip migrasi ke Supabase mandiri (22 Nov 2026)
 - [x] Buat satu DDL ringkas langsung dari katalog aktif dan validasi seluruh objek pada PostgreSQL terisolasi: 22 tabel, 274 kolom termasuk view, 60 constraint, 79 indeks, 85 fungsi, 18 policy, 7 trigger, dan 760 grant identik; impor serta pengaman eksekusi ulang lulus.
