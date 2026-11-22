@@ -202,7 +202,7 @@ export async function handleReportCallback(q: any, d: Dependencies): Promise<Res
       text: stage === 1
         ? `🔒 <b>Akun Anda dibatasi</b> karena laporan dari pengguna lain.${violation}\n\nTekan Cari Partner lalu Setuju untuk berjanji tidak mengulangi pelanggaran dan langsung melanjutkan penggunaan. Baca /rules.`
         : stage === 2
-          ? `🚫 <b>Akun Anda diblokir 14 hari</b> karena pelanggaran berulang.${violation}\n\nTekan Cari Partner untuk melihat opsi pemulihan. Baca /rules.`
+          ? `🚫 <b>Akun Anda diblokir 14 hari</b> karena pelanggaran ketentuan layanan.${violation}\n\nTekan Cari Partner untuk melihat opsi pemulihan. Baca /rules.`
           : `⛔ <b>Akun Anda diblokir 14 hari</b> tanpa opsi pemulihan karena pelanggaran berulang.${violation}\n\nBaca /rules.`,
     });
   }

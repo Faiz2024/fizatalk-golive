@@ -93,6 +93,7 @@ Deno.test('automatic sanction explains its trigger to admin without exposing thr
   assert(admin.body.text.includes('Kategori kritis • 2 pelapor dalam 12 jam'));
   const user = actions.find(action => action.method === 'sendMessage' && action.body.chat_id === 200);
   assert(user.body.text.includes('Penipuan / penyebaran data pribadi'));
+  assertEquals(user.body.text.includes('pelanggaran berulang'), false);
   assertEquals(user.body.text.includes('2 pelapor'), false);
   assertEquals(user.body.text.includes('12 jam'), false);
   assertEquals(actions.some(action => action.method === 'copyMessage'), false);
@@ -151,13 +152,14 @@ Deno.test('silent partner and quick skip are not violations', () => {
   assertEquals(reportRule('partner', 'inactive'), undefined);
   assertEquals(reportRule('partner', 'skip'), undefined);
 });
-for (const [context, category, threshold] of [
-  ['partner', 'fraud', 2], ['partner', 'harassment', 3], ['partner', 'spam', 4],
-  ['link', 'fraud', 2], ['link', 'sexual', 3], ['link', 'promotion', 4], ['link', 'doxxing', 2],
-  ['media', 'sexual', 3], ['media', 'fraud', 2],
+for (const [context, category, threshold, sanction] of [
+  ['partner', 'fraud', 2, 'block14'], ['partner', 'harassment', 3, 'lock_twice'], ['partner', 'spam', 3, 'block14'],
+  ['link', 'fraud', 2, 'block14'], ['link', 'sexual', 3, 'lock_twice'], ['link', 'promotion', 3, 'block14'], ['link', 'doxxing', 2, 'block14'],
+  ['media', 'sexual', 3, 'lock_twice'], ['media', 'fraud', 2, 'block14'],
 ] as const) {
-  Deno.test(`${context}/${category} requires ${threshold} distinct reporters`, () => {
+  Deno.test(`${context}/${category} requires ${threshold} distinct reporters and ${sanction}`, () => {
     assertEquals(reportRule(context, category)?.threshold, threshold);
+    assertEquals(reportRule(context, category)?.sanction, sanction);
     assertEquals('points' in reportRule(context, category)!, false);
   });
 }

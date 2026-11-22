@@ -1,5 +1,6 @@
 export type ReportContext = 'partner' | 'link' | 'media';
-export type ReportRule = { label: string; review: boolean; threshold: 2 | 3 | 4 | null };
+export type ReportSanction = 'review' | 'lock_twice' | 'block14';
+export type ReportRule = { label: string; review: boolean; threshold: 2 | 3 | null; sanction: ReportSanction };
 
 export const REPORT_FREQUENCY_POLICY = {
   windowHours: 12,
@@ -10,21 +11,21 @@ export const REPORT_FREQUENCY_POLICY = {
 
 export const REPORT_POLICY = {
   partner: {
-    danger: { label: '🚸 Asusila Anak / Bahaya Berat', review: true, threshold: null },
-    fraud: { label: '💳 Penipuan / Pemerasan / VCS', review: false, threshold: 2 },
-    harassment: { label: '🔞 Pelecehan / Vulgar', review: false, threshold: 3 },
-    spam: { label: '📢 Spam / Iklan Berulang', review: false, threshold: 4 },
+    danger: { label: '🚸 Asusila Anak / Bahaya Berat', review: true, threshold: null, sanction: 'review' },
+    fraud: { label: '💳 Penipuan / Pemerasan / VCS', review: false, threshold: 2, sanction: 'block14' },
+    harassment: { label: '🔞 Pelecehan / Vulgar', review: false, threshold: 3, sanction: 'lock_twice' },
+    spam: { label: '📢 Spam / Iklan Berulang', review: false, threshold: 3, sanction: 'block14' },
   },
   link: {
-    fraud: { label: '💳 Penipuan / Phishing / Judi', review: false, threshold: 2 },
-    sexual: { label: '🔞 Grup Porno / VCS', review: false, threshold: 3 },
-    promotion: { label: '📢 Promosi Toko / Channel', review: false, threshold: 4 },
-    doxxing: { label: '🆔 Penyebaran Data Pribadi', review: false, threshold: 2 },
+    fraud: { label: '💳 Penipuan / Phishing / Judi', review: false, threshold: 2, sanction: 'block14' },
+    sexual: { label: '🔞 Grup Porno / VCS', review: false, threshold: 3, sanction: 'lock_twice' },
+    promotion: { label: '📢 Promosi Toko / Channel', review: false, threshold: 3, sanction: 'block14' },
+    doxxing: { label: '🆔 Penyebaran Data Pribadi', review: false, threshold: 2, sanction: 'block14' },
   },
   media: {
-    danger: { label: '🚸 Dugaan Eksploitasi Seksual Anak', review: true, threshold: null },
-    sexual: { label: '🔞 Pornografi / Pap Tanpa Izin', review: false, threshold: 3 },
-    fraud: { label: '💳 Penipuan / QRIS Palsu', review: false, threshold: 2 },
+    danger: { label: '🚸 Dugaan Eksploitasi Seksual Anak', review: true, threshold: null, sanction: 'review' },
+    sexual: { label: '🔞 Pornografi / Pap Tanpa Izin', review: false, threshold: 3, sanction: 'lock_twice' },
+    fraud: { label: '💳 Penipuan / QRIS Palsu', review: false, threshold: 2, sanction: 'block14' },
   },
 } as const;
 

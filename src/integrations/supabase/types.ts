@@ -880,6 +880,7 @@ export type Database = {
           reports_decay_at: string | null
           sanction_counted_since: string | null
           sanction_level: number
+          sanction_lock_count: number
           sanction_violation: string | null
           shadowban_until: string | null
           spam_warning_until: string | null
@@ -943,6 +944,7 @@ export type Database = {
           reports_decay_at?: string | null
           sanction_counted_since?: string | null
           sanction_level?: number
+          sanction_lock_count?: number
           sanction_violation?: string | null
           shadowban_until?: string | null
           spam_warning_until?: string | null
@@ -1006,6 +1008,7 @@ export type Database = {
           reports_decay_at?: string | null
           sanction_counted_since?: string | null
           sanction_level?: number
+          sanction_lock_count?: number
           sanction_violation?: string | null
           shadowban_until?: string | null
           spam_warning_until?: string | null
@@ -1365,6 +1368,14 @@ export type Database = {
       }
       report_category_threshold: {
         Args: { p_category: string; p_context: string }
+        Returns: number
+      }
+      report_sanction_stage: {
+        Args: {
+          p_current_level: number
+          p_lock_count: number
+          p_trigger_code: string
+        }
         Returns: number
       }
       report_violation_label: {

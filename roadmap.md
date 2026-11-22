@@ -1,5 +1,12 @@
 # Roadmap
 
+## Penyesuaian sanksi per jenis laporan (22 Nov 2026)
+- [x] Terapkan blokir langsung untuk fraud/doxxing (2 pelapor) dan spam/promosi (3 pelapor).
+- [x] Terapkan dua kunci sebelum blokir untuk sexual/harassment dan eskalasi tanpa tebus pada pengulangan berikutnya.
+- [x] Perbarui pesan, konfigurasi, dan tes tanpa membocorkan ambang kepada terlapor.
+- [x] Validasi RPC dengan data sementara, jalankan 76 regresi, deploy bot, dan bersihkan data uji.
+- [ ] Verifikasi melalui Telegram nyata — menunggu interaksi akun Telegram.
+
 ## Sanksi otomatis berdasarkan jenis dan frekuensi laporan (22 Nov 2026)
 - [x] Hapus logika poin penalti dari aturan pelaporan aktif dan tandai sisa kolom lama sebagai tidak digunakan.
 - [x] Terapkan ambang kritis 2, sedang 3, ringan 4, lonjakan 3 pelapor berbeda/30 menit, dan total 4 pelapor berbeda/12 jam melalui RPC atomik.

@@ -169,6 +169,20 @@
       "when": 1795315461156,
       "tag": "0023_smart_report_frequency_sanctions",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795317247355,
+      "tag": "0024_category_specific_report_sanctions",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795317302814,
+      "tag": "0025_track_locks_before_report_blocks",
+      "breakpoints": true
     }
   ]
 }
