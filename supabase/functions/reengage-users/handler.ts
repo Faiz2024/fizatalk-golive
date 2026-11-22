@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { getServiceClient } from "../_shared/service-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,9 +54,7 @@ export async function handleReengageUsers(req: Request): Promise<Response> {
     });
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false },
-  });
+  const supabase = getServiceClient(supabaseUrl, supabaseKey);
 
   try {
     // 1. Ambil cached file_ids dan base asset URL dari bot_settings (hanya key reengage_*)

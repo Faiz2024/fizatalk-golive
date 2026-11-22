@@ -3,6 +3,7 @@ import { handlePakasirCallback } from "../supabase/functions/pakasir-callback/ha
 import { handleSakurupiahCallback } from "../supabase/functions/sakurupiah-callback/handler.ts";
 import { handleReengageUsers } from "../supabase/functions/reengage-users/handler.ts";
 import { handleCallInviteExchange } from "../supabase/functions/call-invite-exchange/handler.ts";
+import { createGracefulShutdown } from "./graceful-shutdown.ts";
 
 export type HttpHandler = (req: Request) => Response | Promise<Response>;
 export type RouteTable = Readonly<Record<string, HttpHandler>>;
@@ -68,8 +69,11 @@ if (import.meta.main) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("PORT must be an integer between 1 and 65535");
   }
-  Deno.serve(
+  const server = Deno.serve(
     { hostname: "0.0.0.0", port },
     createRouter(handlers, coreRuntimeReady),
   );
+  const shutdown = createGracefulShutdown(server);
+  Deno.addSignalListener("SIGTERM", shutdown);
+  Deno.addSignalListener("SIGINT", shutdown);
 }

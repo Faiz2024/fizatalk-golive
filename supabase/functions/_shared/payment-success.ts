@@ -1,4 +1,6 @@
 // === LOGIKA SUKSES PEMBAYARAN (dipakai bersama Sakurupiah & Pakasir) ===
+import { invalidatePremiumFilterProfile } from './profile-cache.ts';
+
 const TELEGRAM_API = 'https://api.telegram.org/bot';
 
 export async function sendTelegramMessage(botToken: string, chatId: number, text: string, replyMarkup?: any): Promise<void> {
@@ -97,6 +99,7 @@ export async function handlePremiumSuccess(supabase: any, botToken: string, requ
     .from('telegram_users')
     .update(updatePayload)
     .eq('id', req.user_id);
+  invalidatePremiumFilterProfile(req.user_id);
 
   await supabase
     .from('premium_requests')

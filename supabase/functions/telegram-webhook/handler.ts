@@ -1,4 +1,7 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'; // v1
+import { getServiceClient } from '../_shared/service-client.ts';
+import { isButtonOnCooldown } from '../_shared/button-debounce.ts';
+import { getPremiumFilterProfile, invalidatePremiumFilterProfile } from '../_shared/profile-cache.ts';
+import { TtlCache } from '../_shared/runtime-cache.ts';
 import { createPakasirV2Invoice, type PakasirInvoiceResult } from '../_shared/pakasir.ts';
 import { handleReportCallback, handleReportEvidence } from '../_shared/report-handlers.ts';
 import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
@@ -656,6 +659,7 @@ async function handleSuccessfulStarsPayment(
       await supabase.from('telegram_users')
         .update(updatePayload)
         .eq('id', userId);
+      invalidatePremiumFilterProfile(userId);
 
       // Premium never clears moderation sanctions.
 
@@ -942,14 +946,24 @@ async function processSakurupiahPremiumPayment(
   }
 }
 
+// Pengaturan relatif statis di-cache 60 detik dan dibatasi 200 kunci.
+const botSettingsCache = new TtlCache<string, string | null>(60_000, 200);
+
 // HELPER: Get bot setting from database
 async function getBotSetting(supabase: any, key: string): Promise<string | null> {
-  const { data } = await supabase
+  const cached = botSettingsCache.get(key);
+  if (cached !== undefined) return cached;
+
+  const { data, error } = await supabase
     .from('bot_settings')
     .select('value')
     .eq('key', key)
     .single();
-  return data?.value || null;
+  if (error) return null;
+
+  const value = data?.value || null;
+  botSettingsCache.set(key, value);
+  return value;
 }
 
 // HELPER: Set bot setting in database
@@ -962,6 +976,10 @@ async function setBotSetting(supabase: any, key: string, value: string, updatedB
       updated_at: new Date().toISOString(),
       updated_by: updatedBy
     });
+  if (!error) {
+    botSettingsCache.delete(key);
+    if (key === 'bot_username') CACHED_BOT_USERNAME = null;
+  }
   return !error;
 }
 
@@ -1395,6 +1413,7 @@ async function handleCSApproveReject(
       await supabase.from('telegram_users')
         .update(updatePayload)
         .eq('id', userId);
+      invalidatePremiumFilterProfile(userId);
 
       // Premium never clears moderation sanctions.
 
@@ -2584,11 +2603,13 @@ async function answerCallbackQuery(botToken: string, callbackQueryId: string, te
   };
   if (text) body.text = text;
   if (url) body.url = url;
-  await fetch(apiUrl, {
+  const response = await fetch(apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
+  // Tutup body agar koneksi HTTP segera kembali ke pool keep-alive Deno.
+  await response.body?.cancel();
 }
 
 function getVoiceBotUsername(): string | null {
@@ -2924,7 +2945,7 @@ interface StickerPackData {
   submitter_ids?: number[];
 }
 // Cache in-memory untuk memutus query berulang
-const stickerPackCache = new Map<string, StickerPackData>();
+const stickerPackCache = new TtlCache<string, StickerPackData>(5 * 60_000, 2_000);
 
 // ============================================
 // BUTTON DEBOUNCE SYSTEM (Cost Optimization)
@@ -2936,75 +2957,7 @@ const stickerPackCache = new Map<string, StickerPackData>();
 // sebelum operasi database apapun untuk menghemat biaya cloud
 
 
-const buttonClickCache = new Map<string, number>();
-
-// Cooldown per action type (dalam milidetik) - DIPERBESAR untuk mencegah double-click
-const BUTTON_COOLDOWNS: Record<string, number> = {
-  'search_partner': 5000,    // 5 detik - mencari partner (operasi berat)
-  'chat_next': 5000,         // 5 detik - next partner (operasi berat)
-  'chat_stop': 3000,         // 3 detik - stop chat
-  'call_invite': 3000,       // 3 detik - undangan voice call
-  'referral_claim': 3000,    // 3 detik - klaim bonus referal
-  'send_gift': 3000,         // 3 detik - kirim gift
-  'init_topup': 4000,        // 4 detik - init topup
-  'buy_premium': 4000,       // 4 detik - beli premium
-  'prem_pay': 4000,          // 4 detik - proses bayar premium
-  'topup_pay': 4000,         // 4 detik - proses bayar topup
-  'fine_pay': 4000,          // 4 detik - proses bayar denda
-  'report_user': 3000,       // 3 detik - lapor user
-  'rate_asik': 3000,         // 3 detik - rate asik
-  'rate_baik': 3000,         // 3 detik - rate baik
-  'reconnect': 4000,         // 4 detik - reconnect partner
-  'pay_fine': 4000,          // 4 detik - bayar denda (show menu)
-  'cancel_topup': 2000,      // 2 detik - cancel topup
-  'cancel_premium': 2000,    // 2 detik - cancel premium
-  'cancel_fine': 2000,       // 2 detik - cancel fine
-  'cs_action': 5000,         // 5 detik - CS approve/reject
-  'gender': 2000,            // 2 detik - pilih gender
-  'target': 2000,            // 2 detik - pilih target
-  'location': 2000,          // 2 detik - pilih lokasi
-  'default': 1500,           // 1.5 detik - default
-};
-
-// Timestamp terakhir cleanup untuk mencegah cleanup terlalu sering
-let lastCacheCleanup = Date.now();
-const CLEANUP_INTERVAL = 30000; // Cleanup setiap 30 detik
-
-// Helper: Cek apakah tombol masih dalam cooldown
-// Return true jika dalam cooldown (harus di-block), false jika boleh proceed
-function isButtonOnCooldown(userId: number, action: string): boolean {
-  const cacheKey = `${userId}_${action}`;
-  const now = Date.now();
-  const lastClick = buttonClickCache.get(cacheKey);
-  const cooldownMs = BUTTON_COOLDOWNS[action] || BUTTON_COOLDOWNS['default'];
-
-  // Jika masih dalam cooldown, block request
-  if (lastClick && (now - lastClick) < cooldownMs) {
-    console.log(`[DEBOUNCE] Blocked: user=${userId} action=${action} elapsed=${now - lastClick}ms cooldown=${cooldownMs}ms`);
-    return true; // Masih dalam cooldown
-  }
-
-  // Set timestamp klik baru
-  buttonClickCache.set(cacheKey, now);
-
-  // Periodic cleanup: hapus entry yang sudah > 1 menit
-  if (now - lastCacheCleanup > CLEANUP_INTERVAL) {
-    const oneMinuteAgo = now - 60000;
-    let cleanedCount = 0;
-    for (const [key, timestamp] of buttonClickCache.entries()) {
-      if (timestamp < oneMinuteAgo) {
-        buttonClickCache.delete(key);
-        cleanedCount++;
-      }
-    }
-    if (cleanedCount > 0) {
-      console.log(`[DEBOUNCE] Cache cleanup: removed ${cleanedCount} entries, remaining ${buttonClickCache.size}`);
-    }
-    lastCacheCleanup = now;
-  }
-
-  return false;
-}
+// Debounce seluruh tombol memakai cache RAM bersama dengan cooldown tepat 2 detik.
 
 // Helper: Get action type dari callback data
 function getActionTypeFromCallback(callbackData: string): string {
@@ -3698,12 +3651,8 @@ async function handleComprehensiveSearchResult(
     await sendTelegramMessage(botToken, userId, warningText);
   }
 
-  // Ambil filter info user untuk pesan "Mencari..." (hanya premium)
-  const { data: filterUserData } = await supabase
-    .from('telegram_users')
-    .select('target_gender, target_location, premium_until')
-    .eq('id', userId)
-    .single();
+  // Ambil filter info user dari cache 20 detik untuk pesan "Mencari...".
+  const filterUserData = await getPremiumFilterProfile(supabase, userId);
 
   // Filter info hanya ditampilkan untuk premium
   let filterInfo: { target_gender?: string | null; target_location?: string | null } | undefined = undefined;
@@ -3711,7 +3660,7 @@ async function handleComprehensiveSearchResult(
   let isPremium = false;
 
   if (filterUserData) {
-    isPremium = filterUserData.premium_until && new Date(filterUserData.premium_until) > new Date();
+    isPremium = Boolean(filterUserData.premium_until && new Date(filterUserData.premium_until) > new Date());
     if (isPremium) {
       filterInfo = {
         target_gender: filterUserData.target_gender,
@@ -3767,9 +3716,8 @@ async function handleComprehensiveSearchResult(
   }
   // Jika penalty < 40 dan matched: langsung ke notifikasi pairing (lewati pesan pencarian)
 
-  // Kirim notifikasi pairing berhasil
-  const { data: myself } = await supabase.from('telegram_users').select('premium_until').eq('id', userId).single();
-  const myPremiumUntil = myself?.premium_until;
+  // Gunakan profil yang sudah dibaca di atas; tidak perlu query Premium kedua.
+  const myPremiumUntil = filterUserData?.premium_until;
 
   // 2. Status Premium Partner
   // INI PENTING: Kita pakai data dari RPC result, JANGAN query DB lagi.
@@ -3784,12 +3732,8 @@ async function handleComprehensiveSearchResult(
 // ============================================
 
 async function autoSearchPartner(supabase: any, botToken: string, userId: number): Promise<void> {
-  // 0. Ambil filter info user untuk ditampilkan di pesan mencari (hanya premium)
-  const { data: filterData } = await supabase
-    .from('telegram_users')
-    .select('target_gender, target_location, premium_until')
-    .eq('id', userId)
-    .single();
+  // 0. Ambil filter info user dari cache 20 detik untuk pesan mencari.
+  const filterData = await getPremiumFilterProfile(supabase, userId);
 
   const isPremium = filterData?.premium_until && new Date(filterData.premium_until) > new Date();
 
@@ -4047,11 +3991,7 @@ async function searchPartnerWithQueueCheck(supabase: any, botToken: string, user
 
 // Helper: Build target gender keyboard or premium offer based on user status
 async function buildTargetGenderKeyboard(supabase: any, userId: number): Promise<{ keyboard: any; extraText: string; isPremium: boolean }> {
-  const { data: userData } = await supabase
-    .from('telegram_users')
-    .select('premium_until, target_gender, target_location')
-    .eq('id', userId)
-    .single();
+  const userData = await getPremiumFilterProfile(supabase, userId);
 
   const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
@@ -4623,7 +4563,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
     if (!validWebhookSecret(req.headers.get('X-Telegram-Bot-Api-Secret-Token'), await telegramWebhookSecret(botToken))) {
       return new Response('Forbidden', { status: 403 });
     }
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = getServiceClient(supabaseUrl, supabaseKey);
 
 
     // === ROUTING LOGIC BARU ===
@@ -4771,6 +4711,19 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
         // Langsung jawab callback dan return - NO DATABASE OPERATIONS
         await answerCallbackQuery(botToken, query.id, '⏳ Mohon tunggu sebentar...', false);
         return new Response('OK', { status: 200 });
+      }
+
+      // ACK aksi berat sebelum report/promo/database agar loading tombol segera hilang.
+      const heavyActions = ['search_partner', 'chat_next', 'chat_stop', 'send_gift', 'init_topup', 'buy_premium', 'reconnect'];
+      if (heavyActions.includes(actionType)) {
+        const ackText = actionType === 'search_partner'
+          ? '🔍 Mencari partner...'
+          : actionType === 'chat_next'
+            ? '⏭️ Mencari partner baru...'
+            : actionType === 'chat_stop'
+              ? '🛑 Chat diakhiri'
+              : '';
+        answerCallbackQuery(botToken, query.id, ackText).catch(() => {});
       }
 
       const reportResponse = await handleReportCallback(query, { db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID') });
@@ -4995,17 +4948,6 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
           // 3. Stop proses, jangan lanjutkan ke logic database/pembayaran
           return new Response('OK', { status: 200 });
         }
-      }
-
-      // ============================================
-      // STEP 2: ACKNOWLEDGE CALLBACK SEGERA
-      // ============================================
-      // Untuk action tertentu yang berat, acknowledge dulu untuk mencegah Telegram resend
-      // Ini juga menghilangkan "loading" indicator di tombol
-      const heavyActions = ['search_partner', 'chat_next', 'chat_stop', 'send_gift', 'init_topup', 'buy_premium', 'reconnect'];
-      if (heavyActions.includes(actionType)) {
-        // Don't await - fire and forget untuk kecepatan
-        answerCallbackQuery(botToken, query.id);
       }
 
       // ============================================
@@ -5732,6 +5674,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
         }
 
         if (claim?.success) {
+          invalidatePremiumFilterProfile(userId);
           await answerCallbackQuery(botToken, query.id, `🎉 Berhasil! Premium ${rewardLabel} ditambahkan.`);
           const untilText = claim.premium_until ? formatDateTimeWIB(new Date(claim.premium_until)) : '-';
           await sendReferralMenu(
@@ -6177,6 +6120,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
           p_user_id: userId,
           p_target_gender: targetGender
         });
+        invalidatePremiumFilterProfile(userId);
 
         const targetLabel = targetGender === 'cowok' ? 'Cowok 👦' : targetGender === 'cewek' ? 'Cewek 👧' : 'Semua 👥';
 
@@ -6233,6 +6177,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
           p_user_id: userId,
           p_target_location: targetLocation
         });
+        invalidatePremiumFilterProfile(userId);
 
         const targetLabel = targetLocation === 'semua' ? 'Semua 🌏' : `📍 ${targetLocation}`;
 
@@ -6282,12 +6227,8 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
       // --- LOGIKA CHANGE LOCATION (INLINE BUTTON) ---
       if (callbackData === 'change_location') {
-        // Cek premium langsung (filter hanya untuk premium)
-        const { data: userData } = await supabase
-          .from('telegram_users')
-          .select('premium_until, target_location')
-          .eq('id', userId)
-          .single();
+        // Cek Premium/filter melalui cache 20 detik.
+        const userData = await getPremiumFilterProfile(supabase, userId);
 
         const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 
@@ -6734,12 +6675,8 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
       // --- LOGIKA CHANGE TARGET (INLINE BUTTON) ---
       if (callbackData === 'change_target') {
-        // Cek premium langsung (filter hanya untuk premium)
-        const { data: userData } = await supabase
-          .from('telegram_users')
-          .select('premium_until, target_gender')
-          .eq('id', userId)
-          .single();
+        // Cek Premium/filter melalui cache 20 detik.
+        const userData = await getPremiumFilterProfile(supabase, userId);
 
         const isPremium = userData?.premium_until && new Date(userData.premium_until) > new Date();
 

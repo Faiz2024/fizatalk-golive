@@ -1,5 +1,11 @@
 # Roadmap
 
+## Optimasi runtime Railway (22 Nov 2026)
+- [x] Satukan service client per proses agar koneksi HTTP keep-alive digunakan ulang oleh seluruh handler aktif.
+- [x] Tambahkan cache RAM ber-TTL untuk pengaturan bot dan profil Premium/filter, dengan invalidasi dan batas memori.
+- [x] Satukan debounce seluruh tombol menjadi 2 detik dan kirim ACK tombol berat sebelum akses database.
+- [x] Tambahkan graceful shutdown, satu replika, batas 1 vCPU/512 MiB dan heap 256 MiB; 93 regresi lulus, health lokal 200, SIGTERM exit 0, tanpa mengubah skema database.
+
 ## Runtime hybrid Railway + Supabase mandiri (22 Nov 2026)
 - [x] Pisahkan handler HTTP dari titik masuk Supabase tanpa mengubah logika bot, pembayaran, call, atau re-engagement.
 - [x] Siapkan satu server Railway, Dockerfile, health check, konfigurasi callback, dan panduan environment tanpa memindahkan webhook aktif.

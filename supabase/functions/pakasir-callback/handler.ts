@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { getServiceClient } from '../_shared/service-client.ts';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { handlePremiumSuccess, handleTopupSuccess, handleFineSuccess } from '../_shared/payment-success.ts';
 import { equalSecret, expectedPakasirAmount, parsePakasirOrder, verifyPakasirPayment } from '../_shared/pakasir.ts';
@@ -46,7 +46,7 @@ export async function handlePakasirCallback(req: Request): Promise<Response> {
   if (data.status !== 'completed') return reply(200, 'Ignored status');
 
   try {
-    const supabase = createClient(dbUrl, dbKey);
+    const supabase = getServiceClient(dbUrl, dbKey);
     // One read binds the provider payment to the correct local order before fulfillment.
     const { data: payment, error } = await supabase.from(order.table)
       .select('*').eq('id', order.requestId).maybeSingle();

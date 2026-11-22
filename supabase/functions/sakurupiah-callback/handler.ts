@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { getServiceClient } from '../_shared/service-client.ts';
 import {
   handlePremiumSuccess,
   handleTopupSuccess,
@@ -43,7 +43,7 @@ export async function handleSakurupiahCallback(req: Request): Promise<Response> 
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = getServiceClient(supabaseUrl, supabaseKey);
   const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')!;
 
   const prefix = merchant_ref.substring(0, 2);

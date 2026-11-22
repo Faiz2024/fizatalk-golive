@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { getServiceClient } from '../_shared/service-client.ts';
 import { z } from 'https://esm.sh/zod@3.23.8';
 
 const RequestSchema = z.object({
@@ -73,7 +73,7 @@ export async function handleCallInviteExchange(req: Request): Promise<Response> 
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!supabaseUrl || !serviceRoleKey) return json({ error: 'server_configuration' }, 500);
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+  const supabase = getServiceClient(supabaseUrl, serviceRoleKey);
   const { data, error } = await supabase.rpc('exchange_chat_call_invite', {
     p_join_token: parsed.data.join_token,
     p_user_id: parsed.data.telegram_user_id,

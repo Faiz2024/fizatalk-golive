@@ -93,6 +93,20 @@ Stars nyata.
 - Snapshot awal bukan pengganti delta: pengguna dan transaksi baru setelah
   snapshot wajib disinkronkan sebelum cutover.
 
+## 5. Optimasi runtime dan resource
+
+- Seluruh handler berbagi satu service client per kredensial. Connection pool dan
+  HTTP keep-alive bawaan Deno digunakan ulang tanpa membuat client per request.
+- Pengaturan bot di-cache 60 detik, profil Premium/filter 20 detik, dan sticker
+  pack 5 menit. Perubahan pengaturan/Premium membatalkan cache terkait.
+- Seluruh tombol memakai debounce RAM 2 detik. ACK aksi berat dikirim sebelum
+  query database; state chat, partner, dan sanksi tidak pernah di-cache.
+- `railway.json` menetapkan satu replika, maksimum 1 vCPU dan 512 MiB RAM.
+  Heap V8 dibatasi 256 MiB agar tersedia ruang untuk runtime Deno.
+- Deploy baru tumpang-tindih 3 detik. Saat `SIGTERM`, server berhenti menerima
+  koneksi baru, menunggu request aktif maksimal 5 detik, dan Railway memberi
+  waktu pengurasan 8 detik sebelum mematikan proses lama.
+
 ## Uji lokal tanpa layanan nyata
 
 ```bash
