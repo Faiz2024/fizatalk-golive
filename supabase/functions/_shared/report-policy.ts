@@ -1,27 +1,36 @@
 export type ReportContext = 'partner' | 'link' | 'media';
+export type ReportRule = { label: string; review: boolean; threshold: 2 | 3 | 4 | null };
+
+export const REPORT_FREQUENCY_POLICY = {
+  windowHours: 12,
+  burstCount: 3,
+  burstMinutes: 30,
+  aggregateCount: 4,
+} as const;
+
 export const REPORT_POLICY = {
   partner: {
-    danger: { label: '🚸 Asusila Anak / Bahaya Berat', points: 0, review: true },
-    fraud: { label: '💳 Penipuan / Pemerasan / VCS', points: 25, review: false },
-    harassment: { label: '🔞 Pelecehan / Vulgar', points: 15, review: false },
-    spam: { label: '📢 Spam / Iklan Berulang', points: 10, review: false },
+    danger: { label: '🚸 Asusila Anak / Bahaya Berat', review: true, threshold: null },
+    fraud: { label: '💳 Penipuan / Pemerasan / VCS', review: false, threshold: 2 },
+    harassment: { label: '🔞 Pelecehan / Vulgar', review: false, threshold: 3 },
+    spam: { label: '📢 Spam / Iklan Berulang', review: false, threshold: 4 },
   },
   link: {
-    fraud: { label: '💳 Penipuan / Phishing / Judi', points: 25, review: false },
-    sexual: { label: '🔞 Grup Porno / VCS', points: 20, review: false },
-    promotion: { label: '📢 Promosi Toko / Channel', points: 10, review: false },
-    doxxing: { label: '🆔 Penyebaran Data Pribadi', points: 20, review: false },
+    fraud: { label: '💳 Penipuan / Phishing / Judi', review: false, threshold: 2 },
+    sexual: { label: '🔞 Grup Porno / VCS', review: false, threshold: 3 },
+    promotion: { label: '📢 Promosi Toko / Channel', review: false, threshold: 4 },
+    doxxing: { label: '🆔 Penyebaran Data Pribadi', review: false, threshold: 2 },
   },
   media: {
-    danger: { label: '🚸 Dugaan Eksploitasi Seksual Anak', points: 0, review: true },
-    sexual: { label: '🔞 Pornografi / Pap Tanpa Izin', points: 20, review: false },
-    fraud: { label: '💳 Penipuan / QRIS Palsu', points: 15, review: false },
+    danger: { label: '🚸 Dugaan Eksploitasi Seksual Anak', review: true, threshold: null },
+    sexual: { label: '🔞 Pornografi / Pap Tanpa Izin', review: false, threshold: 3 },
+    fraud: { label: '💳 Penipuan / QRIS Palsu', review: false, threshold: 2 },
   },
 } as const;
 
-export function reportRule(context: string, category: string): { label: string; points: number; review: boolean } | undefined {
+export function reportRule(context: string, category: string): ReportRule | undefined {
   const rules = REPORT_POLICY[context as ReportContext];
-  return rules ? (rules as Record<string, { label: string; points: number; review: boolean }>)[category] : undefined;
+  return rules ? (rules as Record<string, ReportRule>)[category] : undefined;
 }
 
 export function reportKeyboard(context: ReportContext, targetId: number) {

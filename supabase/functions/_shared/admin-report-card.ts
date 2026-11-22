@@ -60,6 +60,9 @@ export function renderAdminReportCard(card: any): string {
   if (Number(card.sanction_stage) > 0) {
     lines.push(`⚡ Tahap sanksi saat ini: <b>${Number(card.sanction_stage)}</b>${card.sanction_violation ? ` • ${escapeReportHtml(card.sanction_violation)}` : ''}`);
   }
+  if (card.sanction_trigger) {
+    lines.push(`🤖 Pemicu otomatis: <b>${escapeReportHtml(card.sanction_trigger)}</b>`);
+  }
   lines.push('', '📋 <b>Riwayat Laporan Masuk:</b>');
   const snippets = Array.isArray(card.snippets) ? card.snippets : [];
   snippets.forEach((snippet: any, index: number) => {

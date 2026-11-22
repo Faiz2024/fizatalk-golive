@@ -26,6 +26,7 @@ export type Database = {
           resolved_at: string | null
           resolved_by: number | null
           sanction_stage: number
+          sanction_trigger: string | null
           sanction_violation: string | null
           snippets: Json
           status: string
@@ -44,6 +45,7 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: number | null
           sanction_stage?: number
+          sanction_trigger?: string | null
           sanction_violation?: string | null
           snippets?: Json
           status?: string
@@ -62,6 +64,7 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: number | null
           sanction_stage?: number
+          sanction_trigger?: string | null
           sanction_violation?: string | null
           snippets?: Json
           status?: string
@@ -1360,13 +1363,13 @@ export type Database = {
         Args: { p_admin_id: number; p_reason: string; p_request_id: string }
         Returns: Json
       }
+      report_category_threshold: {
+        Args: { p_category: string; p_context: string }
+        Returns: number
+      }
       report_violation_label: {
         Args: { p_category: string; p_context: string }
         Returns: string
-      }
-      report_weight: {
-        Args: { p_category: string; p_context: string }
-        Returns: number
       }
       request_referral_cashout: { Args: { p_user_id: number }; Returns: Json }
       reset_payment_state: { Args: { p_user_id: number }; Returns: Json }

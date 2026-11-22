@@ -162,6 +162,13 @@
       "when": 1795220378750,
       "tag": "0022_harden_report_card_message_binding",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795315461156,
+      "tag": "0023_smart_report_frequency_sanctions",
+      "breakpoints": true
     }
   ]
 }

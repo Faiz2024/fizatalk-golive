@@ -1,5 +1,12 @@
 # Roadmap
 
+## Sanksi otomatis berdasarkan jenis dan frekuensi laporan (22 Nov 2026)
+- [x] Hapus logika poin penalti dari aturan pelaporan aktif dan tandai sisa kolom lama sebagai tidak digunakan.
+- [x] Terapkan ambang kritis 2, sedang 3, ringan 4, lonjakan 3 pelapor berbeda/30 menit, dan total 4 pelapor berbeda/12 jam melalui RPC atomik.
+- [x] Tampilkan alasan pemicu sanksi pada kartu admin tanpa membocorkan ambang kepada terlapor.
+- [x] Uji setiap kategori, pelapor berbeda, deduplikasi, tahap sanksi, dan 76 regresi bot; validasi database serta deploy berhasil dan data uji sudah dihapus.
+- [ ] Verifikasi sanksi dan kartu melalui Telegram nyata — menunggu interaksi akun Telegram.
+
 ## Kartu laporan gabungan di chat admin (21 Nov 2026)
 - [x] Tambahkan penyimpanan ringkas kartu admin per terlapor dan cuplikan bukti yang aman melalui RPC atomik.
 - [x] Kirim/edit satu pesan admin per terlapor dengan hitungan, jenis laporan, cuplikan, dan tindakan admin.

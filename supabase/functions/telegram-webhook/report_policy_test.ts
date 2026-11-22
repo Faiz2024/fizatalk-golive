@@ -1,5 +1,5 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { evidenceValid, reportRule, reportableMedia } from '../_shared/report-policy.ts';
+import { evidenceValid, REPORT_FREQUENCY_POLICY, reportRule, reportableMedia } from '../_shared/report-policy.ts';
 import { telegramWebhookSecret, validWebhookSecret } from '../_shared/telegram-webhook-auth.ts';
 import { handleReportCallback, handleReportEvidence } from '../_shared/report-handlers.ts';
 
@@ -77,21 +77,24 @@ Deno.test('first ordinary report is aggregated to admin even below sanction thre
   assertEquals(actions.some(action => action.method === 'sendMessage' && action.body.chat_id === 200), false);
 });
 
-Deno.test('fourth same-type report updates the same card with premium flag, stage and user violation', async () => {
+Deno.test('automatic sanction explains its trigger to admin without exposing thresholds to the reported user', async () => {
   const actions: any[] = [];
-  await handleReportCallback({ data: 'rc_partner_spam_200', from: { id: 100 }, message: { message_id: 5, chat: { id: 100 } } }, {
+  await handleReportCallback({ data: 'rc_partner_fraud_200', from: { id: 100 }, message: { message_id: 5, chat: { id: 100 } } }, {
     adminChat: '999',
     db: { rpc: () => Promise.resolve({ data: {
-      success: true, reached_threshold: true, sanction_stage: 2, violation: 'Spam / Iklan Berulang', report_count: 4,
-      report_card: activeCard({ report_count: 4, is_premium: true, premium_until: new Date().toISOString(), sanction_stage: 2, sanction_violation: 'Spam / Iklan Berulang' }),
+      success: true, reached_threshold: true, sanction_stage: 2, violation: 'Penipuan / penyebaran data pribadi', report_count: 2,
+      report_card: activeCard({ report_count: 2, is_premium: true, premium_until: new Date().toISOString(), sanction_stage: 2, sanction_violation: 'Penipuan / penyebaran data pribadi', sanction_trigger: 'Kategori kritis • 2 pelapor dalam 12 jam' }),
     } }) },
     call: telegramCall(actions),
   });
   const admin = actions.find(action => action.method === 'editMessageText' && action.body.chat_id === '999');
   assert(admin.body.text.includes('PREMIUM'));
   assert(admin.body.text.includes('Tahap sanksi saat ini: <b>2</b>'));
+  assert(admin.body.text.includes('Kategori kritis • 2 pelapor dalam 12 jam'));
   const user = actions.find(action => action.method === 'sendMessage' && action.body.chat_id === 200);
-  assert(user.body.text.includes('Spam / Iklan Berulang'));
+  assert(user.body.text.includes('Penipuan / penyebaran data pribadi'));
+  assertEquals(user.body.text.includes('2 pelapor'), false);
+  assertEquals(user.body.text.includes('12 jam'), false);
   assertEquals(actions.some(action => action.method === 'copyMessage'), false);
 });
 
@@ -148,15 +151,23 @@ Deno.test('silent partner and quick skip are not violations', () => {
   assertEquals(reportRule('partner', 'inactive'), undefined);
   assertEquals(reportRule('partner', 'skip'), undefined);
 });
-for (const [context, category, points] of [
-  ['partner', 'fraud', 25], ['partner', 'harassment', 15], ['partner', 'spam', 10],
-  ['link', 'fraud', 25], ['link', 'sexual', 20], ['link', 'promotion', 10], ['link', 'doxxing', 20],
-  ['media', 'sexual', 20], ['media', 'fraud', 15],
+for (const [context, category, threshold] of [
+  ['partner', 'fraud', 2], ['partner', 'harassment', 3], ['partner', 'spam', 4],
+  ['link', 'fraud', 2], ['link', 'sexual', 3], ['link', 'promotion', 4], ['link', 'doxxing', 2],
+  ['media', 'sexual', 3], ['media', 'fraud', 2],
 ] as const) {
-  Deno.test(`${context}/${category} applies ${points} penalty points`, () => {
-    assertEquals(reportRule(context, category)?.points, points);
+  Deno.test(`${context}/${category} requires ${threshold} distinct reporters`, () => {
+    assertEquals(reportRule(context, category)?.threshold, threshold);
+    assertEquals('points' in reportRule(context, category)!, false);
   });
 }
+Deno.test('frequency policy uses a 30-minute burst and 12-hour aggregate window', () => {
+  assertEquals(REPORT_FREQUENCY_POLICY, { windowHours: 12, burstCount: 3, burstMinutes: 30, aggregateCount: 4 });
+});
+Deno.test('serious reports never receive an automatic threshold', () => {
+  assertEquals(reportRule('partner', 'danger')?.threshold, null);
+  assertEquals(reportRule('media', 'danger')?.threshold, null);
+});
 Deno.test('severe partner reports require explanation and safe screenshot', () => {
   assertEquals(evidenceValid('partner', 'Penjelasan kejadian lengkap', null), false);
   assertEquals(evidenceValid('partner', 'Penjelasan kejadian lengkap', 'safe-screenshot'), true);
