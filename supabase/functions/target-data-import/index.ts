@@ -39,6 +39,12 @@ const BodySchema = z.discriminatedUnion('action', [
     checksum: z.string().regex(/^[a-f0-9]{64}$/),
     rows: z.array(z.record(z.string(), z.unknown())).min(1).max(2000),
   }),
+  z.object({
+    action: z.literal('activate_chunk'),
+    table: TableSchema,
+    offset: z.number().int().min(0),
+    limit: z.number().int().min(1).max(5000),
+  }),
   z.object({ action: z.literal('commit') }),
   z.object({ action: z.literal('verify') }),
   z.object({ action: z.literal('abort') }),
@@ -90,6 +96,65 @@ function countsMatch(counts: Record<string, number>, expectedEmpty: boolean): bo
   return TABLES.every((table) => counts[table] === (expectedEmpty ? 0 : EXPECTED[table]));
 }
 
+async function commitData(sql: ReturnType<typeof postgres>) {
+  const staging = await sql`SELECT to_regclass('fizatalk_import.rows') AS rows_table`;
+  if (!staging[0].rows_table) {
+    const counts = await publicCounts(sql);
+    if (countsMatch(counts, false)) return { status: 'IMPORT_OK', already_committed: true, counts };
+    throw new Error('Staging tidak ditemukan dan data target belum lengkap');
+  }
+
+  return await sql.begin(async (tx) => {
+    await tx`SET LOCAL statement_timeout = 0`;
+    await tx`SET LOCAL TIME ZONE 'Asia/Jakarta'`;
+    for (const table of TABLES) {
+      const staged = await tx`
+        SELECT count(*)::int AS count FROM fizatalk_import.rows WHERE table_name = ${table}
+      `;
+      if (staged[0].count !== EXPECTED[table]) {
+        throw new Error(`Jumlah staging ${table}=${staged[0].count}, seharusnya ${EXPECTED[table]}`);
+      }
+      const target = await tx`SELECT count(*)::int AS count FROM ${tx('public')}.${tx(table)}`;
+      if (target[0].count !== EXPECTED[table]) {
+        throw new Error(`Jumlah aktif ${table}=${target[0].count}, seharusnya ${EXPECTED[table]}`);
+      }
+    }
+    await tx`ALTER TABLE public.telegram_users ENABLE TRIGGER guard_moderation_state`;
+    await tx`SELECT setval('public.reengagement_clicks_id_seq', 109728, true)`;
+    await tx`
+      SELECT setval(
+        'public.sticker_packs_id_seq',
+        GREATEST(COALESCE((SELECT max(id) FROM public.sticker_packs), 0), 1),
+        EXISTS(SELECT 1 FROM public.sticker_packs)
+      )
+    `;
+    await tx`DROP SCHEMA fizatalk_import CASCADE`;
+    return { status: 'IMPORT_OK', total_rows: 254379 };
+  });
+}
+
+function streamingCommit(sql: ReturnType<typeof postgres>): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const heartbeat = setInterval(() => controller.enqueue(encoder.encode(' ')), 15000);
+      try {
+        const result = await commitData(sql);
+        controller.enqueue(encoder.encode(JSON.stringify(result)));
+      } catch (error) {
+        const message = safeError(error);
+        console.error(`[target-data-import] commit: ${message}`);
+        controller.enqueue(encoder.encode(JSON.stringify({ status: 'IMPORT_ERROR', error: message })));
+      } finally {
+        clearInterval(heartbeat);
+        await sql.end({ timeout: 5 });
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, { headers: { 'Content-Type': 'application/json' } });
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return response({ error: 'method not allowed' }, 405);
   const provided = req.headers.get('x-api-key') ?? '';
@@ -107,6 +172,7 @@ Deno.serve(async (req) => {
   }
 
   const sql = connect();
+  let streamOwnsConnection = false;
   try {
     if (body.action === 'begin') {
       const result = await sql.begin(async (tx) => {
@@ -174,56 +240,57 @@ Deno.serve(async (req) => {
       return response(result);
     }
 
-    if (body.action === 'commit') {
-      const staging = await sql`SELECT to_regclass('fizatalk_import.rows') AS rows_table`;
-      if (!staging[0].rows_table) {
-        const counts = await publicCounts(sql);
-        if (countsMatch(counts, false)) return response({ status: 'IMPORT_OK', already_committed: true, counts });
-        throw new Error('Staging tidak ditemukan dan data target belum lengkap');
-      }
-
+    if (body.action === 'activate_chunk') {
       const result = await sql.begin(async (tx) => {
-        await tx`SET LOCAL TIME ZONE 'Asia/Jakarta'`;
-        for (const table of TABLES) {
-          const staged = await tx`
-            SELECT count(*)::int AS count FROM fizatalk_import.rows WHERE table_name = ${table}
-          `;
-          if (staged[0].count !== EXPECTED[table]) {
-            throw new Error(`Jumlah staging ${table}=${staged[0].count}, seharusnya ${EXPECTED[table]}`);
-          }
-          const target = await tx`SELECT count(*)::int AS count FROM ${tx('public')}.${tx(table)}`;
-          if (target[0].count !== 0) throw new Error(`Target berubah dan tidak lagi kosong: ${table}`);
-        }
-
-        await tx`ALTER TABLE public.telegram_users DISABLE TRIGGER guard_moderation_state`;
-        for (const table of TABLES) {
-          await tx`
-            INSERT INTO ${tx('public')}.${tx(table)}
-            SELECT * FROM jsonb_populate_recordset(
-              NULL::${tx('public')}.${tx(table)},
-              (SELECT jsonb_agg(payload ORDER BY seq) FROM fizatalk_import.rows WHERE table_name = ${table})
-            )
-          `;
-        }
-        await tx`ALTER TABLE public.telegram_users ENABLE TRIGGER guard_moderation_state`;
-        await tx`SELECT setval('public.reengagement_clicks_id_seq', 109728, true)`;
+        await tx`SET LOCAL statement_timeout = 0`;
         await tx`
-          SELECT setval(
-            'public.sticker_packs_id_seq',
-            GREATEST(COALESCE((SELECT max(id) FROM public.sticker_packs), 0), 1),
-            EXISTS(SELECT 1 FROM public.sticker_packs)
+          CREATE TABLE IF NOT EXISTS fizatalk_import.activated (
+            table_name text NOT NULL,
+            chunk_offset integer NOT NULL,
+            row_count integer NOT NULL,
+            PRIMARY KEY (table_name, chunk_offset)
           )
         `;
-        for (const table of TABLES) {
-          const target = await tx`SELECT count(*)::int AS count FROM ${tx('public')}.${tx(table)}`;
-          if (target[0].count !== EXPECTED[table]) {
-            throw new Error(`Validasi ${table} gagal: ${target[0].count} <> ${EXPECTED[table]}`);
-          }
+        const chunk = await tx`
+          SELECT count(*)::int AS count FROM (
+            SELECT seq FROM fizatalk_import.rows
+            WHERE table_name = ${body.table}
+            ORDER BY seq OFFSET ${body.offset} LIMIT ${body.limit}
+          ) selected
+        `;
+        const rowCount = chunk[0].count;
+        if (rowCount === 0) return { status: 'CHUNK_EMPTY', table: body.table, offset: body.offset };
+        const inserted = await tx`
+          INSERT INTO fizatalk_import.activated (table_name, chunk_offset, row_count)
+          VALUES (${body.table}, ${body.offset}, ${rowCount})
+          ON CONFLICT (table_name, chunk_offset) DO NOTHING
+          RETURNING chunk_offset
+        `;
+        if (inserted.length === 0) {
+          return { status: 'CHUNK_DUPLICATE', table: body.table, offset: body.offset, rows: rowCount };
         }
-        await tx`DROP SCHEMA fizatalk_import CASCADE`;
-        return { status: 'IMPORT_OK', total_rows: 254379 };
+        if (body.table === 'telegram_users') {
+          await tx`ALTER TABLE public.telegram_users DISABLE TRIGGER guard_moderation_state`;
+        }
+        await tx`
+          INSERT INTO ${tx('public')}.${tx(body.table)}
+          SELECT * FROM jsonb_populate_recordset(
+            NULL::${tx('public')}.${tx(body.table)},
+            (SELECT jsonb_agg(payload ORDER BY seq) FROM (
+              SELECT seq, payload FROM fizatalk_import.rows
+              WHERE table_name = ${body.table}
+              ORDER BY seq OFFSET ${body.offset} LIMIT ${body.limit}
+            ) selected)
+          )
+        `;
+        return { status: 'CHUNK_OK', table: body.table, offset: body.offset, rows: rowCount };
       });
       return response(result);
+    }
+
+    if (body.action === 'commit') {
+      streamOwnsConnection = true;
+      return streamingCommit(sql);
     }
 
     if (body.action === 'verify') {
@@ -259,6 +326,6 @@ Deno.serve(async (req) => {
     console.error(`[target-data-import] ${body.action}: ${message}`);
     return response({ error: message }, 500);
   } finally {
-    await sql.end({ timeout: 5 });
+    if (!streamOwnsConnection) await sql.end({ timeout: 5 });
   }
 });
