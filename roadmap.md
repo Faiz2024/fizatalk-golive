@@ -6,6 +6,10 @@
 - [x] Ekspor skema publik aktif: 22 tabel, 274 kolom, 85 RPC/fungsi, 79 indeks, 7 trigger, view, relasi, dan RLS.
 - [x] Susun satu berkas SQL untuk proyek Supabase kosong dengan pengaman transaksi, WIB, pembatasan akses, dan petunjuk penggunaan.
 - [x] Validasi impor PostgreSQL terisolasi, eksekusi ulang aman, checksum katalog, 85 fungsi identik, dan pemindaian kredensial tanpa mengubah database aktif.
+- [x] Ekspor snapshot data inti per tabel tanpa mengubah database aktif; kecualikan riwayat laporan, log bot, dan klik re-engagement sesuai pilihan pengguna.
+- [x] Siapkan impor transaksional dengan urutan relasi, pengaman target kosong, pemulihan sequence, dan validasi jumlah baris.
+- [x] Uji ekspor-impor pada PostgreSQL terisolasi serta siapkan panduan sinkronisasi akhir sebelum webhook dipindahkan; 254.379 baris dan seluruh nilai 22 tabel terverifikasi identik.
+- [ ] Jalankan impor nyata pada Supabase baru dan sinkronisasi delta terakhir — menunggu kredensial target digunakan pengguna serta jadwal cutover.
 
 ## Pembersihan database hemat biaya (22 Nov 2026)
 - [x] Audit satu kueri untuk indeks dan riwayat lama.
