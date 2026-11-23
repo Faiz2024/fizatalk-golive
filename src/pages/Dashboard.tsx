@@ -123,7 +123,12 @@ const KPICard = ({
 const Dashboard = () => {
   const { theme, setTheme } = useTheme();
 
-  const statsQ = useQuery({ queryKey: ["admin-stats"], queryFn: fetchStats });
+  const statsQ = useQuery({
+    queryKey: ["admin-stats"],
+    queryFn: fetchStats,
+    retry: false,
+    staleTime: 60_000,
+  });
   const kpis = statsQ.data?.kpis;
   const activity = statsQ.data?.activity ?? [];
   const reengageActivity = statsQ.data?.reengageActivity ?? [];

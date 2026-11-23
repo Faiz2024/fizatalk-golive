@@ -1,5 +1,10 @@
 # Roadmap
 
+## Pemulihan statistik admin (23 Nov 2026)
+- [x] Tambahkan cache dan penguncian anti-tumpang-tindih pada RPC dashboard serta referal; hasil terakhir menjadi fallback saat refresh sibuk atau gagal.
+- [x] Batasi fetch statistik admin 12 detik dan hentikan retry otomatis dashboard yang dapat menggandakan beban database.
+- [ ] Uji RPC normal/bersamaan, periksa preview dashboard, jalankan regresi, dan simpan perubahan.
+
 ## Pemulihan timeout webhook (23 Nov 2026)
 - [x] Kuras 3.582 update tertahan dan turunkan webhook aktif dari 100 menjadi 40 koneksi; antrean kembali 0 dan error Telegram terakhir hilang.
 - [x] Tambahkan batas tunggu database 5 detik dengan penerusan pembatalan pada service client bersama.
