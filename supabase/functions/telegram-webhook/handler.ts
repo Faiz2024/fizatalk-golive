@@ -21,6 +21,7 @@ import { buildEndChatKeyboard as sharedEndChatKeyboard, buildNextRatingRows } fr
 import { RECOVERY_PRICE_LABEL, RECOVERY_STARS, searchReportLockMessage, validRecoveryPayment } from '../_shared/recovery-policy.ts';
 import { isStaleWebhookUpdate, webhookDatabaseFailureStatus } from '../_shared/webhook-resilience.ts';
 import { formatCachedDailyAdminStats } from '../_shared/admin-stats-command.ts';
+import { isMessageFlooding } from '../_shared/message-flood-limiter.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -4631,6 +4632,14 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
     // Kuras pesan basi tanpa satu panggilan database pun; pembayaran tetap diproses.
     if (isStaleWebhookUpdate(update)) {
+      return new Response('OK', { status: 200 });
+    }
+
+    // Flood lokal dihentikan sebelum I/O. Stars, tombol, dan event membership tidak dibatasi.
+    const floodUserId = update.message?.successful_payment
+      ? undefined
+      : update.message?.from?.id ?? update.edited_message?.from?.id;
+    if (floodUserId !== undefined && isMessageFlooding(floodUserId)) {
       return new Response('OK', { status: 200 });
     }
 

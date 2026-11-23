@@ -19,9 +19,17 @@ import { TtlCache } from "../_shared/runtime-cache.ts";
 import {
   clearServiceClientsForTests,
   createDatabaseFetch,
+  DATABASE_MAX_CONCURRENCY,
   DATABASE_TIMEOUT_MS,
   getServiceClient,
 } from "../_shared/service-client.ts";
+import { DatabaseConcurrencyGate } from "../_shared/database-concurrency.ts";
+import {
+  clearMessageFloodLimiterForTests,
+  isMessageFlooding,
+  MESSAGE_FLOOD_LIMIT,
+  MESSAGE_FLOOD_WINDOW_MS,
+} from "../_shared/message-flood-limiter.ts";
 
 Deno.test("semua tombol memakai cooldown tepat 2 detik dan terisolasi per pengguna/aksi", () => {
   clearButtonClicksForTests();
@@ -148,4 +156,87 @@ Deno.test("database dibatasi 5 detik dan pembatalan pemanggil tetap diteruskan",
     cancellationName = (error as Error).name;
   }
   assertEquals(cancellationName, "AbortError");
+});
+
+Deno.test("maksimal 20 panggilan database berjalan bersamaan dan sisanya menunggu", async () => {
+  assertEquals(DATABASE_MAX_CONCURRENCY, 20);
+  const gate = new DatabaseConcurrencyGate(DATABASE_MAX_CONCURRENCY);
+  const completions: (() => void)[] = [];
+  let active = 0;
+  let maximumActive = 0;
+  const controlledFetch = (() => {
+    active++;
+    maximumActive = Math.max(maximumActive, active);
+    return new Promise<Response>((resolve) => {
+      completions.push(() => {
+        active--;
+        resolve(new Response("ok"));
+      });
+    });
+  }) as typeof fetch;
+  const limitedFetch = createDatabaseFetch(controlledFetch, 5_000, gate);
+  const requests = Array.from(
+    { length: DATABASE_MAX_CONCURRENCY + 5 },
+    () => limitedFetch("https://database.example.invalid/rest/v1/test"),
+  );
+
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assertEquals(completions.length, 20);
+    assertEquals(maximumActive, 20);
+    for (const complete of completions.splice(0)) complete();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assertEquals(completions.length, 5);
+    assertEquals(maximumActive, 20);
+  } finally {
+    for (const complete of completions.splice(0)) complete();
+  }
+  await Promise.all(requests);
+});
+
+Deno.test("pembatalan antrean database tidak menghilangkan slot berikutnya", async () => {
+  const gate = new DatabaseConcurrencyGate(1);
+  const completions: (() => void)[] = [];
+  const controlledFetch = (() => new Promise<Response>((resolve) => {
+    completions.push(() => resolve(new Response("ok")));
+  })) as typeof fetch;
+  const limitedFetch = createDatabaseFetch(controlledFetch, 5_000, gate);
+
+  const first = limitedFetch("https://database.example.invalid/first");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const caller = new AbortController();
+  const cancelled = limitedFetch("https://database.example.invalid/cancelled", {
+    signal: caller.signal,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  caller.abort();
+  let cancellationName = "";
+  try {
+    await cancelled;
+  } catch (error) {
+    cancellationName = (error as Error).name;
+  }
+  assertEquals(cancellationName, "AbortError");
+
+  completions.shift()!();
+  await first;
+  const third = limitedFetch("https://database.example.invalid/third");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assertEquals(completions.length, 1);
+  completions.shift()!();
+  await third;
+});
+
+Deno.test("pesan keempat dalam satu detik dibatasi tanpa memblokir pengguna lain", () => {
+  clearMessageFloodLimiterForTests();
+  assertEquals(MESSAGE_FLOOD_LIMIT, 3);
+  assertEquals(MESSAGE_FLOOD_WINDOW_MS, 1_000);
+  assertEquals(isMessageFlooding(501, 10_000), false);
+  assertEquals(isMessageFlooding(501, 10_001), false);
+  assertEquals(isMessageFlooding(501, 10_002), false);
+  assertEquals(isMessageFlooding(501, 10_003), true);
+  assertEquals(isMessageFlooding(502, 10_003), false);
+  assertEquals(isMessageFlooding(501, 10_999), true);
+  assertEquals(isMessageFlooding(501, 11_000), false);
+  clearMessageFloodLimiterForTests();
 });

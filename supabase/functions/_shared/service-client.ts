@@ -6,27 +6,37 @@ import {
   createCircuitBreakerFetch,
   DatabaseCircuitBreaker,
 } from "./database-circuit-breaker.ts";
+import { DatabaseConcurrencyGate } from "./database-concurrency.ts";
 
 // Satu client per kredensial untuk seluruh handler dalam proses Railway.
 // Fetch bawaan Deno memakai connection pool dan HTTP keep-alive secara otomatis.
 const serviceClients = new Map<string, SupabaseClient>();
 const databaseCircuitBreakers = new Map<string, DatabaseCircuitBreaker>();
+const databaseConcurrencyGates = new Map<string, DatabaseConcurrencyGate>();
 
 export const DATABASE_TIMEOUT_MS = 5_000;
+export const DATABASE_MAX_CONCURRENCY = 20;
 
 // Batasi setiap panggilan database agar webhook selesai sebelum timeout Telegram.
 // Sinyal pembatalan dari pemanggil tetap diteruskan ke fetch yang sebenarnya.
 export function createDatabaseFetch(
   fetcher: typeof fetch = fetch,
   timeoutMs = DATABASE_TIMEOUT_MS,
+  concurrencyGate?: DatabaseConcurrencyGate,
 ): typeof fetch {
-  return (input, init) => {
+  return async (input, init) => {
     const signals = [AbortSignal.timeout(timeoutMs)];
     if (init?.signal) signals.push(init.signal);
-    return fetcher(input, {
-      ...init,
-      signal: AbortSignal.any(signals),
-    });
+    const signal = AbortSignal.any(signals);
+
+    // Waktu tunggu antrean termasuk dalam timeout, sehingga slot tidak menumpuk
+    // ketika database melambat. release selalu berjalan setelah acquire berhasil.
+    await concurrencyGate?.acquire(signal);
+    try {
+      return await fetcher(input, { ...init, signal });
+    } finally {
+      concurrencyGate?.release();
+    }
   };
 }
 
@@ -46,9 +56,17 @@ export function getServiceClient(
     circuitBreaker = new DatabaseCircuitBreaker();
     databaseCircuitBreakers.set(url, circuitBreaker);
   }
+  let concurrencyGate = databaseConcurrencyGates.get(url);
+  if (!concurrencyGate) {
+    concurrencyGate = new DatabaseConcurrencyGate(DATABASE_MAX_CONCURRENCY);
+    databaseConcurrencyGates.set(url, concurrencyGate);
+  }
   const client = createClient(url, serviceRoleKey, {
     global: {
-      fetch: createCircuitBreakerFetch(createDatabaseFetch(), circuitBreaker),
+      fetch: createCircuitBreakerFetch(
+        createDatabaseFetch(fetch, DATABASE_TIMEOUT_MS, concurrencyGate),
+        circuitBreaker,
+      ),
     },
     auth: {
       persistSession: false,
@@ -63,4 +81,5 @@ export function getServiceClient(
 export function clearServiceClientsForTests(): void {
   serviceClients.clear();
   databaseCircuitBreakers.clear();
+  databaseConcurrencyGates.clear();
 }

@@ -2,6 +2,7 @@ import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { createRouter, type RouteTable } from "./server.ts";
 import { telegramWebhookSecret } from "../supabase/functions/_shared/telegram-webhook-auth.ts";
 import { clearServiceClientsForTests } from "../supabase/functions/_shared/service-client.ts";
+import { clearMessageFloodLimiterForTests } from "../supabase/functions/_shared/message-flood-limiter.ts";
 
 async function runWebhookWithFetch(update: unknown, fetcher: typeof fetch): Promise<Response> {
   const previous = {
@@ -289,5 +290,55 @@ Deno.test("webhook palsu ditolak sebelum koneksi database", async () => {
   } finally {
     if (previous === undefined) Deno.env.delete("TELEGRAM_BOT_TOKEN");
     else Deno.env.set("TELEGRAM_BOT_TOKEN", previous);
+  }
+});
+
+Deno.test("flood pesan keempat selesai tanpa database atau Telegram API", async () => {
+  clearMessageFloodLimiterForTests();
+  try {
+    for (let messageId = 1; messageId <= 3; messageId++) {
+      const response = await runWebhookWithFetch(
+        {
+          update_id: 200 + messageId,
+          message: {
+            message_id: messageId,
+            from: { id: 777, first_name: "Flood Test" },
+            chat: { id: 777 },
+            date: Math.floor(Date.now() / 1000),
+            text: `pesan ${messageId}`,
+          },
+        },
+        ((input: Request | URL | string) => {
+          const url = String(input);
+          if (url.includes("api.telegram.org")) {
+            return Promise.resolve(Response.json({ ok: true, result: { message_id: 9 } }));
+          }
+          return Promise.resolve(new Response("database busy", { status: 503 }));
+        }) as typeof fetch,
+      );
+      assertEquals(response.status, 200);
+    }
+
+    let calls = 0;
+    const fourth = await runWebhookWithFetch(
+      {
+        update_id: 204,
+        message: {
+          message_id: 4,
+          from: { id: 777, first_name: "Flood Test" },
+          chat: { id: 777 },
+          date: Math.floor(Date.now() / 1000),
+          text: "pesan keempat",
+        },
+      },
+      (() => {
+        calls++;
+        return Promise.resolve(new Response("unexpected", { status: 500 }));
+      }) as typeof fetch,
+    );
+    assertEquals(fourth.status, 200);
+    assertEquals(calls, 0);
+  } finally {
+    clearMessageFloodLimiterForTests();
   }
 });

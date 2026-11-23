@@ -103,6 +103,11 @@ Stars nyata.
   query database; state chat, partner, dan sanksi tidak pernah di-cache.
 - Webhook dibatasi 40 koneksi dan setiap panggilan database memiliki timeout 5
   detik agar gangguan database tidak memicu antrean retry Telegram berkepanjangan.
+- Maksimal 20 panggilan database berjalan bersamaan per proses. Antrean RAM ikut
+  dibatasi timeout 5 detik dan dapat dibatalkan tanpa membocorkan slot.
+- Pesan/edited message dibatasi 3 pesan per detik bergulir per pengguna. Kelebihan
+  diakhiri HTTP 200 tanpa database atau Telegram API; pembayaran dan tombol tidak
+  ikut dibatasi. Cache limiter menyimpan maksimal 50.000 pengguna terbaru.
 - Pesan biasa yang tertahan lebih dari 90 detik dibuang tanpa membaca database;
   callback dan pembayaran Stars tidak ikut dibuang. Error database pada interaksi
   biasa menghasilkan HTTP 200 dan pesan coba lagi, sedangkan pembayaran Stars

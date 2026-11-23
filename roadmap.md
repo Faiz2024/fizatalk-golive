@@ -1,5 +1,12 @@
 # Roadmap
 
+## Optimasi lanjutan Railway dan Supabase (24 Nov 2026)
+- [ ] Tahap 1: batasi maksimal 20 panggilan database bersamaan per proses Railway, termasuk pembatalan saat menunggu dan timeout 5 detik.
+- [ ] Tahap 2: batasi pesan/edited message menjadi 3 per detik bergulir per pengguna; kelebihan selesai HTTP 200 tanpa database/Telegram API, pembayaran dan tombol dikecualikan.
+- [ ] Tahap 3: pertahankan cron re-engagement Railway setiap 2 jam (09.00–21.00 WIB), optimasi penghitung eligible enam jam dengan indeks covering, dan validasi rencana kueri.
+- [ ] Tahap 4: setel autovacuum `waiting_queue` pada skala 5% dan cost limit 500 lalu verifikasi pengaturan aktif.
+- [ ] Jalankan seluruh regresi Railway/bot, periksa build, dan simpan perubahan; redeploy Railway diperlukan untuk kode runtime terbaru.
+
 ## Audit ketahanan database seluruh jalur (24 Nov 2026)
 - [x] Pesan `/start`, semua perintah, media, dan relay: dibaca pada `handleTelegramWebhook`/`getMessageContext`; error database kembali 200 dengan pesan sibuk dan tercakup simulasi.
 - [x] Semua tombol, laporan kontekstual, moderasi admin, rating, dan tombol voice: callback induk mengubah kegagalan menjadi 200, ACK aksi berat mendahului database; tidak ada retry Telegram.
