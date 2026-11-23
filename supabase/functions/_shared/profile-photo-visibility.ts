@@ -4,14 +4,13 @@ export interface PhotoProfile {
   profile_photo_file_id?: string | null;
 }
 
-// Fail closed when either user's mode or the partner's verification is missing.
+// One-way: the partner's photo is shown when the partner enabled photo mode and is verified,
+// regardless of the viewer's own mode. Fails closed on missing data.
 export function visiblePartnerPhoto(
-  viewer: PhotoProfile | null | undefined,
+  _viewer: PhotoProfile | null | undefined,
   partner: PhotoProfile | null | undefined,
 ): string | null {
-  if (viewer?.profile_photo_enabled !== true ||
-    partner?.profile_photo_enabled !== true ||
-    partner?.is_face_verified !== true) return null;
+  if (partner?.profile_photo_enabled !== true || partner?.is_face_verified !== true) return null;
   const fileId = partner.profile_photo_file_id;
   return typeof fileId === 'string' && fileId.trim().length > 0 ? fileId : null;
 }

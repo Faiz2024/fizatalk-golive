@@ -866,6 +866,7 @@ export type Database = {
           partner_id: number | null
           penalty_points: number | null
           pending_profile_photo_file_id: string | null
+          photo_auto_disabled: boolean
           photo_match_daily_count: number
           photo_match_daily_date: string | null
           premium_until: string | null
@@ -930,6 +931,7 @@ export type Database = {
           partner_id?: number | null
           penalty_points?: number | null
           pending_profile_photo_file_id?: string | null
+          photo_auto_disabled?: boolean
           photo_match_daily_count?: number
           photo_match_daily_date?: string | null
           premium_until?: string | null
@@ -994,6 +996,7 @@ export type Database = {
           partner_id?: number | null
           penalty_points?: number | null
           pending_profile_photo_file_id?: string | null
+          photo_auto_disabled?: boolean
           photo_match_daily_count?: number
           photo_match_daily_date?: string | null
           premium_until?: string | null
