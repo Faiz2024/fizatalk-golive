@@ -1,5 +1,9 @@
 # Roadmap
 
+## Penanganan timeout statistik preview (24 Nov 2026)
+- [x] Reproduksi HTTP 500 `TimeoutError` pada `admin-stats`; dashboard menampilkan pesan gagal tetapi respons resource memicu error preview.
+- [x] Ubah timeout menjadi payload `STATS_UNAVAILABLE` HTTP 200, deploy `admin-stats`, lalu verifikasi dashboard tetap tampil tanpa error resource.
+
 ## Mitigasi badai retry Telegram (24 Nov 2026)
 - [x] Buang pesan/chat yang tertahan lebih dari 90 detik tanpa menyentuh database; pembayaran Stars dan callback tetap diproses.
 - [x] Terapkan circuit breaker 5 kegagalan/10 detik dengan jeda pemulihan 10 detik pada koneksi PostgREST bersama.
@@ -7,7 +11,8 @@
 - [x] Alihkan `/stats` admin ke satu pembacaan cache dashboard dan pertahankan dashboard tanpa retry otomatis.
 - [x] Pantau `pending_update_count` tiap 10 menit dan beri tahu admin bila melewati 300, dengan peringatan maksimal sekali per 30 menit.
 - [x] Jalankan 106 regresi, simulasi webhook tanpa database/saat database gagal, pemeriksaan build, dan validasi diff.
-- [ ] Deploy Railway dan uji Telegram nyata — alamat Railway saat ini HTTP 404 `Application not found`; menunggu service/deployment tersedia.
+- [x] Deploy Railway berhasil dan health publik kembali HTTP 200 pada 24 Nov 2026.
+- [ ] Uji `/start` melalui Telegram nyata — menunggu konfirmasi pengguna.
 - [ ] Verifikasi RPC statistik pada database aktif — pooler yang dapat diakses Lovable masih unavailable.
 
 ## Pemulihan statistik admin (23 Nov 2026)

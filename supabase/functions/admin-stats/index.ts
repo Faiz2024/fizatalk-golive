@@ -214,11 +214,15 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
-    const msg = (e as Error).message;
     console.error("[admin-stats] error:", e);
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Timeout database adalah kondisi data tidak tersedia, bukan crash aplikasi.
+    // Dashboard sudah menampilkan status gagal dan tombol coba lagi dari payload ini.
+    return new Response(JSON.stringify({
+      error: "Statistik sementara tidak tersedia. Silakan coba lagi.",
+      code: "STATS_UNAVAILABLE",
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
     });
   }
 });
