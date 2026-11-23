@@ -19,6 +19,8 @@ import { visiblePartnerPhoto } from '../_shared/profile-photo-visibility.ts';
 import { createSakurupiahWithQrisFallback, isSakurupiahInvoiceUsable } from '../_shared/sakurupiah-fallback.ts';
 import { buildEndChatKeyboard as sharedEndChatKeyboard, buildNextRatingRows } from '../_shared/end-chat-keyboard.ts';
 import { RECOVERY_PRICE_LABEL, RECOVERY_STARS, searchReportLockMessage, validRecoveryPayment } from '../_shared/recovery-policy.ts';
+import { isStaleWebhookUpdate } from '../_shared/webhook-resilience.ts';
+import { formatCachedDailyAdminStats } from '../_shared/admin-stats-command.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -601,6 +603,25 @@ async function processStarsFinePayment(
   }
 }
 
+function expectDatabaseSuccess<T>(result: { data: T; error: any }): T {
+  if (result.error) throw result.error;
+  return result.data;
+}
+
+async function starsPaymentAlreadyProcessed(
+  supabase: any,
+  table: 'premium_requests' | 'topup_requests' | 'pending_transactions',
+  chargeId: string,
+): Promise<boolean> {
+  const existing = expectDatabaseSuccess(await supabase
+    .from(table)
+    .select('id')
+    .eq('sakurupiah_trx_id', chargeId)
+    .limit(1)
+    .maybeSingle());
+  return Boolean(existing);
+}
+
 // Helper: Process successful Stars payment (called from successful_payment handler)
 async function handleSuccessfulStarsPayment(
   supabase: any, botToken: string,
@@ -620,11 +641,13 @@ async function handleSuccessfulStarsPayment(
         return;
       }
 
+      if (await starsPaymentAlreadyProcessed(supabase, 'premium_requests', chargeId)) return;
+
       // Get existing premium
-      const { data: userData } = await supabase
+      const userData = expectDatabaseSuccess(await supabase
         .from('telegram_users')
         .select('premium_until, special_promo_purchased_at')
-        .eq('id', userId).single();
+        .eq('id', userId).single());
 
       const isSpecialPromo = configKey.startsWith('sp');
 
@@ -656,26 +679,26 @@ async function handleSuccessfulStarsPayment(
       }
 
       // Update user
-      await supabase.from('telegram_users')
+      expectDatabaseSuccess(await supabase.from('telegram_users')
         .update(updatePayload)
-        .eq('id', userId);
+        .eq('id', userId));
       invalidatePremiumFilterProfile(userId);
 
       // Premium never clears moderation sanctions.
 
       // Record in premium_requests
-      await supabase.from('premium_requests').insert({
+      expectDatabaseSuccess(await supabase.from('premium_requests').insert({
         user_id: userId, duration_days: config.days, price: config.price,
         unique_code: 0, status: 'approved', payment_method: 'STARS',
         sakurupiah_trx_id: chargeId,
         processed_at: new Date().toISOString(),
-      });
+      }));
 
       // Record transaction
-      await supabase.from('coin_transactions').insert({
+      expectDatabaseSuccess(await supabase.from('coin_transactions').insert({
         user_id: userId, amount: -config.price, type: 'purchase',
         description: `Premium ${config.days} hari via Stars (${starsAmount}⭐)`
-      });
+      }));
 
       const formattedDate = premiumEndDate.toLocaleDateString('id-ID', {
         timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric'
@@ -695,30 +718,32 @@ async function handleSuccessfulStarsPayment(
       const COIN_PRICE = 10;
       const totalPrice = coinAmount * COIN_PRICE;
 
+      if (await starsPaymentAlreadyProcessed(supabase, 'topup_requests', chargeId)) return;
+
       // Add coins
-      const { data: userData } = await supabase
+      const userData = expectDatabaseSuccess(await supabase
         .from('telegram_users')
         .select('coins')
-        .eq('id', userId).single();
+        .eq('id', userId).single());
 
       const newBalance = (userData?.coins || 0) + coinAmount;
-      await supabase.from('telegram_users')
+      expectDatabaseSuccess(await supabase.from('telegram_users')
         .update({ coins: newBalance })
-        .eq('id', userId);
+        .eq('id', userId));
 
       // Record in topup_requests
-      await supabase.from('topup_requests').insert({
+      expectDatabaseSuccess(await supabase.from('topup_requests').insert({
         user_id: userId, amount: coinAmount, unique_code: 0,
         status: 'approved', payment_method: 'STARS',
         sakurupiah_trx_id: chargeId,
         processed_at: new Date().toISOString(),
-      });
+      }));
 
       // Record transaction
-      await supabase.from('coin_transactions').insert({
+      expectDatabaseSuccess(await supabase.from('coin_transactions').insert({
         user_id: userId, amount: coinAmount, type: 'topup',
         description: `Top-up ${coinAmount} koin via Stars (${starsAmount}⭐)`
-      });
+      }));
 
       await sendTelegramMessage(botToken, userId,
         `✅ <b>TOP-UP BERHASIL!</b>\n\n` +
@@ -734,6 +759,7 @@ async function handleSuccessfulStarsPayment(
         await sendTelegramMessage(botToken, userId, 'Nominal pembayaran pemulihan tidak sesuai. Permintaan pengembalian Stars dikirim. Hubungi @FizaTalkCS.');
         return;
       }
+      if (await starsPaymentAlreadyProcessed(supabase, 'pending_transactions', chargeId)) return;
       const { data: eligible, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: userId });
       if (error) throw error;
       if (!eligible) {
@@ -744,29 +770,29 @@ async function handleSuccessfulStarsPayment(
       const FINE_AMOUNT = 10000;
 
       // Unblock user
-      await supabase.from('blocked_users')
+      expectDatabaseSuccess(await supabase.from('blocked_users')
         .update({ is_active: false, unblocked_at: new Date().toISOString() })
-        .eq('user_id', userId);
+        .eq('user_id', userId));
 
       // Reset penalty
-      await supabase.from('telegram_users')
+      expectDatabaseSuccess(await supabase.from('telegram_users')
         .update({ penalty_points: 0, spam_warnings: 0, spam_warning_until: null, unacknowledged_reports_count: 0 })
-        .eq('id', userId);
+        .eq('id', userId));
 
       // Record in pending_transactions
-      await supabase.from('pending_transactions').insert({
+      expectDatabaseSuccess(await supabase.from('pending_transactions').insert({
         user_id: userId, amount: FINE_AMOUNT, unique_code: 0,
         total_amount: FINE_AMOUNT, status: 'approved',
         admin_notes: 'FINE_PAYMENT', payment_method: 'STARS',
         sakurupiah_trx_id: chargeId,
         approved_at: new Date().toISOString(),
-      });
+      }));
 
       // Record transaction
-      await supabase.from('coin_transactions').insert({
+      expectDatabaseSuccess(await supabase.from('coin_transactions').insert({
         user_id: userId, amount: -FINE_AMOUNT, type: 'fine_payment',
         description: `Biaya pemulihan akun via Stars (${starsAmount}⭐)`
-      });
+      }));
 
       const welcomeKeyboard = {
         inline_keyboard: [[{ text: '🔍 Cari Partner', style: 'primary', callback_data: 'search_partner' }]]
@@ -790,6 +816,7 @@ async function handleSuccessfulStarsPayment(
     }
   } catch (e) {
     console.error('[STARS] handleSuccessfulStarsPayment error:', e);
+    throw e;
   }
 }
 
@@ -3103,9 +3130,25 @@ async function postBonusChangeToChannel(botToken: string, oldAmount: number, new
   }
 }
 
+function databaseFailureResponse(botToken: string, update: TelegramUpdate): Response {
+  const isCriticalPayment = Boolean(update.pre_checkout_query || update.message?.successful_payment);
+  if (isCriticalPayment) return new Response('Database Error', { status: 500 });
+
+  const userId = update.message?.from?.id ?? update.edited_message?.from?.id ?? update.callback_query?.from?.id;
+  if (userId) {
+    const notification = sendTelegramMessage(
+      botToken,
+      userId,
+      '⚠️ Koneksi sedang sibuk. Silakan coba lagi beberapa saat.'
+    ).catch(() => false);
+    try { (globalThis as any).EdgeRuntime?.waitUntil?.(notification); } catch (_) { /* Railway tetap menjalankan promise */ }
+  }
+  return new Response('OK', { status: 200 });
+}
+
 // === ADMIN: /ban | /blokir | /unban | /pulihkan <id|@username> [alasan] ===
 const ADMIN_BLOCK_CMD = /^\/(ban|blokir|unban|pulihkan)(@\S+)?(\s|$)/i;
-async function handleAdminBlockCommand(supabase: any, botToken: string, userId: number, text: string): Promise<Response | null> {
+async function handleAdminBlockCommand(supabase: any, botToken: string, userId: number, text: string, update: TelegramUpdate): Promise<Response | null> {
   const adminChatId = Deno.env.get('TELEGRAM_CS_CHAT_ID');
   if (!adminChatId || String(userId) !== String(adminChatId)) return null;
   const m = text.trim().match(/^\/(ban|blokir|unban|pulihkan)(?:@\S+)?\s*(\S+)?\s*([\s\S]*)$/i)!;
@@ -3119,7 +3162,7 @@ async function handleAdminBlockCommand(supabase: any, botToken: string, userId: 
   const duration = action === 'ban' && dm && ['temp', '14d', 'sementara'].includes(dm[1].toLowerCase()) ? 'temp' : 'perm';
   const reasonText = (dm ? (dm[2] || '').trim() : rest) || null;
   const { data, error } = await supabase.rpc('admin_set_user_block', { p_target: m[2], p_action: action, p_admin_id: userId, p_reason: reasonText, p_duration: duration });
-  if (error) return new Response('Database Error', { status: 500 });
+  if (error) return databaseFailureResponse(botToken, update);
   if (!data?.success) {
     await sendTelegramMessage(botToken, userId, data?.error === 'user_not_found' ? `❌ Pengguna <code>${escapeHtml(m[2])}</code> tidak ditemukan.` : '❌ Input tidak valid.');
     return null;
@@ -3149,9 +3192,9 @@ async function handleAdminBlockCommand(supabase: any, botToken: string, userId: 
 }
 
 // Tolak akses Premium (menu, paket, invoice) bagi pengguna terblokir / dalam moderasi
-async function denyPremiumIfBlocked(supabase: any, botToken: string, userId: number, queryId: string): Promise<Response | null> {
+async function denyPremiumIfBlocked(supabase: any, botToken: string, userId: number, queryId: string, update: TelegramUpdate): Promise<Response | null> {
   const { data, error } = await supabase.rpc('premium_purchase_allowed', { p_user_id: userId });
-  if (error) return new Response('Database Error', { status: 500 });
+  if (error) return databaseFailureResponse(botToken, update);
   if (data === true) return null;
   await answerCallbackQuery(botToken, queryId, '🚫 Akun Anda sedang diblokir/dibatasi. Premium tidak dapat dibeli selama pemblokiran aktif.', true);
   return new Response('OK', { status: 200 });
@@ -4550,8 +4593,10 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let update: TelegramUpdate | undefined;
+  let botToken: string | undefined;
   try {
-    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -4573,7 +4618,6 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
 
     // Baca body dengan error handling
-    let update: TelegramUpdate;
     try {
       const text = await req.text();
 
@@ -4586,6 +4630,10 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
       return new Response('Invalid JSON', { status: 400 });
     }
 
+    // Kuras pesan basi tanpa satu panggilan database pun; pembayaran tetap diproses.
+    if (isStaleWebhookUpdate(update)) {
+      return new Response('OK', { status: 200 });
+    }
 
     // === Handle my_chat_member: deteksi user block/unblock bot ===
     if (update.my_chat_member) {
@@ -4683,7 +4731,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
         const payload = JSON.parse(pcq.invoice_payload);
         if (payload.t === 'f' || payload.t === 'p') {
           const { data, error } = await supabase.rpc(payload.t === 'f' ? 'restoration_payment_allowed' : 'premium_purchase_allowed', { p_user_id: pcq.from.id });
-          if (error) return new Response('Database Error', { status: 500 });
+          if (error) return databaseFailureResponse(botToken, update);
           checkoutAllowed = data === true && (payload.t !== 'f' || validRecoveryPayment(payload.u, pcq.from.id, pcq.total_amount));
         }
       } catch { checkoutAllowed = false; }
@@ -4727,11 +4775,13 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
       }
 
       const reportResponse = await handleReportCallback(query, { db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID') });
-      if (reportResponse) return reportResponse;
+      if (reportResponse) {
+        return reportResponse.status >= 500 ? databaseFailureResponse(botToken, update) : reportResponse;
+      }
 
       if (callbackData === 'agree_conduct') {
         const { data: ag, error } = await supabase.rpc('accept_conduct_agreement', { p_user_id: userId });
-        if (error) return new Response('Database Error', { status: 500 });
+        if (error) return databaseFailureResponse(botToken, update);
         if (!ag?.success) {
           await answerCallbackQuery(botToken, query.id, 'Kesepakatan tidak dapat diproses. Coba lagi.', true);
           return new Response('OK');
@@ -4744,7 +4794,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
       }
       if (callbackData === 'pay_fine' || callbackData.startsWith('fine_pay_')) {
         const { data: eligibility, error } = await supabase.rpc('restoration_payment_allowed', { p_user_id: userId });
-        if (error) return new Response('Database Error', { status: 500 });
+        if (error) return databaseFailureResponse(botToken, update);
         if (!eligibility) {
           await answerCallbackQuery(botToken, query.id, 'Pembatasan ini tidak dapat dibuka dengan pembayaran. Hubungi @FizaTalkCS.', true);
           return new Response('OK');
@@ -4775,7 +4825,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
         if (resolveError) {
           console.error('[CALL_INVITE] resolve failed:', resolveError.message);
-          return new Response('Database Error', { status: 500 });
+          return databaseFailureResponse(botToken, update);
         }
 
         if (!resolved?.success) {
@@ -4801,7 +4851,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
         const joinToken = String(resolved.join_token || '');
         if (!voiceBotUsername || !/^[0-9a-f-]{36}$/i.test(joinToken)) {
           console.error('[CALL_INVITE] invalid accepted result');
-          return new Response('Database Error', { status: 500 });
+          return databaseFailureResponse(botToken, update);
         }
 
         const joinUrl = `https://t.me/${voiceBotUsername}?start=call_${joinToken}`;
@@ -5079,7 +5129,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
         const { error: lsErr } = await supabase.rpc('submit_partner_report', {
           p_reporter_id: userId, p_reported_id: spammerId, p_report_type: 'link_spam'
         });
-        if (lsErr) return new Response('Database Error', { status: 500 });
+        if (lsErr) return databaseFailureResponse(botToken, update);
 
         // Hapus tombol spam dari pesan agar partner tidak double-klik
         await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
@@ -5316,7 +5366,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
           p_reported_id: parseInt(senderId),
           p_report_type: kind === 'a' ? 'media_sange' : 'media_spam'
         });
-        if (rmErr) return new Response('Database Error', { status: 500 });
+        if (rmErr) return databaseFailureResponse(botToken, update);
 
         answerCallbackQuery(botToken, query.id, '✅ Laporan diterima. Terima kasih!', true).catch(() => {});
         await fetch(`${TELEGRAM_API}${botToken}/editMessageReplyMarkup`, {
@@ -5814,7 +5864,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
       // === FOTO PROFIL (user) ===
       if (callbackData === 'toggle_photo_mode') {
         const { data: t, error: tErr } = await supabase.rpc('toggle_profile_photo_mode', { p_user_id: userId });
-        if (tErr) { answerCallbackQuery(botToken, query.id, 'Gagal, coba lagi.').catch(() => {}); return new Response('DB error', { status: 500 }); }
+        if (tErr) { answerCallbackQuery(botToken, query.id, 'Gagal, coba lagi.').catch(() => {}); return databaseFailureResponse(botToken, update); }
         const act = t?.action;
         const swapKb = (on: boolean) => {
           const kb = message?.reply_markup?.inline_keyboard;
@@ -6010,7 +6060,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
           await answerCallbackQuery(botToken, query.id, proc?.error === 'already_processed' ? 'Sudah diproses sebelumnya.' : '⚠️ Gagal memproses.', true);
           if (procErr) {
             console.error('Referral cashout processing failed:', procErr);
-            return new Response('Database error', { status: 500 });
+            return databaseFailureResponse(botToken, update);
           }
           return new Response('OK', { status: 200 });
         }
@@ -6089,7 +6139,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
 
       if (callbackData.startsWith('show_premium_offer')) {
-        const denied = await denyPremiumIfBlocked(supabase, botToken, userId, query.id);
+        const denied = await denyPremiumIfBlocked(supabase, botToken, userId, query.id, update);
         if (denied) return denied;
 
         await answerCallbackQuery(botToken, query.id);
@@ -6969,7 +7019,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
         if (reportError) {
           console.error('submit_partner_report error:', reportError);
           await answerCallbackQuery(botToken, query.id, '❌ Gagal mengirim rating');
-          return new Response('Database Error', { status: 500 });
+          return databaseFailureResponse(botToken, update);
         }
 
         // Handle hasil RPC
@@ -7109,7 +7159,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
       // === UNIFIED PREMIUM PURCHASE HANDLER (semua buy_premium_* callbacks) ===
       if (BUY_PREMIUM_MAP[callbackData]) {
-        const denied = await denyPremiumIfBlocked(supabase, botToken, userId, query.id);
+        const denied = await denyPremiumIfBlocked(supabase, botToken, userId, query.id, update);
         if (denied) return denied;
         const configKey = BUY_PREMIUM_MAP[callbackData];
 
@@ -7159,7 +7209,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
       // === HANDLER PROSES PEMBAYARAN PREMIUM VIA SAKURUPIAH/STARS ===
       if (callbackData.startsWith('prem_pay_')) {
-        const denied = await denyPremiumIfBlocked(supabase, botToken, userId, query.id);
+        const denied = await denyPremiumIfBlocked(supabase, botToken, userId, query.id, update);
         if (denied) return denied;
         const payload = callbackData.replace('prem_pay_', '');
         const lastUnderscore = payload.lastIndexOf('_');
@@ -7246,11 +7296,10 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
     // Satu RPC membaca data pengguna sekaligus memvalidasi partner untuk relay chat.
     const { envelope: messageEnvelope, user: dbUser, error: dbError } = await getMessageContext(supabase, userId);
 
-    // JIKA DB ERROR: Jangan lanjut ke logika Welcome!
-    // Return 500 agar Telegram mencoba mengirim ulang pesan (webhook retry)
+    // Jika DB error, hentikan alur chat dan kirim respons sesuai kebijakan anti-retry.
     if (dbError) {
       console.error('[CRITICAL] DB Error fetching message context:', dbError.message);
-      return new Response('Database Error', { status: 500 });
+      return databaseFailureResponse(botToken, update);
     }
 
     if (dbUser) {
@@ -7262,18 +7311,21 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
       // Draft basi (kedaluwarsa / user sudah chat lagi) dibersihkan diam-diam agar tidak mengganggu chat.
       if (draftExpired || dbUser.state === 'chatting') {
         const { error } = await supabase.rpc('cancel_report_draft', { p_user_id: userId });
-        if (error) return new Response('Database Error', { status: 500 });
+        if (error) return databaseFailureResponse(botToken, update);
         dbUser.report_draft = null;
       } else {
         if (text === '/batal' || text === '/back') {
           const { error } = await supabase.rpc('cancel_report_draft', { p_user_id: userId });
-          if (error) return new Response('Database Error', { status: 500 });
+          if (error) return databaseFailureResponse(botToken, update);
           await sendTelegramMessage(botToken, userId, '⬅️ Pengiriman laporan dibatalkan.');
           return new Response('OK');
         }
-        if (!text?.startsWith('/')) return await handleReportEvidence(message, dbUser.report_draft, {
-          db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID'),
-        });
+        if (!text?.startsWith('/')) {
+          const evidenceResponse = await handleReportEvidence(message, dbUser.report_draft, {
+            db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID'),
+          });
+          return evidenceResponse.status >= 500 ? databaseFailureResponse(botToken, update) : evidenceResponse;
+        }
       }
     }
     if (dbUser?.moderation_state && dbUser.moderation_state !== 'normal' && !['/rules', '/tos', '/aturan'].includes(text || '')) {
@@ -7500,7 +7552,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
           isCommand = true;
         }
         else if (ADMIN_BLOCK_CMD.test(text) && String(userId) === String(Deno.env.get('TELEGRAM_CS_CHAT_ID'))) {
-          const r = await handleAdminBlockCommand(supabase, botToken, userId, text);
+          const r = await handleAdminBlockCommand(supabase, botToken, userId, text, update);
           if (r) return r;
           isCommand = true;
         }
@@ -7831,7 +7883,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
         await handleSetBonusCommand(supabase, botToken, userId, text);
       }
       else if (ADMIN_BLOCK_CMD.test(text)) {
-        const r = await handleAdminBlockCommand(supabase, botToken, userId, text);
+        const r = await handleAdminBlockCommand(supabase, botToken, userId, text, update);
         if (r) return r;
       }
 
@@ -8278,71 +8330,25 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
           return new Response('OK', { status: 200 });
         }
 
-        // Kirim pesan loading karena query ke DB mungkin memakan waktu
-        await sendTelegramMessage(botToken, userId, '⏳ Menghitung statistik... Mohon tunggu.');
+        await sendTelegramMessage(botToken, userId, '⏳ Mengambil statistik... Mohon tunggu.');
 
         try {
-          // Setup Waktu (Referensi: Kemarin)
-          const now = new Date();
-          // Reset ke jam 00:00:00 hari ini
-          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-          // Awal hari kemarin (00:00:00 kemarin)
-          const yesterdayStart = new Date(todayStart);
-          yesterdayStart.setDate(yesterdayStart.getDate() - 1);
-
-          // Batas 30 hari sebelum kemarin (untuk menghitung churn)
-          const churnDateStart = new Date(yesterdayStart);
-          churnDateStart.setDate(churnDateStart.getDate() - 30);
-
-          const churnDateEnd = new Date(todayStart);
-          churnDateEnd.setDate(churnDateEnd.getDate() - 30);
-
-          // Format tanggal untuk ditampilkan di pesan
-          const displayDate = yesterdayStart.toLocaleDateString('id-ID', {
-            day: 'numeric', month: 'long', year: 'numeric'
-          });
-
-          // 1. Pengguna Baru pada hari kemarin (created_at >= yesterdayStart AND < todayStart)
-          const { count: newUsers } = await supabase
-            .from('telegram_users')
-            .select('*', { count: 'exact', head: true })
-            .gte('created_at', yesterdayStart.toISOString())
-            .lt('created_at', todayStart.toISOString());
-
-          // 2. Pengguna Aktif pada hari kemarin (last_active >= yesterdayStart AND < todayStart)
-          const { count: activeUsers } = await supabase
-            .from('telegram_users')
-            .select('*', { count: 'exact', head: true })
-            .gte('last_active', yesterdayStart.toISOString())
-            .lt('last_active', todayStart.toISOString());
-
-          // 3. Tidak aktif > 30 hari dihitung dari kemarin (last_active < 30 hari sebelum kemarin)
-          const { count: inactiveUsers } = await supabase
-            .from('telegram_users')
-            .select('*', { count: 'exact', head: true })
-            .lt('last_active', churnDateStart.toISOString());
-
-          // 4. User Churn (Tepat 30 hari tidak aktif pada hari kemarin)
-          // Berarti terakhir aktif pada rentang waktu `churnDateStart` hingga `churnDateEnd`
-          const { count: churnedUsers } = await supabase
-            .from('telegram_users')
-            .select('*', { count: 'exact', head: true })
-            .gte('last_active', churnDateStart.toISOString())
-            .lt('last_active', churnDateEnd.toISOString());
-
-          // Format Pesan Balasan
-          const statsMessage = `📊 <b>Statistik Pengguna Harian</b>\n` +
-            `📅 Tanggal: <b>${displayDate}</b>\n\n` +
-            `📈 <b>Pengguna Baru:</b> ${newUsers || 0} user\n` +
-            `🔥 <b>Pengguna Aktif:</b> ${activeUsers || 0} user\n` +
-            `💤 <b>Tidak Aktif (>30 Hari):</b> ${inactiveUsers || 0} user\n` +
-            `📉 <b>User Churn (Tepat 30 Hari):</b> ${churnedUsers || 0} user`;
-
-          await sendTelegramMessage(botToken, userId, statsMessage);
+          // Satu pembacaan cache; jangan pernah memindai telegram_users dari perintah admin.
+          const { data: cacheRow, error: cacheError } = await supabase
+            .from('bot_settings')
+            .select('value')
+            .eq('key', 'admin_dashboard_stats_cache')
+            .maybeSingle();
+          if (cacheError) return databaseFailureResponse(botToken, update);
+          const statsMessage = formatCachedDailyAdminStats(cacheRow?.value);
+          await sendTelegramMessage(
+            botToken,
+            userId,
+            statsMessage ?? '⚠️ Statistik cache belum tersedia. Buka dashboard admin lalu coba kembali.'
+          );
         } catch (e) {
           console.error('[STATS COMMAND] Error:', e);
-          await sendTelegramMessage(botToken, userId, '❌ Terjadi kesalahan sistem saat mengambil data statistik.');
+          return databaseFailureResponse(botToken, update);
         }
         return new Response('OK', { status: 200 });
       }
@@ -8367,6 +8373,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
     return new Response('OK', { status: 200, headers: corsHeaders });
   } catch (error) {
     console.error('Error:', error);
+    if (botToken && update) return databaseFailureResponse(botToken, update);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,

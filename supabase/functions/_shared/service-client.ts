@@ -2,10 +2,15 @@ import {
   createClient,
   type SupabaseClient,
 } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  createCircuitBreakerFetch,
+  DatabaseCircuitBreaker,
+} from "./database-circuit-breaker.ts";
 
 // Satu client per kredensial untuk seluruh handler dalam proses Railway.
 // Fetch bawaan Deno memakai connection pool dan HTTP keep-alive secara otomatis.
 const serviceClients = new Map<string, SupabaseClient>();
+const databaseCircuitBreakers = new Map<string, DatabaseCircuitBreaker>();
 
 export const DATABASE_TIMEOUT_MS = 5_000;
 
@@ -36,9 +41,14 @@ export function getServiceClient(
   const cached = serviceClients.get(cacheKey);
   if (cached) return cached;
 
+  let circuitBreaker = databaseCircuitBreakers.get(url);
+  if (!circuitBreaker) {
+    circuitBreaker = new DatabaseCircuitBreaker();
+    databaseCircuitBreakers.set(url, circuitBreaker);
+  }
   const client = createClient(url, serviceRoleKey, {
     global: {
-      fetch: createDatabaseFetch(),
+      fetch: createCircuitBreakerFetch(createDatabaseFetch(), circuitBreaker),
     },
     auth: {
       persistSession: false,
@@ -52,4 +62,5 @@ export function getServiceClient(
 
 export function clearServiceClientsForTests(): void {
   serviceClients.clear();
+  databaseCircuitBreakers.clear();
 }

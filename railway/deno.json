@@ -1,6 +1,6 @@
 {
   "tasks": {
     "start": "deno run --v8-flags=--max-old-space-size=256 --allow-net --allow-env server.ts",
-    "test": "deno test --no-config --allow-env server_test.ts graceful-shutdown_test.ts"
+    "test": "deno test --no-config --allow-env server_test.ts graceful-shutdown_test.ts webhook-queue-monitor_test.ts"
   }
 }

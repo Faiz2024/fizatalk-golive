@@ -4,6 +4,7 @@ WORKDIR /app
 COPY supabase/functions ./supabase/functions
 COPY railway/server.ts ./railway/server.ts
 COPY railway/graceful-shutdown.ts ./railway/graceful-shutdown.ts
+COPY railway/webhook-queue-monitor.ts ./railway/webhook-queue-monitor.ts
 COPY railway/setup-webhook.ts ./railway/setup-webhook.ts
 
 RUN deno cache --no-config --no-check railway/server.ts railway/setup-webhook.ts

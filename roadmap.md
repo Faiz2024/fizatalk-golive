@@ -1,5 +1,15 @@
 # Roadmap
 
+## Mitigasi badai retry Telegram (24 Nov 2026)
+- [x] Buang pesan/chat yang tertahan lebih dari 90 detik tanpa menyentuh database; pembayaran Stars dan callback tetap diproses.
+- [x] Terapkan circuit breaker 5 kegagalan/10 detik dengan jeda pemulihan 10 detik pada koneksi PostgREST bersama.
+- [x] Hentikan retry Telegram untuk interaksi biasa yang gagal, beri pesan coba lagi, dan pertahankan retry untuk pembayaran Stars; charge yang sudah tercatat tidak diproses dua kali.
+- [x] Alihkan `/stats` admin ke satu pembacaan cache dashboard dan pertahankan dashboard tanpa retry otomatis.
+- [x] Pantau `pending_update_count` tiap 10 menit dan beri tahu admin bila melewati 300, dengan peringatan maksimal sekali per 30 menit.
+- [x] Jalankan 106 regresi, simulasi webhook tanpa database/saat database gagal, pemeriksaan build, dan validasi diff.
+- [ ] Deploy Railway dan uji Telegram nyata — alamat Railway saat ini HTTP 404 `Application not found`; menunggu service/deployment tersedia.
+- [ ] Verifikasi RPC statistik pada database aktif — pooler yang dapat diakses Lovable masih unavailable.
+
 ## Pemulihan statistik admin (23 Nov 2026)
 - [x] Tambahkan cache dan penguncian anti-tumpang-tindih pada RPC dashboard serta referal; hasil terakhir menjadi fallback saat refresh sibuk atau gagal.
 - [x] Batasi fetch statistik admin 12 detik dan hentikan retry otomatis dashboard yang dapat menggandakan beban database.

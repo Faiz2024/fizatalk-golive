@@ -4,6 +4,7 @@ import { handleSakurupiahCallback } from "../supabase/functions/sakurupiah-callb
 import { handleReengageUsers } from "../supabase/functions/reengage-users/handler.ts";
 import { handleCallInviteExchange } from "../supabase/functions/call-invite-exchange/handler.ts";
 import { createGracefulShutdown } from "./graceful-shutdown.ts";
+import { createWebhookQueueMonitor } from "./webhook-queue-monitor.ts";
 
 export type HttpHandler = (req: Request) => Response | Promise<Response>;
 export type RouteTable = Readonly<Record<string, HttpHandler>>;
@@ -73,7 +74,18 @@ if (import.meta.main) {
     { hostname: "0.0.0.0", port },
     createRouter(handlers, coreRuntimeReady),
   );
-  const shutdown = createGracefulShutdown(server);
+  const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  const adminChatId = Deno.env.get("TELEGRAM_CS_CHAT_ID");
+  const queueMonitor = botToken && adminChatId
+    ? createWebhookQueueMonitor({ botToken, adminChatId })
+    : null;
+  queueMonitor?.start();
+
+  const shutdownServer = createGracefulShutdown(server);
+  const shutdown = () => {
+    queueMonitor?.stop();
+    shutdownServer();
+  };
   Deno.addSignalListener("SIGTERM", shutdown);
   Deno.addSignalListener("SIGINT", shutdown);
 }
