@@ -7,6 +7,24 @@ import {
 // Fetch bawaan Deno memakai connection pool dan HTTP keep-alive secara otomatis.
 const serviceClients = new Map<string, SupabaseClient>();
 
+export const DATABASE_TIMEOUT_MS = 5_000;
+
+// Batasi setiap panggilan database agar webhook selesai sebelum timeout Telegram.
+// Sinyal pembatalan dari pemanggil tetap diteruskan ke fetch yang sebenarnya.
+export function createDatabaseFetch(
+  fetcher: typeof fetch = fetch,
+  timeoutMs = DATABASE_TIMEOUT_MS,
+): typeof fetch {
+  return (input, init) => {
+    const signals = [AbortSignal.timeout(timeoutMs)];
+    if (init?.signal) signals.push(init.signal);
+    return fetcher(input, {
+      ...init,
+      signal: AbortSignal.any(signals),
+    });
+  };
+}
+
 export function getServiceClient(
   url: string,
   serviceRoleKey: string,
@@ -19,6 +37,9 @@ export function getServiceClient(
   if (cached) return cached;
 
   const client = createClient(url, serviceRoleKey, {
+    global: {
+      fetch: createDatabaseFetch(),
+    },
     auth: {
       persistSession: false,
       autoRefreshToken: false,

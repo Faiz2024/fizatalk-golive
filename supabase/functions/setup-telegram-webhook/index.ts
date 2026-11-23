@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         url: webhookUrl,
         secret_token: await telegramWebhookSecret(botToken),
-        max_connections: 100,
+        max_connections: 40,
         allowed_updates: ['message', 'callback_query', 'edited_message', 'my_chat_member', 'pre_checkout_query'],
         drop_pending_updates: false,
       })

@@ -18,6 +18,8 @@ import {
 import { TtlCache } from "../_shared/runtime-cache.ts";
 import {
   clearServiceClientsForTests,
+  createDatabaseFetch,
+  DATABASE_TIMEOUT_MS,
   getServiceClient,
 } from "../_shared/service-client.ts";
 
@@ -104,4 +106,46 @@ Deno.test("profil Premium di-cache 20 detik, dibagikan saat concurrent, dan inva
   assertEquals(refreshed?.target_gender, "cowok");
   assertEquals(reads, 2);
   assert(first !== null);
+});
+
+Deno.test("database dibatasi 5 detik dan pembatalan pemanggil tetap diteruskan", async () => {
+  assertEquals(DATABASE_TIMEOUT_MS, 5_000);
+  const observedSignals: AbortSignal[] = [];
+  const hangingFetch = ((_input: Request | URL | string, init?: RequestInit) => {
+    return new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) {
+        reject(new Error("Abort signal is required"));
+        return;
+      }
+      observedSignals.push(signal);
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+  }) as typeof fetch;
+
+  const timedRequest = createDatabaseFetch(hangingFetch, 5)(
+    "https://database.example.invalid/rest/v1/test",
+  );
+  let timeoutName = "";
+  try {
+    await timedRequest;
+  } catch (error) {
+    timeoutName = (error as Error).name;
+  }
+  assertEquals(timeoutName, "TimeoutError");
+  assertEquals(observedSignals[0]?.aborted, true);
+
+  const caller = new AbortController();
+  const cancelledRequest = createDatabaseFetch(hangingFetch)(
+    "https://database.example.invalid/rest/v1/test",
+    { signal: caller.signal },
+  );
+  caller.abort();
+  let cancellationName = "";
+  try {
+    await cancelledRequest;
+  } catch (error) {
+    cancellationName = (error as Error).name;
+  }
+  assertEquals(cancellationName, "AbortError");
 });

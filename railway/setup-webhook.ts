@@ -21,7 +21,7 @@ const response = await fetch(
     body: JSON.stringify({
       url: webhookUrl,
       secret_token: await telegramWebhookSecret(botToken),
-      max_connections: 100,
+      max_connections: 40,
       allowed_updates: [
         "message",
         "callback_query",

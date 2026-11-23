@@ -1,5 +1,10 @@
 # Roadmap
 
+## Pemulihan timeout webhook (23 Nov 2026)
+- [x] Kuras 3.582 update tertahan dan turunkan webhook aktif dari 100 menjadi 40 koneksi; antrean kembali 0 dan error Telegram terakhir hilang.
+- [x] Tambahkan batas tunggu database 5 detik dengan penerusan pembatalan pada service client bersama.
+- [x] Jalankan 92 regresi, verifikasi webhook tetap 40 tanpa error Telegram, dan simpan perubahan runtime.
+
 ## Optimasi runtime Railway (22 Nov 2026)
 - [x] Satukan service client per proses agar koneksi HTTP keep-alive digunakan ulang oleh seluruh handler aktif.
 - [x] Tambahkan cache RAM ber-TTL untuk pengaturan bot dan profil Premium/filter, dengan invalidasi dan batas memori.

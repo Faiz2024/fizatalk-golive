@@ -101,6 +101,8 @@ Stars nyata.
   pack 5 menit. Perubahan pengaturan/Premium membatalkan cache terkait.
 - Seluruh tombol memakai debounce RAM 2 detik. ACK aksi berat dikirim sebelum
   query database; state chat, partner, dan sanksi tidak pernah di-cache.
+- Webhook dibatasi 40 koneksi dan setiap panggilan database memiliki timeout 5
+  detik agar gangguan database tidak memicu antrean retry Telegram berkepanjangan.
 - `railway.json` menetapkan satu replika, maksimum 1 vCPU dan 512 MiB RAM.
   Heap V8 dibatasi 256 MiB agar tersedia ruang untuk runtime Deno.
 - Deploy baru tumpang-tindih 3 detik. Saat `SIGTERM`, server berhenti menerima
