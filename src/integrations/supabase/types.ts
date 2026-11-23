@@ -1361,6 +1361,11 @@ export type Database = {
         Args: { p_partner_id: number; p_sender_id: number }
         Returns: undefined
       }
+      refresh_admin_dashboard_stats_uncached: {
+        Args: { p_force?: boolean }
+        Returns: Json
+      }
+      refresh_referral_stats_uncached: { Args: never; Returns: Json }
       register_referral: {
         Args: { p_new_user_id: number; p_referrer_id: number }
         Returns: Json
