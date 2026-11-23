@@ -1,3 +1,4 @@
+// Statistik dashboard admin: dibaca dari Supabase mandiri via RPC (WIB).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {

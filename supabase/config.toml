@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.pakasir-callback]
 verify_jwt = false
+
+[functions.admin-stats]
+verify_jwt = false
