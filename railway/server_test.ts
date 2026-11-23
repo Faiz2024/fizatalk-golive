@@ -189,6 +189,53 @@ Deno.test("pembayaran Stars lama tetap diproses dan error database kembali 500",
   assertEquals(calls.filter((url) => url.includes("sendMessage")).length, 0);
 });
 
+Deno.test("pre-checkout Stars mencoba ulang saat database gagal", async () => {
+  const calls: string[] = [];
+  const response = await runWebhookWithFetch(
+    {
+      update_id: 94,
+      pre_checkout_query: {
+        id: "checkout-database-failure",
+        from: { id: 123, first_name: "Test" },
+        currency: "XTR",
+        total_amount: 149,
+        invoice_payload: JSON.stringify({ t: "p", k: "n7" }),
+      },
+    },
+    ((input: Request | URL | string) => {
+      calls.push(String(input));
+      return Promise.resolve(new Response("database busy", { status: 503 }));
+    }) as typeof fetch,
+  );
+  assertEquals(response.status, 500);
+  assertEquals(calls.filter((url) => url.includes("premium_purchase_allowed")).length, 1);
+  assertEquals(calls.filter((url) => url.includes("answerPreCheckoutQuery")).length, 0);
+});
+
+Deno.test("payload pre-checkout tidak valid ditolak tanpa retry atau database", async () => {
+  const calls: string[] = [];
+  const response = await runWebhookWithFetch(
+    {
+      update_id: 95,
+      pre_checkout_query: {
+        id: "checkout-invalid-payload",
+        from: { id: 123, first_name: "Test" },
+        currency: "XTR",
+        total_amount: 149,
+        invoice_payload: "not-json",
+      },
+    },
+    ((input: Request | URL | string) => {
+      const url = String(input);
+      calls.push(url);
+      return Promise.resolve(Response.json({ ok: true }));
+    }) as typeof fetch,
+  );
+  assertEquals(response.status, 200);
+  assertEquals(calls.filter((url) => url.includes("answerPreCheckoutQuery")).length, 1);
+  assertEquals(calls.filter((url) => url.includes("supabase.co")).length, 0);
+});
+
 Deno.test("charge Stars yang sudah tercatat tidak memberi manfaat dua kali", async () => {
   const calls: string[] = [];
   const response = await runWebhookWithFetch(

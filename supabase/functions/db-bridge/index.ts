@@ -1,8 +1,8 @@
 // db-bridge: Antigravity ↔ Lovable Cloud SQL + logs bridge
 // Auth: X-API-Key header (timing-safe compare with DB_BRIDGE_API_KEY)
 // verify_jwt = false (auth handled in code)
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { z } from 'https://esm.sh/zod@3.23.8';
+import { getServiceClient } from '../_shared/service-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,9 +14,7 @@ const API_KEY = Deno.env.get('DB_BRIDGE_API_KEY') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
-  auth: { persistSession: false },
-});
+const supabase = getServiceClient(SUPABASE_URL, SERVICE_ROLE);
 
 // ---------- rate limit (in-memory, per-IP, 120 req/min) ----------
 const RL = new Map<string, { count: number; reset: number }>();

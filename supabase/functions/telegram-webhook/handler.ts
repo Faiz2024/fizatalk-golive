@@ -19,7 +19,7 @@ import { visiblePartnerPhoto } from '../_shared/profile-photo-visibility.ts';
 import { createSakurupiahWithQrisFallback, isSakurupiahInvoiceUsable } from '../_shared/sakurupiah-fallback.ts';
 import { buildEndChatKeyboard as sharedEndChatKeyboard, buildNextRatingRows } from '../_shared/end-chat-keyboard.ts';
 import { RECOVERY_PRICE_LABEL, RECOVERY_STARS, searchReportLockMessage, validRecoveryPayment } from '../_shared/recovery-policy.ts';
-import { isStaleWebhookUpdate } from '../_shared/webhook-resilience.ts';
+import { isStaleWebhookUpdate, webhookDatabaseFailureStatus } from '../_shared/webhook-resilience.ts';
 import { formatCachedDailyAdminStats } from '../_shared/admin-stats-command.ts';
 
 
@@ -3131,8 +3131,7 @@ async function postBonusChangeToChannel(botToken: string, oldAmount: number, new
 }
 
 function databaseFailureResponse(botToken: string, update: TelegramUpdate): Response {
-  const isCriticalPayment = Boolean(update.pre_checkout_query || update.message?.successful_payment);
-  if (isCriticalPayment) return new Response('Database Error', { status: 500 });
+  if (webhookDatabaseFailureStatus(update) === 500) return new Response('Database Error', { status: 500 });
 
   const userId = update.message?.from?.id ?? update.edited_message?.from?.id ?? update.callback_query?.from?.id;
   if (userId) {
@@ -4727,14 +4726,18 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
       const pcq = update.pre_checkout_query;
       console.log(`[STARS] pre_checkout_query from ${pcq.from.id}: ${pcq.invoice_payload}`);
       let checkoutAllowed = true;
-      try {
-        const payload = JSON.parse(pcq.invoice_payload);
-        if (payload.t === 'f' || payload.t === 'p') {
+      let payload: any = null;
+      try { payload = JSON.parse(pcq.invoice_payload); } catch { checkoutAllowed = false; }
+      if (payload?.t === 'f' || payload?.t === 'p') {
+        try {
           const { data, error } = await supabase.rpc(payload.t === 'f' ? 'restoration_payment_allowed' : 'premium_purchase_allowed', { p_user_id: pcq.from.id });
           if (error) return databaseFailureResponse(botToken, update);
           checkoutAllowed = data === true && (payload.t !== 'f' || validRecoveryPayment(payload.u, pcq.from.id, pcq.total_amount));
+        } catch (error) {
+          console.error('[STARS] Pre-checkout database error:', error);
+          return databaseFailureResponse(botToken, update);
         }
-      } catch { checkoutAllowed = false; }
+      }
       await fetch(`${TELEGRAM_API}${botToken}/answerPreCheckoutQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -1,4 +1,5 @@
 import { telegramWebhookSecret } from "../supabase/functions/_shared/telegram-webhook-auth.ts";
+import { railwayTelegramWebhookUrl } from "../supabase/functions/_shared/telegram-webhook-url.ts";
 
 const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
 const domain = Deno.env.get("RAILWAY_PUBLIC_DOMAIN");
@@ -9,10 +10,7 @@ if (!botToken || !domain) {
   Deno.exit(1);
 }
 
-const baseUrl = /^https:\/\//.test(domain)
-  ? domain.replace(/\/+$/, "")
-  : `https://${domain.replace(/\/+$/, "")}`;
-const webhookUrl = `${baseUrl}/telegram-webhook`;
+const webhookUrl = railwayTelegramWebhookUrl(domain);
 const response = await fetch(
   `https://api.telegram.org/bot${botToken}/setWebhook`,
   {

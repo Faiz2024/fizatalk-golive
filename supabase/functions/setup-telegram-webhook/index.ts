@@ -1,5 +1,5 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 import { telegramWebhookSecret } from '../_shared/telegram-webhook-auth.ts'
+import { railwayTelegramWebhookUrl } from '../_shared/telegram-webhook-url.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,16 +13,15 @@ Deno.serve(async (req) => {
 
   try {
     const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const railwayDomain = Deno.env.get('RAILWAY_PUBLIC_DOMAIN') || 'fizatalk-golive-production.up.railway.app'
 
-    if (!botToken || !supabaseUrl) {
-      console.error('Missing TELEGRAM_BOT_TOKEN or SUPABASE_URL')
+    if (!botToken) {
+      console.error('Missing TELEGRAM_BOT_TOKEN')
       return new Response('Missing configuration', { status: 500, headers: corsHeaders })
     }
 
-    // Derive functions host from Supabase URL
-    const functionsHost = supabaseUrl.replace('https://', 'https://').replace('.supabase.co', '.functions.supabase.co')
-    const webhookUrl = `${functionsHost}/telegram-webhook`
+    // Jangan pernah mengarahkan webhook produksi kembali ke runtime Supabase lama.
+    const webhookUrl = railwayTelegramWebhookUrl(railwayDomain)
 
     const resp = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
       method: 'POST',

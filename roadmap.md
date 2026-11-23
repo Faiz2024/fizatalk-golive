@@ -1,5 +1,20 @@
 # Roadmap
 
+## Audit ketahanan database seluruh jalur (24 Nov 2026)
+- [x] Pesan `/start`, semua perintah, media, dan relay: dibaca pada `handleTelegramWebhook`/`getMessageContext`; error database kembali 200 dengan pesan sibuk dan tercakup simulasi.
+- [x] Semua tombol, laporan kontekstual, moderasi admin, rating, dan tombol voice: callback induk mengubah kegagalan menjadi 200, ACK aksi berat mendahului database; tidak ada retry Telegram.
+- [x] Stars pre-checkout/successful-payment: tetap 500 saat database gagal, update lama tidak dibuang, charge tercatat tidak diproses dua kali; error pre-checkout tak terduga kini juga 500 sedangkan payload tidak valid ditolak tanpa database.
+- [x] Pakasir/Sakurupiah: kegagalan provider payment tetap dapat dicoba ulang provider, bukan retry webhook Telegram; kontrak dan verifikasi pembayaran tidak diubah.
+- [x] Voice exchange: jalur service-to-service bertanda tangan memakai client bersama dan mengembalikan `database_error` ke bot voice; bukan webhook Telegram sehingga tidak memicu badai retry Telegram.
+- [x] Re-engagement serta cron re-engagement, eligible count, snapshot harian, dan penalty decay: kode penjadwal/handler dibaca; memakai RPC/client bersama dan tidak melewati retry webhook Telegram.
+- [x] Statistik admin dan `/stats`: satu pembacaan cache, RPC beradvisory lock/fallback, HTTP 200 saat data tidak tersedia; tidak memindai pengguna dari webhook.
+- [x] Jembatan database admin: kini memakai timeout 5 detik, circuit breaker, dan singleton yang sama; dashboard tetap memakai batas 12 detik khusus dengan fallback.
+- [x] Setup webhook Railway dan Supabase: keduanya kini memakai helper URL Railway yang sama; pintu lama tidak dapat lagi mengalihkan produksi ke `functions.supabase.co`.
+- [x] Health, monitor antrean, dan graceful shutdown: health tidak menyentuh database, alert hanya di atas 300 dengan cooldown, dan seluruh tes lulus.
+- [x] Perbaikan tidak mengubah transaksi selesai, izin, pengaturan produk, maupun data contoh.
+- [x] 109 regresi lulus (99 webhook/bot + 10 Pakasir), task Railway 16 lulus, pemeriksaan tipe file yang diubah lulus.
+- [ ] Verifikasi eksekusi RPC dan respons Telegram nyata setelah database Healthy; redeploy Railway diperlukan untuk membawa perbaikan handler terbaru.
+
 ## Penanganan timeout statistik preview (24 Nov 2026)
 - [x] Reproduksi HTTP 500 `TimeoutError` pada `admin-stats`; dashboard menampilkan pesan gagal tetapi respons resource memicu error preview.
 - [x] Ubah timeout menjadi payload `STATS_UNAVAILABLE` HTTP 200, deploy `admin-stats`, lalu verifikasi dashboard tetap tampil tanpa error resource.
@@ -14,7 +29,7 @@
 - [x] Deploy Railway berhasil dan health publik kembali HTTP 200 pada 24 Nov 2026.
 - [x] Reproduksi `/start` melalui Railway: webhook resmi benar, autentikasi sah, uji HTTP 200; pesan “koneksi sedang sibuk” berasal dari kegagalan database, bukan token atau webhook.
 - [x] Uji PostgREST dan RPC ringan berulang selama lebih dari dua menit; keduanya timeout dan pemeriksaan internal melaporkan pooler unavailable/proyek kemungkinan paused atau waking.
-- [ ] Aktifkan proyek Supabase `gqjbogkpzsuxscsxoxpe` melalui tombol Resume/Restore di dashboard — memerlukan akses pemilik; setelah Active, uji `/start` dan RPC kembali.
+- [ ] Pulihkan proyek Supabase `gqjbogkpzsuxscsxoxpe` yang dikonfirmasi pengguna berstatus **Unhealthy** melalui Restart project/database di dashboard — memerlukan akses pemilik; setelah Healthy/Active, uji `/start` dan RPC kembali.
 - [ ] Verifikasi RPC statistik pada database aktif — pooler yang dapat diakses Lovable masih unavailable.
 
 ## Pemulihan statistik admin (23 Nov 2026)
