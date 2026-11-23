@@ -33,6 +33,7 @@ export function createDatabaseFetch(
     // ketika database melambat. release selalu berjalan setelah acquire berhasil.
     await concurrencyGate?.acquire(signal);
     try {
+      signal.throwIfAborted();
       return await fetcher(input, { ...init, signal });
     } finally {
       concurrencyGate?.release();
