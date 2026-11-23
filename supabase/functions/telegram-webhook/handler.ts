@@ -4636,9 +4636,9 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
     }
 
     // Flood lokal dihentikan sebelum I/O. Stars, tombol, dan event membership tidak dibatasi.
-    const floodUserId = update.message?.successful_payment
+    const floodUserId = update?.message?.successful_payment
       ? undefined
-      : update.message?.from?.id ?? update.edited_message?.from?.id;
+      : update?.message?.from?.id ?? update?.edited_message?.from?.id;
     if (floodUserId !== undefined && isMessageFlooding(floodUserId)) {
       return new Response('OK', { status: 200 });
     }

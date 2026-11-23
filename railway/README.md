@@ -86,7 +86,12 @@ Stars nyata.
 ## 4. Cron dan rollback
 
 - Ubah job HTTP re-engagement ke `https://DOMAIN_RAILWAY/reengage-users`; tetap
-  gunakan header autentikasi cron yang sama.
+  gunakan header autentikasi cron yang sama. Produksi berjalan setiap 2 jam pada
+  09.00–21.00 WIB melalui `fizatalk-golive-production.up.railway.app`.
+- Penghitung eligible enam jam memakai `idx_tu_reengage_claim_covering` agar
+  statistik harian tidak melakukan full-table scan pada `telegram_users`.
+- `waiting_queue` memakai autovacuum scale factor 0,05 dan cost limit 500 agar
+  dead tuple pada antrean pencocokan dibersihkan lebih dini.
 - Jangan menjalankan cron re-engagement lama dan baru bersamaan.
 - Rollback webhook dilakukan dengan mengarahkan `setWebhook` kembali ke endpoint
   backend lama. Jangan menjalankan kedua webhook secara bersamaan.
