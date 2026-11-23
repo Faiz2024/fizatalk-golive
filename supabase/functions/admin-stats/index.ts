@@ -27,15 +27,19 @@ Deno.serve(async (req) => {
       force = body?.force === true;
     } catch (_) { /* tanpa body */ }
 
-    // Semua agregasi dihitung di DB via RPC (hemat biaya cloud, akurat WIB)
-    const [{ data, error }, { data: referralRaw }] = await Promise.all([
-      supabase.rpc("get_admin_dashboard_stats", { p_force: force }),
-      supabase.rpc("get_referral_stats"),
-    ]);
-    if (error) throw error;
+    // Pembukaan biasa membaca cache langsung agar tidak memicu agregasi berat.
+    // Refresh paksa tetap mencoba RPC, tetapi selalu punya cadangan hasil terakhir.
+    const { data: cacheRows, error: cacheError } = await supabase
+      .from("bot_settings")
+      .select("key, value")
+      .in("key", ["admin_dashboard_stats_cache", "referral_stats_cache"]);
+    if (cacheError) throw cacheError;
+    const cachedDashboardText = cacheRows?.find((row) => row.key === "admin_dashboard_stats_cache")?.value;
+    const cachedReferralText = cacheRows?.find((row) => row.key === "referral_stats_cache")?.value;
+    const cachedDashboard = cachedDashboardText ? JSON.parse(cachedDashboardText) : null;
+    const cachedReferral = cachedReferralText ? JSON.parse(cachedReferralText) : null;
 
-
-    const raw = data as {
+    let raw: {
       kpis: { newToday: number; activeToday: number; inactive30: number; churn: number; reengageReturns: number; revenueToday: number };
       activity: { date: string; baru: number; aktif: number; churn: number; baru30hariLalu: number }[];
       reengage_activity: {
@@ -76,6 +80,31 @@ Deno.serve(async (req) => {
         purchasedToday: number;
       };
     };
+    let referralRaw: unknown;
+
+    if (!force && cachedDashboard && cachedReferral) {
+      raw = cachedDashboard;
+      referralRaw = cachedReferral;
+    } else {
+      const [dashboardResult, referralResult] = await Promise.allSettled([
+        supabase.rpc("get_admin_dashboard_stats", { p_force: force }),
+        supabase.rpc("get_referral_stats"),
+      ]);
+      const dashboardData = dashboardResult.status === "fulfilled" ? dashboardResult.value.data : null;
+      const referralData = referralResult.status === "fulfilled" ? referralResult.value.data : null;
+      raw = (dashboardData ?? cachedDashboard) as typeof raw;
+      referralRaw = referralData ?? cachedReferral;
+      if (!raw) {
+        throw dashboardResult.status === "rejected"
+          ? dashboardResult.reason
+          : dashboardResult.value.error ?? new Error("Statistik dashboard belum tersedia");
+      }
+      if (!referralRaw) {
+        throw referralResult.status === "rejected"
+          ? referralResult.reason
+          : referralResult.value.error ?? new Error("Statistik referal belum tersedia");
+      }
+    }
 
     // Format label tanggal Indonesia (di edge agar client tetap ringan)
     const activity = (raw.activity ?? []).map((row) => {
