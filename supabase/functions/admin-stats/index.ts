@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     };
     let referralRaw: unknown;
 
-    if (!force && cachedDashboard && cachedReferral) {
+    if (!force && cachedDashboard) {
       raw = cachedDashboard;
       referralRaw = cachedReferral;
     } else {
@@ -98,11 +98,6 @@ Deno.serve(async (req) => {
         throw dashboardResult.status === "rejected"
           ? dashboardResult.reason
           : dashboardResult.value.error ?? new Error("Statistik dashboard belum tersedia");
-      }
-      if (!referralRaw) {
-        throw referralResult.status === "rejected"
-          ? referralResult.reason
-          : referralResult.value.error ?? new Error("Statistik referal belum tersedia");
       }
     }
 
@@ -214,7 +209,7 @@ Deno.serve(async (req) => {
     };
 
     return new Response(
-      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats, reengageSummary: raw.reengage_summary, transactions, special_promo: raw.special_promo, referral }),
+      JSON.stringify({ kpis: raw.kpis, activity, reengageActivity, reengageDailyStats, reengageSummary: raw.reengage_summary, transactions, special_promo: raw.special_promo, referral, referralAvailable: referralRaw != null }),
 
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

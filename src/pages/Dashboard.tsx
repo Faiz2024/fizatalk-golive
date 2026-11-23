@@ -2,11 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   UserPlus,
   Activity,
   UserMinus,
   AlertTriangle,
+  AlertCircle,
   RefreshCw,
   Moon,
   Sun,
@@ -75,6 +77,7 @@ const fetchStats = async () => {
       sentToday: number;
       purchasedToday: number;
     };
+    referralAvailable?: boolean;
     referral: {
       newToday: number;
       qualifiedToday: number;
@@ -550,6 +553,16 @@ const Dashboard = () => {
             )}
           </CardContent>
         </Card>
+
+        {statsQ.data?.referralAvailable === false && (
+          <Alert variant="default" className="border-border/50 bg-card/60">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Statistik referal belum tersedia</AlertTitle>
+            <AlertDescription>
+              Angka nol di bagian referal bukan data final. Tekan Segarkan Data untuk mencoba menghitungnya kembali.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <KPICard
