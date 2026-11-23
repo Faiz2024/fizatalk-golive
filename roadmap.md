@@ -12,7 +12,9 @@
 - [x] Pantau `pending_update_count` tiap 10 menit dan beri tahu admin bila melewati 300, dengan peringatan maksimal sekali per 30 menit.
 - [x] Jalankan 106 regresi, simulasi webhook tanpa database/saat database gagal, pemeriksaan build, dan validasi diff.
 - [x] Deploy Railway berhasil dan health publik kembali HTTP 200 pada 24 Nov 2026.
-- [ ] Uji `/start` melalui Telegram nyata — menunggu konfirmasi pengguna.
+- [x] Reproduksi `/start` melalui Railway: webhook resmi benar, autentikasi sah, uji HTTP 200; pesan “koneksi sedang sibuk” berasal dari kegagalan database, bukan token atau webhook.
+- [x] Uji PostgREST dan RPC ringan berulang selama lebih dari dua menit; keduanya timeout dan pemeriksaan internal melaporkan pooler unavailable/proyek kemungkinan paused atau waking.
+- [ ] Aktifkan proyek Supabase `gqjbogkpzsuxscsxoxpe` melalui tombol Resume/Restore di dashboard — memerlukan akses pemilik; setelah Active, uji `/start` dan RPC kembali.
 - [ ] Verifikasi RPC statistik pada database aktif — pooler yang dapat diakses Lovable masih unavailable.
 
 ## Pemulihan statistik admin (23 Nov 2026)
