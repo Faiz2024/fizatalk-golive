@@ -10,6 +10,13 @@ fungsi backend saat ini, sehingga tidak ada dua implementasi logika bot.
 - `/call-invite-exchange`
 - `/health`
 
+Agen channel berjalan sebagai fungsi `channel-agent` di Supabase agar kredit AI
+server tetap terpisah dari Railway. Railway memanggil fungsi itu secara asinkron
+untuk pemolesan admin; pekerjaan harian dipicu oleh pg_cron langsung ke Supabase.
+Draf tidak pernah otomatis masuk channel. Admin memakai tombol persetujuan,
+`/feedback` untuk masukan pengguna, dan `/giveaway https://link.dana.id/...`
+untuk draf giveaway dengan tautan buatan admin.
+
 Prefix lama `/functions/v1/...` juga diterima. Health check hanya memeriksa
 konfigurasi proses dan tidak membaca database.
 

@@ -1,7 +1,8 @@
+import type {} from "./generated/models.d.ts";
 import {
   generateResponse,
   GatewayError,
-} from "npm:@lovable.dev/ai-gateway@0.1.13";
+} from "@lovable.dev/ai-gateway";
 import {
   normalizeGeneratedContent,
   sanitizeFeedbackForPrompt,

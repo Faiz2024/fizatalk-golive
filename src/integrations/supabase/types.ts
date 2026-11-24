@@ -1524,6 +1524,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_channel_post_posted: {
+        Args: { p_channel_message_id: number; p_post_id: string }
+        Returns: boolean
+      }
       pause_channel_agent: {
         Args: { p_reason: string; p_resume_at?: string }
         Returns: undefined

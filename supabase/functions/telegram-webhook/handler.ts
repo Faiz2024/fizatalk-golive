@@ -22,6 +22,7 @@ import { RECOVERY_PRICE_LABEL, RECOVERY_STARS, searchReportLockMessage, validRec
 import { isStaleWebhookUpdate, webhookDatabaseFailureStatus } from '../_shared/webhook-resilience.ts';
 import { formatCachedDailyAdminStats } from '../_shared/admin-stats-command.ts';
 import { isMessageFlooding } from '../_shared/message-flood-limiter.ts';
+import { handleChannelAgentCallback, handleChannelAgentMessage } from '../_shared/channel-agent-telegram.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -3025,6 +3026,7 @@ function getActionTypeFromCallback(callbackData: string): string {
   if (callbackData.startsWith('cs_approve_') || callbackData.startsWith('cs_reject_')) return 'cs_action';
   if (callbackData.startsWith('reportm_')) return 'report_media';
   if (callbackData.startsWith('admin_warnm_') || callbackData.startsWith('admin_blockm_')) return 'admin_media_action';
+  if (callbackData.startsWith('ca_')) return 'channel_agent';
   return 'default';
 }
 
@@ -4785,6 +4787,14 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
               : '';
         answerCallbackQuery(botToken, query.id, ackText).catch(() => {});
       }
+
+      const channelAgentResponse = await handleChannelAgentCallback(query, {
+        db: supabase,
+        botToken,
+        adminChatId: Deno.env.get('TELEGRAM_CS_CHAT_ID'),
+        onDatabaseError: () => databaseFailureResponse(botToken, update),
+      });
+      if (channelAgentResponse) return channelAgentResponse;
 
       const reportResponse = await handleReportCallback(query, { db: supabase, call: (method, body) => tgCall(botToken, method, body), adminChat: Deno.env.get('TELEGRAM_CS_CHAT_ID') });
       if (reportResponse) {
@@ -7344,6 +7354,14 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
       await sendTelegramMessage(botToken, userId, '⏳ Akun dibatasi oleh moderasi. Pembayaran tidak membuka pembatasan. Sanggahan: @FizaTalkCS.');
       return new Response('OK');
     }
+
+    const channelAgentMessageResponse = await handleChannelAgentMessage(message, {
+      db: supabase,
+      botToken,
+      adminChatId: Deno.env.get('TELEGRAM_CS_CHAT_ID'),
+      onDatabaseError: () => databaseFailureResponse(botToken, update),
+    });
+    if (channelAgentMessageResponse) return channelAgentMessageResponse;
 
     // === FOTO PROFIL: command & alur (tidak aktif saat chatting) ===
     if (text === '/fotoprofil') {
