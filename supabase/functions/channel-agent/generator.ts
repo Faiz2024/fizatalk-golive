@@ -19,6 +19,7 @@ export interface ChannelGenerationInput {
   currentText?: string;
   adminRoughText?: string;
   feedback?: Array<{ content: string }>;
+  questionText?: string;
   giveawayUrl?: string;
 }
 
@@ -33,7 +34,7 @@ Untuk masukan pengguna, kelompokkan tema serupa dan jangan menyebut identitas. J
 Teks harus berdiri sendiri sebagai posting channel, maksimal 2800 karakter. Poin rangkuman maksimal 6, masing-masing maksimal 160 karakter.
 Kembalikan JSON ketat sesuai schema: text berisi posting channel dan points berisi poin ringkas (array kosong bila bukan rangkuman).`;
 
-function userPrompt(input: ChannelGenerationInput): string {
+export function channelGenerationPrompt(input: ChannelGenerationInput): string {
   const rough = input.adminRoughText?.trim();
   if (input.kind === "giveaway") {
     return `Buat draf giveaway dari catatan admin. Pertahankan maksud admin dan sertakan persis satu tautan resmi ini tanpa mengubahnya: ${input.giveawayUrl}\nJangan menambah nominal, syarat, pemenang, atau tenggat yang tidak disebut admin.\n<catatan_admin>\n${rough ?? "Giveaway DANA Kaget untuk komunitas FizaTalk."}\n</catatan_admin>`;

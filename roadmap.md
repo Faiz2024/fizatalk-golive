@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Agen AI Channel FizaTalk (24 Nov 2026)
+- [ ] Ikat rangkuman ke pertanyaan channel terbaru yang sudah tayang; ambil maksimal 100 jawaban setelah waktu tayang dan berikan konteks pertanyaan kepada AI.
+- [ ] Pastikan jawaban pertanyaan lama atau yang sudah masuk draf tidak dihitung ulang; uji aturan, deploy, dan verifikasi dengan data sementara.
 - [x] Tambahkan penyimpanan masukan, draf posting, status persetujuan, serta penguncian pekerjaan melalui RPC atomik.
 - [x] Tambahkan `/feedback`, draf harian 09.00 WIB, rangkuman maksimal 100 masukan, dan `/giveaway` dengan tautan dari admin.
 - [x] Tambahkan persetujuan, variasi baru, penolakan, pemolesan jawaban admin, dan `/channel_resume` tanpa posting otomatis.

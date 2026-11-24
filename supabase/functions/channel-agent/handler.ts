@@ -135,6 +135,7 @@ async function generateAndReview(
       currentText: post.content || undefined,
       adminRoughText: post.admin_rough_text || undefined,
       feedback,
+      questionText: post.metadata?.source_question,
       giveawayUrl: post.metadata?.giveaway_url,
     });
     const { data: completed, error: completeError } = await supabase.rpc("complete_channel_post_generation", {
