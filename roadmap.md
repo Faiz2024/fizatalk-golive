@@ -6,7 +6,7 @@
 - [ ] Tambahkan persetujuan, variasi baru, penolakan, dan pemolesan jawaban admin tanpa posting otomatis.
 - [ ] Integrasikan pekerjaan AI asinkron ke Railway dan Supabase serta jadwal satu kali per hari.
 - [ ] Uji aturan keamanan, idempotensi, batas pekerjaan, regresi bot, lalu deploy dan verifikasi alur admin.
-- [ ] Pandu pengisian `CHANNEL_AGENT_CRON_SECRET`: Generate pada form rahasia, lalu masukkan nilai yang sama di Railway.
+- [x] Hapus kebutuhan kunci rahasia tambahan; jadwal memakai kunci publik Supabase dan tindakan admin memakai kredensial server yang sudah ada.
 
 ## Optimasi lanjutan Railway dan Supabase (24 Nov 2026)
 - [x] Tahap 1: maksimal 20 panggilan database bersamaan per proses Railway, pembatalan antrean tanpa kebocoran slot, dan timeout total 5 detik.
