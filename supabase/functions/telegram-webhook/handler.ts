@@ -7359,6 +7359,8 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
       db: supabase,
       botToken,
       adminChatId: Deno.env.get('TELEGRAM_CS_CHAT_ID'),
+      botUsername: Deno.env.get('BOT_USERNAME') || 'FizaTalkBot',
+      userExists: Boolean(dbUser),
       onDatabaseError: () => databaseFailureResponse(botToken, update),
     });
     if (channelAgentMessageResponse) return channelAgentMessageResponse;

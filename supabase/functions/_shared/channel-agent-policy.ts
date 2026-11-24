@@ -8,7 +8,8 @@ export type ChannelPostKind =
   | "question"
   | "feedback_request"
   | "feedback_summary"
-  | "giveaway";
+  | "giveaway"
+  | "admin";
 
 export interface GeneratedChannelContent {
   text: string;
@@ -85,8 +86,31 @@ export function channelKindLabel(kind: string): string {
     feedback_request: "Permintaan saran",
     feedback_summary: "Rangkuman masukan",
     giveaway: "Giveaway admin",
+    admin: "Posting admin",
   };
   return labels[kind] ?? "Posting komunitas";
+}
+
+export function channelAnswerButtonEnabled(post: { kind: string; metadata?: unknown }): boolean {
+  const metadata = post.metadata && typeof post.metadata === "object"
+    ? post.metadata as { answer_button?: unknown }
+    : {};
+  if (typeof metadata.answer_button === "boolean") return metadata.answer_button;
+  return post.kind === "question" || post.kind === "feedback_request";
+}
+
+export function channelPostReplyMarkup(
+  post: { kind: string; metadata?: unknown },
+  botUsername: string,
+): { inline_keyboard: Array<Array<{ text: string; url: string }>> } | undefined {
+  const username = botUsername.trim().replace(/^@/, "");
+  if (!channelAnswerButtonEnabled(post) || !/^[A-Za-z0-9_]{5,32}$/.test(username)) return undefined;
+  return {
+    inline_keyboard: [[{
+      text: "💬 Jawab di Bot",
+      url: `https://t.me/${username}?start=feedback`,
+    }]],
+  };
 }
 
 export function channelReviewKeyboard(postId: string) {

@@ -2,6 +2,7 @@ import {
   CHANNEL_FEEDBACK_MAX_LENGTH,
   CHANNEL_USERNAME,
   channelReviewKeyboard,
+  channelPostReplyMarkup,
   validGiveawayUrl,
 } from "./channel-agent-policy.ts";
 
@@ -22,6 +23,8 @@ interface ChannelTelegramContext {
   db: any;
   botToken: string;
   adminChatId?: string;
+  botUsername?: string;
+  userExists?: boolean;
   onDatabaseError: () => Response;
 }
 
@@ -110,6 +113,7 @@ export async function handleChannelAgentCallback(
       chat_id: CHANNEL_USERNAME,
       text: result.post.content,
       disable_web_page_preview: false,
+      reply_markup: channelPostReplyMarkup(result.post, context.botUsername || "FizaTalkBot"),
     });
     if (!posted?.ok) {
       await context.db.rpc("channel_post_action", {
@@ -176,6 +180,15 @@ export async function handleChannelAgentMessage(
   const userId = message.from.id;
   const isAdmin = Boolean(context.adminChatId && String(userId) === context.adminChatId && String(message.chat.id) === context.adminChatId);
 
+  if (/^\/start(?:@\S+)?\s+feedback$/i.test(text) && context.userExists) {
+    await send(
+      context.botToken,
+      userId,
+      "💬 Kirim jawaban untuk pertanyaan channel dengan format:\n/feedback jawaban kamu\n\nJawaban dikumpulkan tanpa nama untuk draf rangkuman yang ditinjau admin.",
+    );
+    return responseOk();
+  }
+
   const feedbackMatch = text.match(/^\/feedback(?:@\S+)?(?:\s+([\s\S]+))?$/i);
   if (feedbackMatch) {
     const feedback = feedbackMatch[1]?.trim() ?? "";
@@ -204,6 +217,42 @@ export async function handleChannelAgentMessage(
     const { error } = await context.db.rpc("resume_channel_agent");
     if (error) return context.onDatabaseError();
     await send(context.botToken, userId, "✅ Agen channel aktif kembali. Jadwal dan draf admin dapat diproses; persetujuan tetap wajib sebelum posting.");
+    return responseOk();
+  }
+
+  if (/^\/channel_post(?:@\S+)?(?:\s|$)/i.test(text)) {
+    if (!isAdmin) {
+      await send(context.botToken, userId, "⛔ Perintah ini hanya untuk admin.");
+      return responseOk();
+    }
+    const customPost = text.match(/^\/channel_post(?:@\S+)?\s+(jawab|polos)\s+([\s\S]+)$/i);
+    const rough = customPost?.[2]?.trim() ?? "";
+    if (!customPost || rough.length < 5 || rough.length > 2_000) {
+      await send(
+        context.botToken,
+        userId,
+        "Format posting di luar jadwal:\n/channel_post jawab teks Anda — dengan tombol Jawab\n/channel_post polos teks Anda — tanpa tombol Jawab\n\nTeks 5–2000 karakter akan dipoles AI dan tetap memerlukan persetujuan Anda.",
+      );
+      return responseOk();
+    }
+    const answerButton = customPost[1].toLowerCase() === "jawab";
+    const { data: result, error } = await context.db.rpc("create_channel_admin_post", {
+      p_admin_id: userId,
+      p_kind: "admin",
+      p_rough_text: rough,
+      p_metadata: { answer_button: answerButton },
+    });
+    if (error) return context.onDatabaseError();
+    if (result?.success) {
+      dispatch(result.post.id, "generate_admin");
+      await send(
+        context.botToken,
+        userId,
+        `⏳ Draf admin sedang dipoles AI dengan pilihan tombol Jawab: ${answerButton ? "Ya" : "Tidak"}. Pratinjau akan dikirim untuk persetujuan sebelum posting.`,
+      );
+    } else {
+      await send(context.botToken, userId, "⏸️ Draf belum dibuat karena agen sedang dijeda atau masukan tidak valid. Tidak ada posting yang dikirim.");
+    }
     return responseOk();
   }
 

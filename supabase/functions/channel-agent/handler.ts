@@ -6,6 +6,7 @@ import {
   CHANNEL_FEEDBACK_BATCH_LIMIT,
   channelKindLabel,
   channelReviewKeyboard,
+  channelAnswerButtonEnabled,
   dailyChannelKind,
   wibDateKey,
 } from "../_shared/channel-agent-policy.ts";
@@ -66,7 +67,7 @@ async function sendAdminReview(
   const points = content.points.length
     ? `\n\nPoin masukan:\n${content.points.map((point) => `• ${point}`).join("\n")}`
     : "";
-  const preview = `🤖 DRAF CHANNEL FIZATALK\nJenis: ${channelKindLabel(post.kind)}\nDibuat: ${wibNow()} WIB\n\n${content.text}${points}\n\nBelum ada posting yang dikirim ke channel.`;
+  const preview = `🤖 DRAF CHANNEL FIZATALK\nJenis: ${channelKindLabel(post.kind)}\nTombol Jawab: ${channelAnswerButtonEnabled(post) ? "Ya" : "Tidak"}\nDibuat: ${wibNow()} WIB\n\n${content.text}${points}\n\nBelum ada posting yang dikirim ke channel.`;
   const result = await telegram(botToken, "sendMessage", {
     chat_id: Number(adminId),
     text: preview,

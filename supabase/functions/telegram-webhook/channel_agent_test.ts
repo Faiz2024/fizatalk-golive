@@ -8,6 +8,8 @@ import {
   CHANNEL_FEEDBACK_BATCH_LIMIT,
   CHANNEL_POST_MAX_LENGTH,
   channelReviewKeyboard,
+  channelAnswerButtonEnabled,
+  channelPostReplyMarkup,
   dailyChannelKind,
   normalizeGeneratedContent,
   sanitizeFeedbackForPrompt,
@@ -200,6 +202,133 @@ Deno.test("admin sah memposting hanya setelah transisi approved dan mencatat pes
     const channelPost = telegramCalls.find((call) => call.method === "sendMessage" && call.body.chat_id === "@FizaTalkCh");
     assertEquals(channelPost?.body.text, "Posting yang disetujui admin");
     assertEquals(channelPost?.body.parse_mode, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("tombol Jawab aktif untuk pertanyaan dan pilihan admin, tetapi tidak untuk posting polos", () => {
+  const question = { kind: "question", metadata: {} };
+  const withButton = { kind: "admin", metadata: { answer_button: true } };
+  const withoutButton = { kind: "admin", metadata: { answer_button: false } };
+  assert(channelAnswerButtonEnabled(question));
+  assert(channelAnswerButtonEnabled({ kind: "feedback_request", metadata: {} }));
+  assertEquals(channelAnswerButtonEnabled({ kind: "greeting", metadata: {} }), false);
+  assertEquals(channelPostReplyMarkup(withButton, "FizaTalkBot")?.inline_keyboard[0][0].url, "https://t.me/FizaTalkBot?start=feedback");
+  assertEquals(channelPostReplyMarkup(withoutButton, "FizaTalkBot"), undefined);
+  assertEquals(channelPostReplyMarkup(question, "nama tidak valid!"), undefined);
+});
+
+Deno.test("persetujuan posting pertanyaan mengirim tombol Jawab ke channel", async () => {
+  const originalFetch = globalThis.fetch;
+  const telegramCalls: Array<{ method: string; body: any }> = [];
+  globalThis.fetch = ((input: Request | URL | string, init?: RequestInit) => {
+    const method = String(input).split("/").pop()!;
+    telegramCalls.push({ method, body: JSON.parse(String(init?.body)) });
+    return Promise.resolve(Response.json({ ok: true, result: { message_id: 778 } }));
+  }) as typeof fetch;
+  try {
+    await handleChannelAgentCallback({
+      id: "answer-button",
+      from: { id: 999 },
+      data: "ca_approve_11111111-1111-4111-8111-111111111111",
+      message: { message_id: 10, chat: { id: 999 }, text: "Pratinjau draf" },
+    }, {
+      db: { rpc: (name: string) => Promise.resolve({
+        data: name === "channel_post_action"
+          ? { success: true, post: { kind: "question", content: "Pertanyaan untuk komunitas", metadata: { answer_button: true } } }
+          : true,
+        error: null,
+      }) },
+      botToken: "test-token",
+      botUsername: "FizaTalkBot",
+      adminChatId: "999",
+      onDatabaseError: () => new Response("DB", { status: 500 }),
+    });
+    const channelPost = telegramCalls.find((call) => call.method === "sendMessage" && call.body.chat_id === "@FizaTalkCh");
+    assertEquals(channelPost?.body.reply_markup.inline_keyboard[0][0].url, "https://t.me/FizaTalkBot?start=feedback");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("perintah admin jawab dan polos membuat draf AI dengan pilihan tombol yang tepat", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => Promise.resolve(Response.json({ ok: true, result: { message_id: 1 } }))) as typeof fetch;
+  const rpcCalls: Array<{ name: string; args: any }> = [];
+  try {
+    for (const [mode, expected] of [["jawab", true], ["polos", false]] as const) {
+      const response = await handleChannelAgentMessage({
+        from: { id: 999 }, chat: { id: 999 }, text: `/channel_post ${mode} Pengumuman penting untuk komunitas`,
+      }, {
+        db: { rpc: (name: string, args: any) => {
+          rpcCalls.push({ name, args });
+          return Promise.resolve({ data: { success: true, post: { id: "11111111-1111-4111-8111-111111111111" } }, error: null });
+        } },
+        botToken: "test-token",
+        adminChatId: "999",
+        userExists: true,
+        onDatabaseError: () => new Response("DB", { status: 500 }),
+      });
+      assertEquals(response?.status, 200);
+      assertEquals(rpcCalls.at(-1), {
+        name: "create_channel_admin_post",
+        args: {
+          p_admin_id: 999,
+          p_kind: "admin",
+          p_rough_text: "Pengumuman penting untuk komunitas",
+          p_metadata: { answer_button: expected },
+        },
+      });
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("non-admin tidak dapat membuat posting channel di luar jadwal", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => Promise.resolve(Response.json({ ok: true, result: { message_id: 1 } }))) as typeof fetch;
+  let databaseCalls = 0;
+  try {
+    const response = await handleChannelAgentMessage({
+      from: { id: 42 }, chat: { id: 42 }, text: "/channel_post jawab Palsu",
+    }, {
+      db: { rpc: () => { databaseCalls++; return Promise.resolve({ data: null, error: null }); } },
+      botToken: "test-token",
+      adminChatId: "999",
+      userExists: true,
+      onDatabaseError: () => new Response("DB", { status: 500 }),
+    });
+    assertEquals(response?.status, 200);
+    assertEquals(databaseCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("tautan Jawab pengguna terdaftar tidak menulis database atau meneruskan chat", async () => {
+  const originalFetch = globalThis.fetch;
+  const telegramCalls: Array<{ method: string; body: any }> = [];
+  globalThis.fetch = ((input: Request | URL | string, init?: RequestInit) => {
+    telegramCalls.push({ method: String(input).split("/").pop()!, body: JSON.parse(String(init?.body)) });
+    return Promise.resolve(Response.json({ ok: true, result: { message_id: 1 } }));
+  }) as typeof fetch;
+  let databaseCalls = 0;
+  try {
+    const response = await handleChannelAgentMessage({
+      from: { id: 42 }, chat: { id: 42 }, text: "/start feedback",
+    }, {
+      db: { rpc: () => { databaseCalls++; return Promise.resolve({ data: null, error: null }); } },
+      botToken: "test-token",
+      adminChatId: "999",
+      userExists: true,
+      onDatabaseError: () => new Response("DB", { status: 500 }),
+    });
+    assertEquals(response?.status, 200);
+    assertEquals(databaseCalls, 0);
+    assertEquals(telegramCalls.length, 1);
+    assertEquals(telegramCalls[0].method, "sendMessage");
   } finally {
     globalThis.fetch = originalFetch;
   }

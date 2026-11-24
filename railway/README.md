@@ -15,7 +15,10 @@ server tetap terpisah dari Railway. Railway memanggil fungsi itu secara asinkron
 untuk pemolesan admin; pekerjaan harian dipicu oleh pg_cron langsung ke Supabase.
 Draf tidak pernah otomatis masuk channel. Admin memakai tombol persetujuan,
 `/feedback` untuk masukan pengguna, dan `/giveaway https://link.dana.id/...`
-untuk draf giveaway dengan tautan buatan admin.
+untuk draf giveaway dengan tautan buatan admin. Posting di luar jadwal dibuat
+dengan `/channel_post jawab teks` (tombol Jawab) atau `/channel_post polos teks`
+(tanpa tombol). Keduanya dipoles AI dan tetap memerlukan persetujuan admin.
+Tombol Jawab membuka `/start feedback`, lalu pengguna mengirim `/feedback jawaban`.
 
 Prefix lama `/functions/v1/...` juga diterima. Health check hanya memeriksa
 konfigurasi proses dan tidak membaca database.
