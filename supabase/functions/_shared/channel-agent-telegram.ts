@@ -196,6 +196,17 @@ export async function handleChannelAgentMessage(
     return responseOk();
   }
 
+  if (/^\/channel_resume(?:@\S+)?$/i.test(text)) {
+    if (!isAdmin) {
+      await send(context.botToken, userId, "⛔ Perintah ini hanya untuk admin.");
+      return responseOk();
+    }
+    const { error } = await context.db.rpc("resume_channel_agent");
+    if (error) return context.onDatabaseError();
+    await send(context.botToken, userId, "✅ Agen channel aktif kembali. Jadwal dan draf admin dapat diproses; persetujuan tetap wajib sebelum posting.");
+    return responseOk();
+  }
+
   const giveawayMatch = text.match(/^\/giveaway(?:@\S+)?\s+(\S+)(?:\s+([\s\S]+))?$/i);
   if (giveawayMatch || /^\/giveaway(?:@\S+)?$/i.test(text)) {
     if (!isAdmin) {

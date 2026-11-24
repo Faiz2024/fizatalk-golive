@@ -1609,6 +1609,7 @@ export type Database = {
         Args: { p_user_id: number }
         Returns: boolean
       }
+      resume_channel_agent: { Args: never; Returns: undefined }
       search_or_next_partner: {
         Args: {
           p_first_name?: string

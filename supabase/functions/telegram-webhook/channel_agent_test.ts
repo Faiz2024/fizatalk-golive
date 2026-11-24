@@ -131,6 +131,26 @@ Deno.test("non-admin tidak dapat menyetujui atau menyentuh database draf", async
   }
 });
 
+Deno.test("non-admin tidak dapat memulihkan agen channel", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => Promise.resolve(Response.json({ ok: true }))) as typeof fetch;
+  let databaseCalls = 0;
+  try {
+    const response = await handleChannelAgentMessage({
+      from: { id: 42 }, chat: { id: 42 }, text: "/channel_resume",
+    }, {
+      db: { rpc: () => { databaseCalls++; return Promise.resolve({ error: null }); } },
+      botToken: "test-token",
+      adminChatId: "999",
+      onDatabaseError: () => new Response("DB", { status: 500 }),
+    });
+    assertEquals(response?.status, 200);
+    assertEquals(databaseCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("admin sah memposting hanya setelah transisi approved dan mencatat pesan channel", async () => {
   const originalFetch = globalThis.fetch;
   const telegramCalls: Array<{ method: string; body: any }> = [];

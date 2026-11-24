@@ -1,11 +1,11 @@
 # Roadmap
 
 ## Agen AI Channel FizaTalk (24 Nov 2026)
-- [ ] Tambahkan penyimpanan masukan, draf posting, status persetujuan, serta penguncian pekerjaan melalui RPC atomik.
-- [ ] Tambahkan `/feedback`, draf harian 09.00 WIB, rangkuman maksimal 100 masukan, dan `/giveaway` dengan tautan dari admin.
-- [ ] Tambahkan persetujuan, variasi baru, penolakan, dan pemolesan jawaban admin tanpa posting otomatis.
-- [ ] Integrasikan pekerjaan AI asinkron ke Railway dan Supabase serta jadwal satu kali per hari.
-- [ ] Uji aturan keamanan, idempotensi, batas pekerjaan, regresi bot, lalu deploy dan verifikasi alur admin.
+- [x] Tambahkan penyimpanan masukan, draf posting, status persetujuan, serta penguncian pekerjaan melalui RPC atomik.
+- [x] Tambahkan `/feedback`, draf harian 09.00 WIB, rangkuman maksimal 100 masukan, dan `/giveaway` dengan tautan dari admin.
+- [x] Tambahkan persetujuan, variasi baru, penolakan, pemolesan jawaban admin, dan `/channel_resume` tanpa posting otomatis.
+- [x] Integrasikan pekerjaan AI asinkron ke Railway dan Supabase serta jadwal satu kali per hari.
+- [x] Uji aturan keamanan, idempotensi, batas pekerjaan, regresi bot, deploy, serta persetujuan admin nyata hingga pesan channel ID 178.
 - [x] Hapus kebutuhan kunci rahasia tambahan; jadwal memakai kunci publik Supabase dan tindakan admin memakai kredensial server yang sudah ada.
 
 ## Optimasi lanjutan Railway dan Supabase (24 Nov 2026)
