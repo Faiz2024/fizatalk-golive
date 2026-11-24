@@ -2,6 +2,7 @@ import {
   assert,
   assertEquals,
   assertStringIncludes,
+  assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   CHANNEL_FEEDBACK_BATCH_LIMIT,
@@ -17,6 +18,7 @@ import {
   handleChannelAgentCallback,
   handleChannelAgentMessage,
 } from "../_shared/channel-agent-telegram.ts";
+import { channelGenerationPrompt } from "../_shared/channel-agent-prompt.ts";
 
 Deno.test("batas pekerjaan channel adalah 100 masukan dan 2800 karakter", () => {
   assertEquals(CHANNEL_FEEDBACK_BATCH_LIMIT, 100);
@@ -24,6 +26,21 @@ Deno.test("batas pekerjaan channel adalah 100 masukan dan 2800 karakter", () => 
   assertEquals(wibDateKey(new Date("2026-11-24T16:59:59Z")), "2026-11-24");
   assertEquals(wibDateKey(new Date("2026-11-24T17:00:00Z")), "2026-11-25");
   assert(["greeting", "question", "feedback_request"].includes(dailyChannelKind()));
+});
+
+Deno.test("prompt rangkuman memakai pertanyaan sumber dan menolak draf tanpa pertanyaan", () => {
+  const prompt = channelGenerationPrompt({
+    kind: "feedback_summary",
+    questionText: "Fitur apa yang paling kamu butuhkan?",
+    feedback: [{ content: "Saya membutuhkan pengingat jadwal." }],
+  });
+  assertStringIncludes(prompt, "Fitur apa yang paling kamu butuhkan?");
+  assertStringIncludes(prompt, "Saya membutuhkan pengingat jadwal.");
+  assertThrows(
+    () => channelGenerationPrompt({ kind: "feedback_summary", feedback: [{ content: "Jawaban" }] }),
+    Error,
+    "Pertanyaan sumber",
+  );
 });
 
 Deno.test("masukan tidak membawa tautan, identitas, nomor, atau kontrol ke prompt AI", () => {
