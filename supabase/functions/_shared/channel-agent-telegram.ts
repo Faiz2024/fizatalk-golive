@@ -1,4 +1,5 @@
 import {
+  CHANNEL_FEEDBACK_BATCH_LIMIT,
   CHANNEL_FEEDBACK_MAX_LENGTH,
   CHANNEL_USERNAME,
   channelReviewKeyboard,
@@ -106,7 +107,16 @@ export async function handleChannelAgentCallback(
     });
     if (error) return context.onDatabaseError();
     if (!result?.success) {
-      await editAdminMessage(query, context.botToken, `${original}\n\n⚠️ Draf sudah diproses atau tidak dapat disetujui.`);
+      const approvalErrors: Record<string, string> = {
+        summary_pending: "Selesaikan dan posting draf rangkuman yang masih ditinjau terlebih dahulu.",
+        summary_required: "Rangkuman pertanyaan terakhir harus sudah diposting sebelum posting otomatis berikutnya.",
+        pending_feedback: "Masih ada jawaban baru yang belum dirangkum dan diposting.",
+      };
+      await editAdminMessage(
+        query,
+        context.botToken,
+        `${original}\n\n⚠️ ${approvalErrors[result?.error] ?? "Draf sudah diproses atau tidak dapat disetujui."}`,
+      );
       return responseOk();
     }
     const posted = await call(context.botToken, "sendMessage", {
@@ -217,6 +227,44 @@ export async function handleChannelAgentMessage(
     const { error } = await context.db.rpc("resume_channel_agent");
     if (error) return context.onDatabaseError();
     await send(context.botToken, userId, "✅ Agen channel aktif kembali. Jadwal dan draf admin dapat diproses; persetujuan tetap wajib sebelum posting.");
+    return responseOk();
+  }
+
+  if (/^\/channel_summary(?:@\S+)?$/i.test(text)) {
+    if (!isAdmin) {
+      await send(context.botToken, userId, "⛔ Perintah ini hanya untuk admin.");
+      return responseOk();
+    }
+    const { data: result, error } = await context.db.rpc("create_channel_feedback_summary", {
+      p_lease_token: null,
+      p_limit: CHANNEL_FEEDBACK_BATCH_LIMIT,
+      p_admin_id: userId,
+      p_force: true,
+    });
+    if (error) return context.onDatabaseError();
+    if (result?.created) {
+      dispatch(result.post.id, "generate_admin");
+      const count = result.feedback?.length ?? result.count ?? 0;
+      await send(
+        context.botToken,
+        userId,
+        `⏳ ${count} jawaban sedang dirangkum AI sekarang. Draf jawaban akan dikirim untuk persetujuan Anda sebelum posting.`,
+      );
+      return responseOk();
+    }
+
+    const pendingStatus = result?.post?.status;
+    const summaryMessages: Record<string, string> = {
+      no_posted_question: "Belum ada pertanyaan channel yang tayang untuk dirangkum jawabannya.",
+      not_enough: `Belum ada jawaban baru yang dapat dirangkum. Jumlah saat ini: ${result?.count ?? 0}.`,
+      summary_pending: `Draf rangkuman untuk pertanyaan terakhir sudah ada (status: ${pendingStatus ?? "diproses"}). Selesaikan draf tersebut terlebih dahulu.`,
+      paused: "⏸️ Agen channel sedang dijeda. Gunakan /channel_resume sebelum meminta rangkuman.",
+    };
+    await send(
+      context.botToken,
+      userId,
+      summaryMessages[result?.error ?? result?.reason] ?? "⚠️ Rangkuman belum dapat dibuat. Coba lagi setelah pembaruan berikutnya.",
+    );
     return responseOk();
   }
 

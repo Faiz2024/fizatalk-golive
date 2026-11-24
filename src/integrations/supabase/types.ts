@@ -1465,6 +1465,15 @@ export type Database = {
         Args: { p_lease_token: string; p_limit?: number }
         Returns: Json
       }
+      create_channel_feedback_summary: {
+        Args: {
+          p_admin_id?: number
+          p_force?: boolean
+          p_lease_token: string
+          p_limit?: number
+        }
+        Returns: Json
+      }
       create_chat_call_invite: {
         Args: { p_requester_id: number }
         Returns: Json

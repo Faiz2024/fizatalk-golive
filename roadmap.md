@@ -11,6 +11,7 @@
 - [x] Hapus kebutuhan kunci rahasia tambahan; jadwal memakai kunci publik Supabase dan tindakan admin memakai kredensial server yang sudah ada.
 - [x] Tambahkan tombol Jawab pada posting interaktif dan panduan `/start feedback`; pilihan Ya/Tidak tampil di pratinjau admin dan tersimpan pada draf.
 - [x] Tambahkan `/channel_post jawab|polos <teks>` untuk draf admin di luar jadwal, wajib dipoles AI dan disetujui sebelum posting; 40 tes lulus, fungsi aktif merespons, dan tidak ada posting uji ke channel.
+- [ ] Dahulukan rangkuman sebelum posting otomatis baru, tahan pembuatan/persetujuan sampai rangkuman tayang dan tidak ada jawaban baru tersisa, serta tambahkan `/channel_summary` untuk rangkuman manual admin.
 
 ## Optimasi lanjutan Railway dan Supabase (24 Nov 2026)
 - [x] Tahap 1: maksimal 20 panggilan database bersamaan per proses Railway, pembatalan antrean tanpa kebocoran slot, dan timeout total 5 detik.

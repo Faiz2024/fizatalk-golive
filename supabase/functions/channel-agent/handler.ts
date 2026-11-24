@@ -162,26 +162,30 @@ async function runScheduled(supabase: any, botToken: string, adminId: string): P
   const leaseToken = claim.lease_token;
   let outcome = "completed";
   try {
-    const kind = dailyChannelKind();
-    const dedupeKey = `daily:${wibDateKey()}`;
-    const { data: daily, error: dailyError } = await supabase.rpc("create_channel_daily_post", {
+    const { data: summary, error: summaryError } = await supabase.rpc("create_channel_feedback_post", {
       p_lease_token: leaseToken,
-      p_dedupe_key: dedupeKey,
-      p_kind: kind,
+      p_limit: CHANNEL_FEEDBACK_BATCH_LIMIT,
     });
-    if (dailyError) throw dailyError;
-    if (daily?.created) {
-      outcome = await generateAndReview(supabase, botToken, adminId, daily.post);
+    if (summaryError) throw summaryError;
+    if (summary?.created) {
+      outcome = await generateAndReview(supabase, botToken, adminId, summary.post, summary.feedback ?? []);
+    } else if (["summary_pending", "not_enough", "cooldown"].includes(summary?.reason)) {
+      outcome = `waiting_${summary.reason}`;
     }
 
-    if (outcome !== "paused" && outcome !== "failed") {
-      const { data: summary, error: summaryError } = await supabase.rpc("create_channel_feedback_post", {
+    if (outcome === "completed") {
+      const kind = dailyChannelKind();
+      const dedupeKey = `daily:${wibDateKey()}`;
+      const { data: daily, error: dailyError } = await supabase.rpc("create_channel_daily_post", {
         p_lease_token: leaseToken,
-        p_limit: CHANNEL_FEEDBACK_BATCH_LIMIT,
+        p_dedupe_key: dedupeKey,
+        p_kind: kind,
       });
-      if (summaryError) throw summaryError;
-      if (summary?.created) {
-        outcome = await generateAndReview(supabase, botToken, adminId, summary.post, summary.feedback ?? []);
+      if (dailyError) throw dailyError;
+      if (daily?.created) {
+        outcome = await generateAndReview(supabase, botToken, adminId, daily.post);
+      } else if (daily?.reason) {
+        outcome = `waiting_${daily.reason}`;
       }
     }
     return json({ ok: true, outcome });

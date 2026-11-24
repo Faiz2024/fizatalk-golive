@@ -307,6 +307,107 @@ Deno.test("non-admin tidak dapat membuat posting channel di luar jadwal", async 
   }
 });
 
+Deno.test("admin dapat merangkum jawaban sekarang tanpa jeda dan draf tetap antre untuk persetujuan", async () => {
+  const originalFetch = globalThis.fetch;
+  const previousUrl = Deno.env.get("SUPABASE_URL");
+  const previousKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  Deno.env.set("SUPABASE_URL", "https://test.supabase.co");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-service-key");
+  const requests: Array<{ url: string; body: any }> = [];
+  globalThis.fetch = ((input: Request | URL | string, init?: RequestInit) => {
+    requests.push({ url: String(input), body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    return Promise.resolve(Response.json({ ok: true, result: { message_id: 1 } }));
+  }) as typeof fetch;
+  const rpcCalls: Array<{ name: string; args: any }> = [];
+  try {
+    const response = await handleChannelAgentMessage({
+      from: { id: 999 }, chat: { id: 999 }, text: "/channel_summary",
+    }, {
+      db: { rpc: (name: string, args: any) => {
+        rpcCalls.push({ name, args });
+        return Promise.resolve({
+          data: {
+            created: true,
+            count: 1,
+            feedback: [{ content: "Satu jawaban cukup untuk perintah admin" }],
+            post: { id: "11111111-1111-4111-8111-111111111111" },
+          },
+          error: null,
+        });
+      } },
+      botToken: "test-token",
+      adminChatId: "999",
+      onDatabaseError: () => new Response("DB", { status: 500 }),
+    });
+    assertEquals(response?.status, 200);
+    assertEquals(rpcCalls, [{
+      name: "create_channel_feedback_summary",
+      args: { p_lease_token: null, p_limit: 100, p_admin_id: 999, p_force: true },
+    }]);
+    const dispatch = requests.find((request) => request.url.includes("/functions/v1/channel-agent"));
+    assertEquals(dispatch?.body, {
+      action: "generate_admin",
+      post_id: "11111111-1111-4111-8111-111111111111",
+    });
+    const message = requests.find((request) => request.url.includes("sendMessage"));
+    assertStringIncludes(message?.body.text, "1 jawaban sedang dirangkum AI sekarang");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousUrl === undefined) Deno.env.delete("SUPABASE_URL");
+    else Deno.env.set("SUPABASE_URL", previousUrl);
+    if (previousKey === undefined) Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+    else Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", previousKey);
+  }
+});
+
+Deno.test("non-admin tidak dapat meminta rangkuman channel manual", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => Promise.resolve(Response.json({ ok: true, result: { message_id: 1 } }))) as typeof fetch;
+  let databaseCalls = 0;
+  try {
+    const response = await handleChannelAgentMessage({
+      from: { id: 42 }, chat: { id: 42 }, text: "/channel_summary",
+    }, {
+      db: { rpc: () => { databaseCalls++; return Promise.resolve({ data: null, error: null }); } },
+      botToken: "test-token",
+      adminChatId: "999",
+      onDatabaseError: () => new Response("DB", { status: 500 }),
+    });
+    assertEquals(response?.status, 200);
+    assertEquals(databaseCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("posting otomatis tidak dikirim bila rangkuman pertanyaan terakhir belum tayang", async () => {
+  const originalFetch = globalThis.fetch;
+  const telegramCalls: Array<{ method: string; body: any }> = [];
+  globalThis.fetch = ((input: Request | URL | string, init?: RequestInit) => {
+    telegramCalls.push({ method: String(input).split("/").pop()!, body: JSON.parse(String(init?.body)) });
+    return Promise.resolve(Response.json({ ok: true, result: { message_id: 1 } }));
+  }) as typeof fetch;
+  try {
+    const response = await handleChannelAgentCallback({
+      id: "blocked-approval",
+      from: { id: 999 },
+      data: "ca_approve_11111111-1111-4111-8111-111111111111",
+      message: { message_id: 10, chat: { id: 999 }, text: "Pratinjau draf" },
+    }, {
+      db: { rpc: () => Promise.resolve({ data: { success: false, error: "summary_required" }, error: null }) },
+      botToken: "test-token",
+      adminChatId: "999",
+      onDatabaseError: () => new Response("DB", { status: 500 }),
+    });
+    assertEquals(response?.status, 200);
+    assertEquals(telegramCalls.some((call) => call.method === "sendMessage" && call.body.chat_id === "@FizaTalkCh"), false);
+    const edit = telegramCalls.find((call) => call.method === "editMessageText");
+    assertStringIncludes(edit?.body.text, "Rangkuman pertanyaan terakhir harus sudah diposting");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("tautan Jawab pengguna terdaftar tidak menulis database atau meneruskan chat", async () => {
   const originalFetch = globalThis.fetch;
   const telegramCalls: Array<{ method: string; body: any }> = [];

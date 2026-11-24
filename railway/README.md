@@ -19,6 +19,11 @@ untuk draf giveaway dengan tautan buatan admin. Posting di luar jadwal dibuat
 dengan `/channel_post jawab teks` (tombol Jawab) atau `/channel_post polos teks`
 (tanpa tombol). Keduanya dipoles AI dan tetap memerlukan persetujuan admin.
 Tombol Jawab membuka `/start feedback`, lalu pengguna mengirim `/feedback jawaban`.
+Posting otomatis baru ditahan sampai seluruh jawaban baru untuk pertanyaan terakhir
+sudah dirangkum dan posting rangkumannya tayang. Admin dapat memproses jawaban saat
+itu juga dengan `/channel_summary`; perintah ini melewati jeda tiga hari dan cukup
+satu jawaban, tetapi draf AI tetap memerlukan persetujuan sebelum posting. Posting
+yang dibuat melalui `/channel_post` atau `/giveaway` tidak terkena penahanan ini.
 
 Prefix lama `/functions/v1/...` juga diterima. Health check hanya memeriksa
 konfigurasi proses dan tidak membaca database.
