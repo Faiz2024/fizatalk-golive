@@ -238,6 +238,148 @@ export type Database = {
           },
         ]
       }
+      channel_agent_posts: {
+        Row: {
+          admin_id: number | null
+          admin_message_id: number | null
+          admin_rough_text: string | null
+          channel_message_id: number | null
+          content: string
+          created_at: string
+          dedupe_key: string
+          error: string | null
+          id: string
+          kind: string
+          metadata: Json
+          posted_at: string | null
+          status: string
+          summary: Json
+          updated_at: string
+        }
+        Insert: {
+          admin_id?: number | null
+          admin_message_id?: number | null
+          admin_rough_text?: string | null
+          channel_message_id?: number | null
+          content?: string
+          created_at?: string
+          dedupe_key: string
+          error?: string | null
+          id?: string
+          kind: string
+          metadata?: Json
+          posted_at?: string | null
+          status?: string
+          summary?: Json
+          updated_at?: string
+        }
+        Update: {
+          admin_id?: number | null
+          admin_message_id?: number | null
+          admin_rough_text?: string | null
+          channel_message_id?: number | null
+          content?: string
+          created_at?: string
+          dedupe_key?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          metadata?: Json
+          posted_at?: string | null
+          status?: string
+          summary?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      channel_agent_state: {
+        Row: {
+          created_at: string
+          job_key: string
+          last_run_at: string | null
+          last_summary_at: string | null
+          lease_expires_at: string | null
+          lease_token: string | null
+          pause_reason: string | null
+          resume_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          job_key: string
+          last_run_at?: string | null
+          last_summary_at?: string | null
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          pause_reason?: string | null
+          resume_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          job_key?: string
+          last_run_at?: string | null
+          last_summary_at?: string | null
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          pause_reason?: string | null
+          resume_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      channel_feedback: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          post_id: string | null
+          summarized_at: string | null
+          user_id: number
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          post_id?: string | null
+          summarized_at?: string | null
+          user_id: number
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          post_id?: string | null
+          summarized_at?: string | null
+          user_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_feedback_post_fk"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "channel_agent_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_feedback_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_feedback_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "v_eligible_reengagement_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coin_transactions: {
         Row: {
           amount: number
@@ -1256,6 +1398,15 @@ export type Database = {
       cancel_premium_transaction: { Args: { p_user_id: number }; Returns: Json }
       cancel_report_draft: { Args: { p_user_id: number }; Returns: undefined }
       cancel_topup_transaction: { Args: { p_user_id: number }; Returns: Json }
+      channel_post_action: {
+        Args: {
+          p_action: string
+          p_admin_id: number
+          p_post_id: string
+          p_rough_text?: string
+        }
+        Returns: Json
+      }
       check_and_claim_special_promo: {
         Args: { p_user_id: number }
         Returns: boolean
@@ -1264,6 +1415,11 @@ export type Database = {
         Args: { p_user_id: number }
         Returns: boolean
       }
+      claim_channel_agent_schedule: {
+        Args: { p_lease_seconds?: number }
+        Returns: Json
+      }
+      claim_queued_channel_post: { Args: { p_post_id: string }; Returns: Json }
       claim_reengagement_batch: {
         Args: { p_limit: number }
         Returns: {
@@ -1278,6 +1434,10 @@ export type Database = {
         Returns: Json
       }
       cleanup_inactive_users: { Args: never; Returns: undefined }
+      complete_channel_post_generation: {
+        Args: { p_content: string; p_post_id: string; p_summary?: Json }
+        Returns: boolean
+      }
       comprehensive_search_action: {
         Args: {
           p_first_name?: string
@@ -1286,6 +1446,23 @@ export type Database = {
           p_user_id: number
           p_username?: string
         }
+        Returns: Json
+      }
+      create_channel_admin_post: {
+        Args: {
+          p_admin_id: number
+          p_kind: string
+          p_metadata?: Json
+          p_rough_text: string
+        }
+        Returns: Json
+      }
+      create_channel_daily_post: {
+        Args: { p_dedupe_key: string; p_kind: string; p_lease_token: string }
+        Returns: Json
+      }
+      create_channel_feedback_post: {
+        Args: { p_lease_token: string; p_limit?: number }
         Returns: Json
       }
       create_chat_call_invite: {
@@ -1303,7 +1480,15 @@ export type Database = {
         Args: { p_join_token: string; p_user_id: number }
         Returns: Json
       }
+      fail_channel_post_generation: {
+        Args: { p_error: string; p_post_id: string }
+        Returns: undefined
+      }
       find_and_pair_partner: { Args: { p_user_id: number }; Returns: Json }
+      finish_channel_agent_schedule: {
+        Args: { p_lease_token: string }
+        Returns: undefined
+      }
       finish_reengagement_batch: {
         Args: { p_results: Json }
         Returns: undefined
@@ -1337,6 +1522,10 @@ export type Database = {
           p_source: string
           p_user_id?: number
         }
+        Returns: undefined
+      }
+      pause_channel_agent: {
+        Args: { p_reason: string; p_resume_at?: string }
         Returns: undefined
       }
       premium_purchase_allowed: {
@@ -1434,6 +1623,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      set_channel_post_admin_message: {
+        Args: { p_message_id: number; p_post_id: string }
+        Returns: undefined
+      }
       set_profile_flow: {
         Args: { p_flow: string; p_user_id: number }
         Returns: Json
@@ -1460,6 +1653,10 @@ export type Database = {
         Returns: boolean
       }
       snapshot_daily_stats: { Args: { p_target_date?: string }; Returns: Json }
+      submit_channel_feedback: {
+        Args: { p_text: string; p_user_id: number }
+        Returns: Json
+      }
       submit_context_report: {
         Args: {
           p_category: string
