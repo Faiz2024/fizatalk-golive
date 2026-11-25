@@ -53,7 +53,7 @@ Deno.test('resolved card states the admin action and removes report keyboard', (
   assert(text.includes('Diblokir 14 hari tanpa tebus'));
 });
 
-Deno.test('first report sends and silently pins one admin card then saves its message id', async () => {
+Deno.test('first report sends one admin card without pinning then saves its message id', async () => {
   const actions: any[] = [];
   const rpcs: any[] = [];
   const result = await syncAdminReportCard(card(), {
@@ -65,12 +65,11 @@ Deno.test('first report sends and silently pins one admin card then saves its me
     },
   });
   assertEquals(result.ok, true);
-  assertEquals(actions.map(action => action.method), ['sendMessage', 'pinChatMessage']);
-  assertEquals(actions[1].body.disable_notification, true);
+  assertEquals(actions.map(action => action.method), ['sendMessage']);
   assertEquals(rpcs[0], { name: 'set_admin_report_card_message', params: { p_target_user_id: 200, p_expected_message_id: null, p_new_message_id: 321 } });
 });
 
-Deno.test('subsequent report edits and repins the existing admin message without a database write', async () => {
+Deno.test('subsequent report edits the existing admin message without pinning or a database write', async () => {
   const actions: any[] = [];
   let writes = 0;
   const result = await syncAdminReportCard(card({ admin_message_id: 321, report_count: 2 }), {
@@ -79,12 +78,12 @@ Deno.test('subsequent report edits and repins the existing admin message without
     call: (method: string, body: any) => { actions.push({ method, body }); return Promise.resolve({ ok: true }); },
   });
   assertEquals(result.ok, true);
-  assertEquals(actions.map(action => action.method), ['editMessageText', 'pinChatMessage']);
+  assertEquals(actions.map(action => action.method), ['editMessageText']);
   assertEquals(actions[0].body.message_id, 321);
   assertEquals(writes, 0);
 });
 
-Deno.test('deleted admin message falls back to a new card and replaces the saved id', async () => {
+Deno.test('deleted admin message falls back to a new card without pinning and replaces the saved id', async () => {
   const actions: any[] = [];
   const result = await syncAdminReportCard(card({ admin_message_id: 321 }), {
     adminChat: '999',
@@ -97,5 +96,5 @@ Deno.test('deleted admin message falls back to a new card and replaces the saved
     },
   });
   assertEquals(result.ok, true);
-  assertEquals(actions, ['editMessageText', 'sendMessage', 'pinChatMessage']);
+  assertEquals(actions, ['editMessageText', 'sendMessage']);
 });

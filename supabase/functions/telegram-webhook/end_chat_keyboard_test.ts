@@ -2,6 +2,9 @@ import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   buildEndChatKeyboard,
   buildNextRatingRows,
+  formatEndChatMessage,
+  SOCIAL_CONTENT_NOTE,
+  SOCIAL_CONTENT_NOTE_PROBABILITY,
   WOLA_BOT_URL,
   wolaChatButton
 } from '../_shared/end-chat-keyboard.ts';
@@ -35,4 +38,20 @@ Deno.test('next search keyboard shows the Wola button under the partner rating r
   assertEquals(rows.length, 2);
   assertEquals(rows[0].map((b: any) => b.callback_data), ['report_user_303', 'rate_asik_303', 'rate_baik_303']);
   assertEquals(rows[1], [{ text: WOLA_TEXT, style: 'success', url: WOLA_BOT_URL }]);
+});
+
+Deno.test('end chat message includes social content note only when random roll is below threshold and not suppressed', () => {
+  const base = '👋 Anda mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!';
+  const shown = formatEndChatMessage(base, { random: () => SOCIAL_CONTENT_NOTE_PROBABILITY - 0.01 });
+  assertEquals(shown, `${base}\n\n${SOCIAL_CONTENT_NOTE}`);
+  assertEquals(shown.includes('@fizatalk'), true);
+  assertEquals(shown.includes('@fizavoice'), true);
+  assertEquals(shown.includes('@fizatalkcs'), true);
+  assertEquals(shown.includes('Rp300.000* <i>(menyesuaikan jumlah views)</i>'), true);
+
+  const skipped = formatEndChatMessage(base, { random: () => SOCIAL_CONTENT_NOTE_PROBABILITY });
+  assertEquals(skipped, base);
+
+  const suppressed = formatEndChatMessage(base, { suppressPromoNote: true, random: () => 0 });
+  assertEquals(suppressed, base);
 });

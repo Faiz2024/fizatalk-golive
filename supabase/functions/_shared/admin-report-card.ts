@@ -90,9 +90,6 @@ export async function syncAdminReportCard(card: any, d: Dependencies): Promise<{
       chat_id: d.adminChat, message_id: messageId, parse_mode: 'HTML', text, reply_markup: keyboard,
     });
     if (edited?.ok || String(edited?.description || '').includes('message is not modified')) {
-      if (card.status !== 'resolved') {
-        await d.call('pinChatMessage', { chat_id: d.adminChat, message_id: messageId, disable_notification: true });
-      }
       return { ok: true };
     }
   }
@@ -111,9 +108,6 @@ export async function syncAdminReportCard(card: any, d: Dependencies): Promise<{
   if (!saved) {
     await d.call('deleteMessage', { chat_id: d.adminChat, message_id: messageId });
     return { ok: true };
-  }
-  if (card.status !== 'resolved') {
-    await d.call('pinChatMessage', { chat_id: d.adminChat, message_id: messageId, disable_notification: true });
   }
   return { ok: true };
 }

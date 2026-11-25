@@ -17,7 +17,7 @@ import {
 import { getMessageContext } from '../_shared/message-context.ts';
 import { visiblePartnerPhoto } from '../_shared/profile-photo-visibility.ts';
 import { createSakurupiahWithQrisFallback, isSakurupiahInvoiceUsable } from '../_shared/sakurupiah-fallback.ts';
-import { buildEndChatKeyboard as sharedEndChatKeyboard, buildNextRatingRows } from '../_shared/end-chat-keyboard.ts';
+import { buildEndChatKeyboard as sharedEndChatKeyboard, buildNextRatingRows, formatEndChatMessage } from '../_shared/end-chat-keyboard.ts';
 import { RECOVERY_PRICE_LABEL, RECOVERY_STARS, searchReportLockMessage, validRecoveryPayment } from '../_shared/recovery-policy.ts';
 import { isStaleWebhookUpdate, webhookDatabaseFailureStatus } from '../_shared/webhook-resilience.ts';
 import { formatCachedDailyAdminStats } from '../_shared/admin-stats-command.ts';
@@ -3662,7 +3662,10 @@ async function comprehensiveSearchAction(
     await sendTelegramMessage(
       botToken,
       result.old_partner_id,
-      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
+      formatEndChatMessage(
+        `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
+        { suppressPromoNote: Boolean(result.old_partner_promo?.should_send) }
+      ),
       combinedPartnerKeyboard
     );
 
@@ -4311,7 +4314,7 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
       await sendTelegramMessage(
         botToken,
         userId,
-        `👋 Anda mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
+        formatEndChatMessage(`👋 Anda mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`),
         endChatKeyboard
       );
       return false;
@@ -4356,7 +4359,10 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
     await sendTelegramMessage(
       botToken,
       partnerId,
-      `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
+      formatEndChatMessage(
+        `⚠️ Partner mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
+        { suppressPromoNote: Boolean(result.partner_promo?.should_send || result.partner_should_send_channel_invite) }
+      ),
       combinedPartnerKeyboard
     );
   }
@@ -4366,7 +4372,10 @@ async function endChat(supabase: any, botToken: string, userId: number): Promise
   await sendTelegramMessage(
     botToken,
     userId,
-    `👋 Anda mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
+    formatEndChatMessage(
+      `👋 Anda mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!`,
+      { suppressPromoNote: Boolean(result.user_promo?.should_send || result.should_send_channel_invite) }
+    ),
     endChatKeyboard
   );
 

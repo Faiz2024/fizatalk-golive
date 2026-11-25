@@ -2,6 +2,19 @@
 // Dipisahkan agar susunan tombol bisa diuji tanpa memuat fungsi webhook.
 
 export const WOLA_BOT_URL = 'https://t.me/WolaChatBot';
+export const SOCIAL_CONTENT_NOTE_PROBABILITY = 0.14;
+export const SOCIAL_CONTENT_NOTE =
+  '🎬 Abadikan momen seru/lucu di @fizatalk atau @fizavoice lalu upload ke TikTok atau sosmed lainnya. Hubungi admin @fizatalkcs jika kontenmu FYP dan raih hadiah hingga Rp300.000* <i>(menyesuaikan jumlah views)</i>.';
+
+// Sisipkan keterangan konten medsos sesekali di footer pesan akhir chat tanpa menambah panggilan API/DB.
+export function formatEndChatMessage(
+  baseText: string,
+  options?: { suppressPromoNote?: boolean; random?: () => number },
+): string {
+  if (options?.suppressPromoNote) return baseText;
+  const roll = (options?.random ?? Math.random)();
+  return roll < SOCIAL_CONTENT_NOTE_PROBABILITY ? `${baseText}\n\n${SOCIAL_CONTENT_NOTE}` : baseText;
+}
 
 // Tombol promosi bot chat Wola: hijau (style 'success') dan membuka bot via tautan.
 export function wolaChatButton(): { text: string; style: string; url: string } {

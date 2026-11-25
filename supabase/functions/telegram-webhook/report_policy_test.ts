@@ -56,7 +56,7 @@ Deno.test('serious media evidence is reviewed without copying illegal material',
   assertEquals(response.status, 200);
   assertEquals(actions.some(action => action.method === 'copyMessage'), false);
   assertEquals(actions.some(action => action.method === 'sendPhoto'), false);
-  assertEquals(actions.filter(action => action.method === 'pinChatMessage').length, 1);
+  assertEquals(actions.some(action => action.method === 'pinChatMessage'), false);
   // Kartu gabungan + peninjauan prioritas untuk admin + konfirmasi pelapor.
   assertEquals(actions.filter(action => action.method === 'sendMessage').length, 3);
 });
@@ -73,7 +73,7 @@ Deno.test('first ordinary report is aggregated to admin even below sanction thre
   assertEquals(adminEdit.body.reply_markup.inline_keyboard.flat().map((button: any) => button.callback_data), [
     'rpa_restore_200', 'rpa_lock_200', 'rpa_block14_200', 'rpa_perm_200', 'rpa_ignore_200',
   ]);
-  assertEquals(actions.some(action => action.method === 'pinChatMessage' && action.body.message_id === 777), true);
+  assertEquals(actions.some(action => action.method === 'pinChatMessage'), false);
   assertEquals(actions.some(action => action.method === 'sendMessage' && action.body.chat_id === 200), false);
 });
 
