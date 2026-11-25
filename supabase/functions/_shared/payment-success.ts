@@ -20,7 +20,7 @@ export function formatDateWIB(date: Date): string {
 }
 
 // === PREMIUM SUCCESS ===
-export async function handlePremiumSuccess(supabase: any, botToken: string, requestId: string, gatewayLabel = 'Sakurupiah') {
+export async function handlePremiumSuccess(supabase: any, botToken: string, requestId: string, gatewayLabel = 'Sakurupiah'): Promise<boolean> {
   const { data: req, error } = await supabase
     .from('premium_requests')
     .select('*')
@@ -30,7 +30,7 @@ export async function handlePremiumSuccess(supabase: any, botToken: string, requ
 
   if (error || !req) {
     console.error('[CALLBACK] Premium not found:', requestId);
-    return;
+    return false;
   }
 
   const { data: allowed, error: allowErr } = await supabase.rpc('premium_purchase_allowed', { p_user_id: req.user_id });
@@ -40,7 +40,7 @@ export async function handlePremiumSuccess(supabase: any, botToken: string, requ
     await sendTelegramMessage(botToken, req.user_id, '🚫 <b>Premium tidak diaktifkan</b>\n\nAkun Anda sedang diblokir/dibatasi, sehingga Premium tidak dapat dibeli. Hubungi @FizaTalkCS.');
     const cs = Deno.env.get('TELEGRAM_CS_CHAT_ID');
     if (cs) await sendTelegramMessage(botToken, parseInt(cs), `⚠️ <b>PREMIUM DITOLAK (AKUN DIBLOKIR)</b>\n\n👤 User: ${req.user_id}\n💰 Rp ${req.price.toLocaleString('id-ID')}\n📱 Via: ${req.payment_method || gatewayLabel}\nPembayaran masuk; tinjau manual.`);
-    return;
+    return true;
   }
 
   const { data: userData } = await supabase
@@ -77,7 +77,7 @@ export async function handlePremiumSuccess(supabase: any, botToken: string, requ
         .eq('id', requestId);
 
       await sendTelegramMessage(botToken, req.user_id, '⚠️ <b>Transaksi Ditolak</b>\n\nPembayaran diterima, namun batas waktu penawaran promo khusus ini telah habis (kedaluwarsa) atau jatah (1x seumur hidup) telah terpakai. Transaksi promo tidak berlaku lagi.');
-      return;
+      return true;
     }
   }
 
@@ -127,10 +127,11 @@ export async function handlePremiumSuccess(supabase: any, botToken: string, requ
   }
 
   console.log(`[CALLBACK] Premium approved: user=${req.user_id} days=${req.duration_days}`);
+  return true;
 }
 
 // === TOPUP SUCCESS ===
-export async function handleTopupSuccess(supabase: any, botToken: string, requestId: string, gatewayLabel = 'Sakurupiah') {
+export async function handleTopupSuccess(supabase: any, botToken: string, requestId: string, gatewayLabel = 'Sakurupiah'): Promise<boolean> {
   const { data: req, error } = await supabase
     .from('topup_requests')
     .select('*')
@@ -140,7 +141,7 @@ export async function handleTopupSuccess(supabase: any, botToken: string, reques
 
   if (error || !req) {
     console.error('[CALLBACK] Topup not found:', requestId);
-    return;
+    return false;
   }
 
   const { data: userData } = await supabase
@@ -181,10 +182,11 @@ export async function handleTopupSuccess(supabase: any, botToken: string, reques
   }
 
   console.log(`[CALLBACK] Topup approved: user=${req.user_id} amount=${req.amount}`);
+  return true;
 }
 
 // === FINE SUCCESS (UNBLOCK) ===
-export async function handleFineSuccess(supabase: any, botToken: string, requestId: string, gatewayLabel = 'Sakurupiah') {
+export async function handleFineSuccess(supabase: any, botToken: string, requestId: string, gatewayLabel = 'Sakurupiah'): Promise<boolean> {
   const { data: req, error } = await supabase
     .from('pending_transactions')
     .select('*')
@@ -195,14 +197,14 @@ export async function handleFineSuccess(supabase: any, botToken: string, request
 
   if (error || !req) {
     console.error('[CALLBACK] Fine not found:', requestId);
-    return;
+    return false;
   }
 
   const { data: eligible, error: eligibilityError } = await supabase.rpc('restoration_payment_allowed', { p_user_id: req.user_id });
   if (eligibilityError) throw eligibilityError;
   if (!eligible) {
     await sendTelegramMessage(botToken, req.user_id, 'Pembayaran tidak dapat membuka pembatasan moderasi atau blokir permanen. Hubungi @FizaTalkCS untuk peninjauan pembayaran.');
-    return;
+    return true;
   }
 
   await supabase
@@ -244,6 +246,7 @@ export async function handleFineSuccess(supabase: any, botToken: string, request
   }
 
   console.log(`[CALLBACK] Fine approved, user unblocked: ${req.user_id}`);
+  return true;
 }
 
 // === HANDLE EXPIRED ===

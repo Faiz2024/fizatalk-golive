@@ -254,8 +254,9 @@ function formatRemainingTime(blockedUntilStr?: string): string {
 
 // === SAKURUPIAH PAYMENT GATEWAY ===
 const SAKURUPIAH_API_URL = 'https://sakurupiah.id/api/create.php';
+const DEFAULT_SAKURUPIAH_CALLBACK_URL = 'https://fizatalk-golive-production.up.railway.app/sakurupiah-callback';
 const SAKURUPIAH_CALLBACK_URL = Deno.env.get('SAKURUPIAH_CALLBACK_URL')
-  || 'https://chwopnsmykwzqflqozvf.supabase.co/functions/v1/sakurupiah-callback';
+  || DEFAULT_SAKURUPIAH_CALLBACK_URL;
 
 interface SakurupiahInvoiceParams {
   method: 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO';
