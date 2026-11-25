@@ -15,6 +15,20 @@ export interface PremiumPayConfig {
   stars?: number;
 }
 
+function rupiah(price: number): string {
+  return `Rp ${price.toLocaleString('id-ID')}`;
+}
+
+// Meniru coretan harga Telegram: setiap karakter dibungkus combining stroke U+0336.
+function strike(value: string): string {
+  return [...value]
+    .map((char) => {
+      const base = char === 'R' ? '\u{1D445}' : char === 'p' ? '\u{1D45D}' : char;
+      return `${base}\u0336`;
+    })
+    .join('');
+}
+
 // Satu sumber harga untuk tombol, invoice Stars, dan pencatatan pembayaran.
 export const PREMIUM_PAY_CONFIG: Record<string, PremiumPayConfig> = {
   '30': { days: 30, price: 28000, label: 'PREMIUM 30 HARI (PROMO SPESIAL)', stars: 139 },
@@ -43,8 +57,8 @@ export function buildPremiumNormalKeyboard(referralRow: any[]): any {
   const month = PREMIUM_NORMAL_PACKAGES['30'];
   return {
     inline_keyboard: [
-      [{ text: `📦 ${week.label} - ⭐ ${week.stars}`, callback_data: 'buy_premium_normal_7' }],
-      [{ text: `📦 ${month.label} - ⭐ ${month.stars}`, callback_data: 'buy_premium_normal_30' }],
+      [{ text: `📦 ${week.label} - ${rupiah(week.price)}`, callback_data: 'buy_premium_normal_7' }],
+      [{ text: `📦 ${month.label} - ${rupiah(month.price)}`, callback_data: 'buy_premium_normal_30' }],
       referralRow,
     ],
   };
@@ -54,11 +68,11 @@ export function buildPremiumNormalKeyboard(referralRow: any[]): any {
 // Telegram tidak mendukung HTML pada teks tombol; label Hemat memakai Unicode miring.
 // Semua tombol paket berwarna hijau (style: 'success'); tombol Abaikan tetap biasa.
 export const PREMIUM_PROMO_ROWS: Array<{ text: string; callback_data: string; style: string }> = [
-  { text: '🔥 35 Hari / ⭐ 149 • (𝘏𝘦𝘮𝘢𝘵)🔥', callback_data: 'buy_premium_35', style: 'success' },
-  { text: '💎 30 Hari / ⭐ 2̶4̶9̶ ➡️ ⭐ 139', callback_data: 'buy_premium_30', style: 'success' },
-  { text: '🔥 7 Hari / ⭐ 1̶4̶9̶ ➡️ ⭐ 99', callback_data: 'buy_premium_7', style: 'success' },
-  { text: '📦 3 Hari / ⭐ 59', callback_data: 'buy_premium_3', style: 'success' },
-  { text: '⚡ 1 Hari / ⭐ 29', callback_data: 'buy_premium_1', style: 'success' },
+  { text: '🔥 35 Hari / Rp 30.000 • (𝘏𝘦𝘮𝘢𝘵)🔥', callback_data: 'buy_premium_35', style: 'success' },
+  { text: `💎 30 Hari / ${strike('Rp60.000')} ➡️ Rp 28.000`, callback_data: 'buy_premium_30', style: 'success' },
+  { text: `🔥 7 Hari / ${strike('Rp25.000')} ➡️ Rp 19.000`, callback_data: 'buy_premium_7', style: 'success' },
+  { text: '📦 3 Hari / Rp 12.000', callback_data: 'buy_premium_3', style: 'success' },
+  { text: '⚡ 1 Hari / Rp 7.000', callback_data: 'buy_premium_1', style: 'success' },
 ];
 
 export const PROMO_DISMISS_ROW = [{ text: '⏭️ Abaikan & Lanjut Cari Partner', callback_data: 'dismiss_promo_search' }];
@@ -79,7 +93,7 @@ export const PREMIUM_PROMO_MESSAGE = `🚨 <b>PROMO TERBATAS! HANYA 1 JAM!</b> �
 🎁 <b>PENAWARAN EKSKLUSIF:</b>
 ━━━━━━━━━━━━━━━━━━━━
 🔥 <b>PREMIUM 35 HARI</b>
-<b>HANYA ⭐ 149!</b>
+<b>HANYA Rp 30.000!</b>
 <i>(Hemat)🔥</i>
 ━━━━━━━━━━━━━━━━━━━━
 💥 <b>HARGA SPESIAL!</b>`;

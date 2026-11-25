@@ -4244,9 +4244,9 @@ Anda adalah 1 dari 50 pengguna yang berhak mendapatkan <b>PENAWARAN SPESIAL 1 KA
 
   const promoKeyboard = {
     inline_keyboard: [
-      [{ text: '👑 1 Tahun / 749 ⭐', callback_data: 'special_buy_premium_365' }],
-      [{ text: '🔥 30 Hari / 99 ⭐', callback_data: 'special_buy_premium_30' }],
-      [{ text: '🔥 7 Hari / 74 ⭐', callback_data: 'special_buy_premium_7' }],
+      [{ text: '👑 1 Tahun / 𝑅̶𝑝̶4̶9̶9̶.̶0̶0̶0̶ ➡️ Rp 99.000 (Hemat 80%)', callback_data: 'special_buy_premium_365' }],
+      [{ text: '🔥 30 Hari / 𝑅̶𝑝̶6̶0̶.̶0̶0̶0̶ ➡️ Rp 15.000 (1x)', callback_data: 'special_buy_premium_30' }],
+      [{ text: '🔥 7 Hari / 𝑅̶𝑝̶2̶5̶.̶0̶0̶0̶ ➡️ Rp 10.000 (1x)', callback_data: 'special_buy_premium_7' }],
       buildReferralButtonRow()
 
     ]
@@ -5060,7 +5060,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
         } else if (callbackData === 'cancel_premium') {
           // Kembali ke penawaran premium normal.
-          backText = `💎 <b>Upgrade ke Premium</b>\n\n✨ <b>KEUNTUNGAN PREMIUM:</b>\n• 🎯 Pilih target gender chat\n• 📍 Pilih target lokasi chat\n• ⭐ Badge Premium\n• 🚀 Prioritas matching\n\n💰 <b>HARGA PREMIUM:</b>\n📦 <b>1 MINGGU:</b> ⭐ 149\n📦 <b>1 BULAN:</b> ⭐ 249\n\nPilih paket di bawah ini:`;
+          backText = `💎 <b>Upgrade ke Premium</b>\n\n✨ <b>KEUNTUNGAN PREMIUM:</b>\n• 🎯 Pilih target gender chat\n• 📍 Pilih target lokasi chat\n• ⭐ Badge Premium\n• 🚀 Prioritas matching\n\n💰 <b>HARGA PREMIUM:</b>\n📦 <b>1 MINGGU:</b> Rp 25.000\n📦 <b>1 BULAN:</b> Rp 60.000\n\nPilih paket di bawah ini:`;
           backKeyboard = buildPremiumNormalKeyboard();
 
         } else if (callbackData === 'cancel_fine') {
