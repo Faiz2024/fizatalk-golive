@@ -23,6 +23,10 @@ import { isStaleWebhookUpdate, webhookDatabaseFailureStatus } from '../_shared/w
 import { formatCachedDailyAdminStats } from '../_shared/admin-stats-command.ts';
 import { isMessageFlooding } from '../_shared/message-flood-limiter.ts';
 import { handleChannelAgentCallback, handleChannelAgentMessage } from '../_shared/channel-agent-telegram.ts';
+import {
+  buildPaymentMethodKeyboard as sharedPaymentMethodKeyboard,
+  isAllowedPaymentMethod,
+} from '../_shared/payment-method-keyboard.ts';
 
 
 // GANTI DENGAN URL DARI BAGIAN 1
@@ -442,30 +446,17 @@ function buildPaymentMethodKeyboard(
   cancelCallback: string,
   amountIDR: number = 0,
   starsInvoiceUrl?: string,
-  starsOverride?: number
+  starsOverride?: number,
+  backLabel?: string
 ): any {
-  // Derive Stars callback dari baseCallback
-  const starsCallback = `${baseCallback}_STARS`;
-
-  // Hanya Telegram Stars (metode lain dinonaktifkan)
-  const kb: any[][] = [];
-
-  // Tombol Stars
-  if (amountIDR > 0 || starsOverride !== undefined) {
-    const starsPrice = starsOverride ?? calculateStarsPrice(amountIDR);
-    kb.push([starsInvoiceUrl
-      ? { text: `⭐ Telegram Stars (${starsPrice} ⭐)`, url: starsInvoiceUrl }
-      : { text: `⭐ Telegram Stars (${starsPrice} ⭐)`, callback_data: starsCallback }
-    ]);
-  } else {
-    kb.push([starsInvoiceUrl
-      ? { text: '⭐ Telegram Stars', url: starsInvoiceUrl }
-      : { text: '⭐ Telegram Stars', callback_data: starsCallback }
-    ]);
-  }
-
-  if (cancelCallback) kb.push([{ text: '🔙 Kembali', callback_data: cancelCallback }]);
-  return { inline_keyboard: kb };
+  const starsPrice = starsOverride ?? (amountIDR > 0 ? calculateStarsPrice(amountIDR) : undefined);
+  return sharedPaymentMethodKeyboard({
+    baseCallback,
+    cancelCallback,
+    backLabel,
+    starsPrice,
+    starsInvoiceUrl,
+  });
 }
 
 // Kontrak harga Premium dipusatkan di _shared/premium-packages.ts.
@@ -5636,7 +5627,7 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
         console.log(`[STARS] fine payment button mode: ${fineStarsInvoiceLink ? 'url' : 'callback_fallback'}`);
 
         await sendTelegramMessage(botToken, userId,
-          `💸 <b>BIAYA PEMULIHAN AKUN</b>\n\n💰 Total: <b>${RECOVERY_PRICE_LABEL}</b>\n\nPilih metode pembayaran:`,
+          `💸 <b>BIAYA PEMULIHAN AKUN</b>\n\n💰 Total: <b>Rp 10.000</b> / <b>${RECOVERY_PRICE_LABEL}</b>\n\nPilih metode pembayaran:`,
           buildPaymentMethodKeyboard('fine_pay', 'cancel_fine', 0, fineStarsInvoiceLink || undefined, RECOVERY_STARS)
         );
         return new Response('OK', { status: 200 });
@@ -5644,11 +5635,10 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
       // --- HANDLER PROSES PEMBAYARAN DENDA VIA SAKURUPIAH/STARS ---
       if (callbackData.startsWith('fine_pay_')) {
-        // UBAH BARIS INI:
-        const method = callbackData.replace('fine_pay_', '') as 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO' | 'STARS';
+        const method = callbackData.replace('fine_pay_', '');
 
-        if (method !== 'STARS') {
-          await answerCallbackQuery(botToken, query.id, '⭐ Pembayaran kini hanya melalui Telegram Stars.', true);
+        if (!isAllowedPaymentMethod(method)) {
+          await answerCallbackQuery(botToken, query.id, '❌ Metode pembayaran ini tidak tersedia. Gunakan QRIS, GoPay, atau Telegram Stars.', true);
           return new Response('OK', { status: 200 });
         }
 
@@ -6597,11 +6587,10 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
       if (callbackData.startsWith('topup_pay_')) {
         const parts = callbackData.replace('topup_pay_', '').split('_');
         const amount = parseInt(parts[0]);
-        // UBAH BARIS INI:
-        const method = parts[1] as 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO' | 'STARS';
+        const method = parts[1] || '';
 
-        if (method !== 'STARS') {
-          await answerCallbackQuery(botToken, query.id, '⭐ Pembayaran kini hanya melalui Telegram Stars.', true);
+        if (!isAllowedPaymentMethod(method)) {
+          await answerCallbackQuery(botToken, query.id, '❌ Metode pembayaran ini tidak tersedia. Gunakan QRIS, GoPay, atau Telegram Stars.', true);
           return new Response('OK', { status: 200 });
         }
 
@@ -7230,13 +7219,15 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
         // Tampilkan pilihan metode pembayaran beserta harga Stars
         await sendTelegramMessage(botToken, userId,
-          `💎 <b>Konfirmasi Pembelian Premium</b>\n\n📦 Paket: <b>${config.label}</b>\n📅 Durasi: <b>${config.days} hari</b>\n⭐ Total: <b>${premiumStars} Stars</b>\n\nKlik tombol di bawah untuk menyelesaikan pembayaran:`,
-          { inline_keyboard: [
-            [premiumStarsInvoiceLink
-              ? { text: `⭐ Bayar ${premiumStars} Stars`, url: premiumStarsInvoiceLink, style: 'success' }
-              : { text: `⭐ Bayar ${premiumStars} Stars`, callback_data: `prem_pay_${configKey}_STARS`, style: 'success' }],
-            [{ text: '🔙 Ganti Paket', callback_data: premiumChangePackageCallback(configKey) }],
-          ] }
+          `💎 <b>Konfirmasi Pembelian Premium</b>\n\n📦 Paket: <b>${config.label}</b>\n📅 Durasi: <b>${config.days} hari</b>\n💰 Total: <b>Rp ${config.price.toLocaleString('id-ID')}</b> / <b>${premiumStars} ⭐</b>\n\nPilih metode pembayaran:`,
+          buildPaymentMethodKeyboard(
+            `prem_pay_${configKey}`,
+            premiumChangePackageCallback(configKey),
+            config.price,
+            premiumStarsInvoiceLink || undefined,
+            premiumStars,
+            '🔙 Ganti Paket'
+          )
         );
         return new Response('OK', { status: 200 });
       }
@@ -7248,11 +7239,10 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
         const payload = callbackData.replace('prem_pay_', '');
         const lastUnderscore = payload.lastIndexOf('_');
         const configKey = payload.substring(0, lastUnderscore);
-        // UBAH BARIS INI:
-        const method = payload.substring(lastUnderscore + 1) as 'QRIS' | 'DANA' | 'GOPAY' | 'SHOPEEPAY' | 'OVO' | 'STARS';
+        const method = payload.substring(lastUnderscore + 1);
 
-        if (method !== 'STARS') {
-          await answerCallbackQuery(botToken, query.id, '⭐ Pembayaran kini hanya melalui Telegram Stars.', true);
+        if (!isAllowedPaymentMethod(method)) {
+          await answerCallbackQuery(botToken, query.id, '❌ Metode pembayaran ini tidak tersedia. Gunakan QRIS, GoPay, atau Telegram Stars.', true);
           return new Response('OK', { status: 200 });
         }
 
