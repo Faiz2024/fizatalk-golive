@@ -3,6 +3,7 @@ import {
   buildEndChatKeyboard,
   buildNextRatingRows,
   formatEndChatMessage,
+  formatSearchingMessage,
   SOCIAL_CONTENT_NOTE,
   SOCIAL_CONTENT_NOTE_PROBABILITY,
   WOLA_BOT_URL,
@@ -44,9 +45,9 @@ Deno.test('end chat message includes social content note only when random roll i
   const base = '👋 Anda mengakhiri chat.\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!';
   const shown = formatEndChatMessage(base, { random: () => SOCIAL_CONTENT_NOTE_PROBABILITY - 0.01 });
   assertEquals(shown, `${base}\n\n${SOCIAL_CONTENT_NOTE}`);
-  assertEquals(shown.includes('@fizatalk'), true);
-  assertEquals(shown.includes('@fizavoice'), true);
-  assertEquals(shown.includes('@fizatalkcs'), true);
+  assertEquals(shown.includes('@FizaTalkBot'), true);
+  assertEquals(shown.includes('@FizaVoiceBot'), true);
+  assertEquals(shown.includes('@FizaTalkCS'), true);
   assertEquals(shown.includes('Rp300.000* <i>(menyesuaikan jumlah views)</i>'), true);
 
   const skipped = formatEndChatMessage(base, { random: () => SOCIAL_CONTENT_NOTE_PROBABILITY });
@@ -54,4 +55,16 @@ Deno.test('end chat message includes social content note only when random roll i
 
   const suppressed = formatEndChatMessage(base, { suppressPromoNote: true, random: () => 0 });
   assertEquals(suppressed, base);
+});
+
+Deno.test('next transition searching message can carry the social note, plain searching message never does', () => {
+  const nextBase = '🔄 <b>Mengakhiri chat dan mencari partner baru...</b>\n\n✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!';
+  const searchBase = '🔍 Mencari partner untuk kamu...\n\nMohon tunggu sebentar!';
+
+  assertEquals(
+    formatSearchingMessage(nextBase, true, { random: () => SOCIAL_CONTENT_NOTE_PROBABILITY - 0.01 }),
+    `${nextBase}\n\n${SOCIAL_CONTENT_NOTE}`
+  );
+  assertEquals(formatSearchingMessage(nextBase, true, { random: () => SOCIAL_CONTENT_NOTE_PROBABILITY }), nextBase);
+  assertEquals(formatSearchingMessage(searchBase, false, { random: () => 0 }), searchBase);
 });

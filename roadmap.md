@@ -209,3 +209,8 @@
 ## Penonaktifan event log bot (16 Nov 2026)
 - [x] Hapus seluruh pemanggilan `log_bot_event` dari fungsi bot tanpa mengubah alur utama atau respons error.
 - [x] Jalankan 39 tes regresi, deploy empat fungsi terdampak, dan verifikasi tidak ada pemanggilan tersisa.
+
+## Keterangan medsos pada transisi Next (24 Nov 2026)
+- [x] Sisipkan keterangan medsos ~14% pada pesan transisi "Mengakhiri chat dan mencari partner baru..." bagi user yang menekan /next.
+- [x] Ganti handle pada keterangan menjadi @FizaTalkBot, @FizaVoiceBot, dan @FizaTalkCS.
+- [x] Jalankan 15 file tes regresi dan deploy `telegram-webhook`.

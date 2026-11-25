@@ -17,7 +17,7 @@ import {
 import { getMessageContext } from '../_shared/message-context.ts';
 import { visiblePartnerPhoto } from '../_shared/profile-photo-visibility.ts';
 import { createSakurupiahWithQrisFallback, isSakurupiahInvoiceUsable } from '../_shared/sakurupiah-fallback.ts';
-import { buildEndChatKeyboard as sharedEndChatKeyboard, buildNextRatingRows, formatEndChatMessage } from '../_shared/end-chat-keyboard.ts';
+import { buildEndChatKeyboard as sharedEndChatKeyboard, buildNextRatingRows, formatEndChatMessage, formatSearchingMessage } from '../_shared/end-chat-keyboard.ts';
 import { RECOVERY_PRICE_LABEL, RECOVERY_STARS, searchReportLockMessage, validRecoveryPayment } from '../_shared/recovery-policy.ts';
 import { isStaleWebhookUpdate, webhookDatabaseFailureStatus } from '../_shared/webhook-resilience.ts';
 import { formatCachedDailyAdminStats } from '../_shared/admin-stats-command.ts';
@@ -2915,7 +2915,10 @@ function buildSearchMessageWithReputation(
     if (skipIfLowPenalty) {
       return null;
     }
-    return `${baseAction}${filterText}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}${shadowNote}`;
+    return formatSearchingMessage(
+      `${baseAction}${filterText}\n\n${isNext ? '✨ Bagaimana pengalaman chat kamu? Beri penilaian untuk partner!' : 'Mohon tunggu sebentar!'}${shadowNote}`,
+      isNext
+    );
   }
 
 
