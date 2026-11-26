@@ -30,9 +30,9 @@ export function wolaChatButton(): { text: string; style: string; url: string } {
   return { text: '🚀Coba Wola - Chat Bot!', style: 'success', url: WOLA_BOT_URL };
 }
 
-// Tombol Call Acak warna biru (style default Telegram, tanpa style) dan membuka bot suara via tautan.
-export function callAcakButton(voiceBotUsername: string): { text: string; url: string } {
-  return { text: '🎙️ Call Acak', url: `https://t.me/${voiceBotUsername}` };
+// Tombol Call Acak warna biru (style 'primary' seperti tombol Cari Partner) dan membuka bot suara via tautan.
+export function callAcakButton(voiceBotUsername: string): { text: string; style: string; url: string } {
+  return { text: '🎙️ Call Acak', style: 'primary', url: `https://t.me/${voiceBotUsername}` };
 }
 
 // Baris penilaian partner (lapor + dua rating positif).

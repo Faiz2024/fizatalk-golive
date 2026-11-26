@@ -39,9 +39,8 @@ Deno.test('next search keyboard shows the Wola button then a blue Call Acak butt
   assertEquals(rows.length, 3);
   assertEquals(rows[0].map((b: any) => b.callback_data), ['report_user_303', 'rate_asik_303', 'rate_baik_303']);
   assertEquals(rows[1], [{ text: WOLA_TEXT, style: 'success', url: WOLA_BOT_URL }]);
-  // Biru = style default Telegram: tidak ada field style sama sekali.
-  assertEquals(rows[2], [{ text: '🎙️ Call Acak', url: 'https://t.me/FizaVoiceBot' }]);
-  assertEquals('style' in rows[2][0], false);
+  // Biru = style 'primary' (sama seperti tombol Cari Partner).
+  assertEquals(rows[2], [{ text: '🎙️ Call Acak', style: 'primary', url: 'https://t.me/FizaVoiceBot' }]);
 });
 
 Deno.test('next search keyboard hides Call Acak when no voice bot is configured', () => {
