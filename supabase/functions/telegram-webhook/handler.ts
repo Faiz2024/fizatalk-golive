@@ -3718,7 +3718,7 @@ async function handleComprehensiveSearchResult(
 
   // Jika user menekan Next dan penalti < 40, tampilkan tombol rating
   if (isNext && result.old_partner_id && penaltyPoints < 40) {
-    inlineKeyboard.push(...buildNextRatingRows(result.old_partner_id));
+    inlineKeyboard.push(...buildNextRatingRows(result.old_partner_id, getVoiceBotUsername()));
   }
 
   // Jika penalty >= 40, tampilkan tombol Upgrade Premium
@@ -4493,7 +4493,7 @@ async function executeChatNext(supabase: any, botToken: string, userId: number, 
       
       // Jika user sedang chatting dan penalti < 40, tambahkan tombol rating untuk partner lamanya
       if (isActuallyChatting && preNextData?.partner_id && penaltyPoints < 40) {
-        inlineKeyboard.push(...buildNextRatingRows(preNextData.partner_id));
+        inlineKeyboard.push(...buildNextRatingRows(preNextData.partner_id, getVoiceBotUsername()));
       }
       
       // Jika penalty >= 40, tambahkan tombol Upgrade Premium

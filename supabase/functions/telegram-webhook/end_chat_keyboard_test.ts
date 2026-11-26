@@ -33,11 +33,21 @@ Deno.test('Wola button opens @WolaChatBot in green without needing a voice bot',
   assertEquals(rows.length, 4);
 });
 
-Deno.test('next search keyboard shows the Wola button under the partner rating row', () => {
-  const rows = buildNextRatingRows(303);
+Deno.test('next search keyboard shows the Wola button then a blue Call Acak button under the partner rating row', () => {
+  const rows = buildNextRatingRows(303, 'FizaVoiceBot');
+
+  assertEquals(rows.length, 3);
+  assertEquals(rows[0].map((b: any) => b.callback_data), ['report_user_303', 'rate_asik_303', 'rate_baik_303']);
+  assertEquals(rows[1], [{ text: WOLA_TEXT, style: 'success', url: WOLA_BOT_URL }]);
+  // Biru = style default Telegram: tidak ada field style sama sekali.
+  assertEquals(rows[2], [{ text: '🎙️ Call Acak', url: 'https://t.me/FizaVoiceBot' }]);
+  assertEquals('style' in rows[2][0], false);
+});
+
+Deno.test('next search keyboard hides Call Acak when no voice bot is configured', () => {
+  const rows = buildNextRatingRows(404, null);
 
   assertEquals(rows.length, 2);
-  assertEquals(rows[0].map((b: any) => b.callback_data), ['report_user_303', 'rate_asik_303', 'rate_baik_303']);
   assertEquals(rows[1], [{ text: WOLA_TEXT, style: 'success', url: WOLA_BOT_URL }]);
 });
 

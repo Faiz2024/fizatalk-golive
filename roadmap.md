@@ -214,3 +214,8 @@
 - [x] Sisipkan keterangan medsos ~14% pada pesan transisi "Mengakhiri chat dan mencari partner baru..." bagi user yang menekan /next.
 - [x] Ganti handle pada keterangan menjadi @FizaTalkBot, @FizaVoiceBot, dan @FizaTalkCS.
 - [x] Jalankan 15 file tes regresi dan deploy `telegram-webhook`.
+
+## Tombol Call Acak biru pada pesan Next (26 Nov 2026)
+- [x] Tambah tombol biru "🎙️ Call Acak" di bawah tombol Wola pada pesan keterangan saat user menekan /next.
+- [x] Sembunyikan tombol saat VOICE_BOT_USERNAME belum diatur.
+- [x] Jalankan 6 tes keyboard dan deploy `telegram-webhook`.
