@@ -32,8 +32,12 @@ konfigurasi proses dan tidak membaca database.
 
 1. Hubungkan repository ini melalui **Railway → New Project → Deploy from GitHub
    Repo**.
-2. `railway.json` otomatis memilih `railway/Dockerfile` dan health check
-   `/health`.
+2. `Dockerfile` di root memungkinkan deteksi container bot tanpa build website.
+   `railway.json` memilih builder `DOCKERFILE`, path `Dockerfile`, dan health check
+   `/health`. Gunakan root repository sebagai **Root Directory** (kosong atau `/`).
+   Jika log masih menunjukkan `bun run build`, pastikan **Config File Path**
+   menunjuk `/railway.json`, **Dockerfile Path** adalah `Dockerfile`, dan hapus
+   **Custom Build Command** atau **Custom Start Command** lama untuk website.
 3. Isi variabel berikut pada service Railway **sebelum deploy**. Jangan menulis
    nilai rahasia di repository atau chat.
 
@@ -150,6 +154,10 @@ Stars nyata.
 deno task test
 ```
 
-Docker build memakai root repository sebagai context dan `railway/Dockerfile`;
+Uji konfigurasi deploy dengan `deno task --config railway/deno.json test:deploy`.
+
+Docker build memakai root repository sebagai context dan `Dockerfile`;
 jangan mengubah build context ke folder `railway` karena handler berada di
-`supabase/functions`.
+`supabase/functions`. `railway/Dockerfile` tetap identik untuk konfigurasi lama.
+Tidak ada fallback Nixpacks: container Deno adalah satu jalur deploy bot agar
+perintah build website tidak dijalankan secara tidak sengaja.

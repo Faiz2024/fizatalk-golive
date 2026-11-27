@@ -10,5 +10,6 @@
 - Derive Telegram webhook authentication from the bot credential in one shared helper and register the same secret with Telegram; reject forged updates before database access.
 - Filter partner photos through the shared visibility policy in pairing notifications for both search and reconnect; reuse the existing batch query to avoid additional database calls.
 - Keep HTTP handlers independent from Supabase and Railway entrypoints so both runtimes execute the same bot logic without parallel implementations.
+- Deploy the Railway bot through the root Dockerfile with repository-root context; keep the legacy railway/Dockerfile identical so builder detection never depends on website sources.
 - Keep database concurrency and total queue/request deadlines in the shared service client; count only HTTP 502/503/504 toward its circuit breaker, so local timeouts cannot disable all bot traffic.
 - Keep channel AI generation and scheduled work in the Supabase `channel-agent` function; Telegram handlers only queue work and require explicit admin approval before channel posting, so AI latency and credentials stay outside the P2P chat path.

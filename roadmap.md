@@ -1,5 +1,10 @@
 # Roadmap
 
+## Perbaikan build Railway (27 Nov 2026)
+- [x] Tambahkan Dockerfile bot di root dan arahkan railway.json ke Dockerfile tersebut, tanpa mengubah website atau aturan bot.
+- [x] Dua tes konfigurasi deploy dan 54 regresi Railway lulus; build preview OK. Build container dan bot produksi belum diverifikasi karena Docker/akses deployment Railway tidak tersedia.
+- [ ] Redeploy dan verifikasi bot aktif — memerlukan akses deployment Railway dan interaksi Telegram nyata.
+
 ## Ketahanan koneksi bot tahap 1 (27 Nov 2026)
 - [x] Naikkan batas panggilan database serentak menjadi 40 dan timeout total menjadi 8 detik, termasuk waktu antre.
 - [x] Naikkan ambang circuit breaker menjadi 15 kegagalan/10 detik; hanya HTTP 502/503/504 dihitung, bukan timeout atau pembatalan lokal.

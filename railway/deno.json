@@ -1,5 +1,6 @@
 {
   "tasks": {
+    "test:deploy": "deno test --no-config --no-check --allow-read=.. deployment_config_test.ts",
     "start": "deno run --v8-flags=--max-old-space-size=256 --allow-net --allow-env server.ts",
     "test": "deno test --no-config --no-check --allow-env server_test.ts graceful-shutdown_test.ts webhook-queue-monitor_test.ts ../supabase/functions/telegram-webhook/webhook_url_test.ts ../supabase/functions/telegram-webhook/runtime_optimization_test.ts ../supabase/functions/telegram-webhook/database_circuit_breaker_test.ts ../supabase/functions/telegram-webhook/channel_agent_test.ts"
   }
