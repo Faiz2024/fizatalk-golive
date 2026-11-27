@@ -14,8 +14,8 @@ const serviceClients = new Map<string, SupabaseClient>();
 const databaseCircuitBreakers = new Map<string, DatabaseCircuitBreaker>();
 const databaseConcurrencyGates = new Map<string, DatabaseConcurrencyGate>();
 
-export const DATABASE_TIMEOUT_MS = 5_000;
-export const DATABASE_MAX_CONCURRENCY = 20;
+export const DATABASE_TIMEOUT_MS = 8_000;
+export const DATABASE_MAX_CONCURRENCY = 40;
 
 // Batasi setiap panggilan database agar webhook selesai sebelum timeout Telegram.
 // Sinyal pembatalan dari pemanggil tetap diteruskan ke fetch yang sebenarnya.

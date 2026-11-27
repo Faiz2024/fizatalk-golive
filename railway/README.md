@@ -121,10 +121,10 @@ Stars nyata.
   pack 5 menit. Perubahan pengaturan/Premium membatalkan cache terkait.
 - Seluruh tombol memakai debounce RAM 2 detik. ACK aksi berat dikirim sebelum
   query database; state chat, partner, dan sanksi tidak pernah di-cache.
-- Webhook dibatasi 40 koneksi dan setiap panggilan database memiliki timeout 5
+- Webhook dibatasi 40 koneksi dan setiap panggilan database memiliki timeout 8
   detik agar gangguan database tidak memicu antrean retry Telegram berkepanjangan.
-- Maksimal 20 panggilan database berjalan bersamaan per proses. Antrean RAM ikut
-  dibatasi timeout 5 detik dan dapat dibatalkan tanpa membocorkan slot.
+- Maksimal 40 panggilan database berjalan bersamaan per proses. Antrean RAM ikut
+  dibatasi timeout total 8 detik dan dapat dibatalkan tanpa membocorkan slot.
 - Pesan/edited message dibatasi 3 pesan per detik bergulir per pengguna. Kelebihan
   diakhiri HTTP 200 tanpa database atau Telegram API; pembayaran dan tombol tidak
   ikut dibatasi. Cache limiter menyimpan maksimal 50.000 pengguna terbaru.
@@ -132,8 +132,10 @@ Stars nyata.
   callback dan pembayaran Stars tidak ikut dibuang. Error database pada interaksi
   biasa menghasilkan HTTP 200 dan pesan coba lagi, sedangkan pembayaran Stars
   tetap dapat dicoba ulang Telegram.
-- Circuit breaker terbuka setelah 5 kegagalan database dalam 10 detik dan memberi
-  jeda pemulihan 10 detik. `/stats` admin hanya membaca cache dashboard.
+- Circuit breaker terbuka setelah 15 respons HTTP 502/503/504 database dalam 10
+  detik dan memberi jeda pemulihan 10 detik. Timeout/pembatalan lokal dan error
+  transport tidak dihitung; error tetap diteruskan ke handler. `/stats` admin
+  hanya membaca cache dashboard.
 - Setiap 10 menit runtime memeriksa antrean webhook. Lebih dari 300 update memicu
   peringatan WIB ke `TELEGRAM_CS_CHAT_ID`, maksimal satu peringatan per 30 menit.
 - `railway.json` menetapkan satu replika, maksimum 1 vCPU dan 512 MiB RAM.

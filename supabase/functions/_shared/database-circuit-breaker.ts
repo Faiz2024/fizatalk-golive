@@ -1,4 +1,4 @@
-export const DATABASE_FAILURE_THRESHOLD = 5;
+export const DATABASE_FAILURE_THRESHOLD = 15;
 export const DATABASE_FAILURE_WINDOW_MS = 10_000;
 export const DATABASE_CIRCUIT_OPEN_MS = 10_000;
 
@@ -46,14 +46,11 @@ export function createCircuitBreakerFetch(
       error.name = "CircuitBreakerOpenError";
       throw error;
     }
-    try {
-      const response = await fetcher(input, init);
-      if (response.status >= 500) breaker.recordFailure();
-      else breaker.recordSuccess();
-      return response;
-    } catch (error) {
-      if ((error as Error)?.name !== "AbortError") breaker.recordFailure();
-      throw error;
-    }
+    // Timeout/abort lokal dan kegagalan transport tetap diteruskan, tetapi bukan
+    // bukti PostgREST sedang down. Hanya respons gateway yang membuka circuit.
+    const response = await fetcher(input, init);
+    if ([502, 503, 504].includes(response.status)) breaker.recordFailure();
+    else breaker.recordSuccess();
+    return response;
   };
 }

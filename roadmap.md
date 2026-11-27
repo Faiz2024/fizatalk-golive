@@ -1,5 +1,11 @@
 # Roadmap
 
+## Ketahanan koneksi bot tahap 1 (27 Nov 2026)
+- [x] Naikkan batas panggilan database serentak menjadi 40 dan timeout total menjadi 8 detik, termasuk waktu antre.
+- [x] Naikkan ambang circuit breaker menjadi 15 kegagalan/10 detik; hanya HTTP 502/503/504 dihitung, bukan timeout atau pembatalan lokal.
+- [x] Jalankan 54 regresi koneksi/Railway, termasuk timeout antrean yang tidak membuka circuit dan permintaan berikutnya berhasil; tanpa mengubah matching, fallback state, maupun broadcast.
+- [ ] Aktifkan perubahan melalui redeploy Railway dan verifikasi interaksi Telegram nyata — memerlukan akses deployment Railway dan akun Telegram.
+
 ## Agen AI Channel FizaTalk (24 Nov 2026)
 - [x] Ikat rangkuman ke pertanyaan channel terbaru yang sudah tayang; ambil maksimal 100 jawaban setelah waktu tayang dan berikan konteks pertanyaan kepada AI.
 - [x] Pastikan jawaban pertanyaan lama atau yang sudah masuk draf tidak dihitung ulang; 35 tes lulus, pengujian database mengambil 100+5 jawaban baru tanpa duplikasi, data uji bersih, dan fungsi aktif merespons HTTP 200 tanpa draf baru saat belum ada pertanyaan tayang.

@@ -2,6 +2,7 @@ import {
   assert,
   assertEquals,
   assertNotStrictEquals,
+  assertRejects,
   assertStrictEquals,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
@@ -24,6 +25,10 @@ import {
   getServiceClient,
 } from "../_shared/service-client.ts";
 import { DatabaseConcurrencyGate } from "../_shared/database-concurrency.ts";
+import {
+  createCircuitBreakerFetch,
+  DatabaseCircuitBreaker,
+} from "../_shared/database-circuit-breaker.ts";
 import {
   clearMessageFloodLimiterForTests,
   isMessageFlooding,
@@ -116,8 +121,8 @@ Deno.test("profil Premium di-cache 20 detik, dibagikan saat concurrent, dan inva
   assert(first !== null);
 });
 
-Deno.test("database dibatasi 5 detik dan pembatalan pemanggil tetap diteruskan", async () => {
-  assertEquals(DATABASE_TIMEOUT_MS, 5_000);
+Deno.test("database dibatasi 8 detik dan pembatalan pemanggil tetap diteruskan", async () => {
+  assertEquals(DATABASE_TIMEOUT_MS, 8_000);
   const observedSignals: AbortSignal[] = [];
   const hangingFetch = ((_input: Request | URL | string, init?: RequestInit) => {
     return new Promise<Response>((_resolve, reject) => {
@@ -158,8 +163,8 @@ Deno.test("database dibatasi 5 detik dan pembatalan pemanggil tetap diteruskan",
   assertEquals(cancellationName, "AbortError");
 });
 
-Deno.test("maksimal 20 panggilan database berjalan bersamaan dan sisanya menunggu", async () => {
-  assertEquals(DATABASE_MAX_CONCURRENCY, 20);
+Deno.test("maksimal 40 panggilan database berjalan bersamaan dan sisanya menunggu", async () => {
+  assertEquals(DATABASE_MAX_CONCURRENCY, 40);
   const gate = new DatabaseConcurrencyGate(DATABASE_MAX_CONCURRENCY);
   const completions: (() => void)[] = [];
   let active = 0;
@@ -182,12 +187,12 @@ Deno.test("maksimal 20 panggilan database berjalan bersamaan dan sisanya menungg
 
   try {
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assertEquals(completions.length, 20);
-    assertEquals(maximumActive, 20);
+    assertEquals(completions.length, 40);
+    assertEquals(maximumActive, 40);
     for (const complete of completions.splice(0)) complete();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assertEquals(completions.length, 5);
-    assertEquals(maximumActive, 20);
+    assertEquals(maximumActive, 40);
   } finally {
     for (const complete of completions.splice(0)) complete();
   }
@@ -218,13 +223,44 @@ Deno.test("pembatalan antrean database tidak menghilangkan slot berikutnya", asy
   }
   assertEquals(cancellationName, "AbortError");
 
-  completions.shift()!();
+  const completeFirst = completions.shift();
+  assert(completeFirst);
+  completeFirst();
   await first;
   const third = limitedFetch("https://database.example.invalid/third");
   await new Promise((resolve) => setTimeout(resolve, 0));
   assertEquals(completions.length, 1);
-  completions.shift()!();
+  const completeThird = completions.shift();
+  assert(completeThird);
+  completeThird();
   await third;
+});
+
+Deno.test("timeout antrean tidak membuka circuit dan permintaan berikutnya tetap berjalan", async () => {
+  const gate = new DatabaseConcurrencyGate(1);
+  const breaker = new DatabaseCircuitBreaker(1);
+  await gate.acquire(new AbortController().signal);
+  let calls = 0;
+  const controlledFetch = (() => {
+    calls++;
+    return Promise.resolve(new Response("ok"));
+  }) as typeof fetch;
+  const limitedFetch = createCircuitBreakerFetch(
+    createDatabaseFetch(controlledFetch, 20, gate),
+    breaker,
+  );
+  try {
+    const error = await assertRejects(() => limitedFetch("https://database.example.invalid/queued"));
+    assertEquals(error.name, "TimeoutError");
+    assertEquals(calls, 0);
+    assertEquals(breaker.isOpen(), false);
+  } finally {
+    gate.release();
+  }
+  const response = await limitedFetch("https://database.example.invalid/next");
+  assertEquals(response.status, 200);
+  assertEquals(calls, 1);
+  assertEquals(breaker.isOpen(), false);
 });
 
 Deno.test("pesan keempat dalam satu detik dibatasi tanpa memblokir pengguna lain", () => {
