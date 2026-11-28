@@ -1429,6 +1429,17 @@ export type Database = {
           prev_sent_at: string
         }[]
       }
+      claim_reengagement_drip: {
+        Args: { p_limit?: number }
+        Returns: {
+          claimed_at: string
+          first_name: string
+          id: number
+          last_active: string
+          last_reengagement_message_id: number
+          prev_sent_at: string
+        }[]
+      }
       claim_referral_reward: {
         Args: { p_reward_type: string; p_user_id: number }
         Returns: Json
@@ -1636,6 +1647,10 @@ export type Database = {
           p_target_user_id: number
         }
         Returns: boolean
+      }
+      set_bot_membership: {
+        Args: { p_blocked: boolean; p_user_id: number }
+        Returns: Json
       }
       set_channel_post_admin_message: {
         Args: { p_message_id: number; p_post_id: string }

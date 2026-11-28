@@ -1,4 +1,8 @@
 import { getServiceClient } from "../_shared/service-client.ts";
+import { REENGAGEMENT_BATCH, reengagementWindow, runReengagementDrip } from "../_shared/reengagement-policy.ts";
+
+let running = false;
+let cooldownUntil = 0;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,6 +25,7 @@ interface TelegramSendPhotoResponse {
   };
   description?: string;
   error_code?: number;
+  parameters?: { retry_after?: number };
 }
 
 export async function handleReengageUsers(req: Request): Promise<Response> {
@@ -45,7 +50,7 @@ export async function handleReengageUsers(req: Request): Promise<Response> {
   const isAuthorized = 
     (cronSecretHeader === expectedCronSecret) || 
     (authHeader && authHeader === `Bearer ${supabaseKey}`) ||
-    (authHeader && authHeader.includes(supabaseKey));
+    false;
 
   if (!isAuthorized) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -54,6 +59,12 @@ export async function handleReengageUsers(req: Request): Promise<Response> {
     });
   }
 
+  if (running || Date.now() < cooldownUntil || !reengagementWindow()) {
+    return new Response(JSON.stringify({ success: true, skipped: "busy_or_quiet_hours" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  running = true;
   const supabase = getServiceClient(supabaseUrl, supabaseKey);
 
   try {
@@ -109,33 +120,11 @@ export async function handleReengageUsers(req: Request): Promise<Response> {
       }
     });
 
-    // 3. Ambil batch pengguna via RPC atomik (klaim + tandai, anti kirim ganda)
-    // Batas baris respons API = 1000, jadi BATCH disamakan agar lanjutan otomatis terpicu.
-    const BATCH = 1000;
-    const MAX_HOPS = 8;
-    const startedAt = Date.now();
+    // One bounded atomic claim; no chaining or parallel blast.
     let users: any[] = [];
-    let isTest = false;
-    let hop = 0;
-    try {
-      const body = await req.json();
-      hop = Number(body?.hop) || 0;
-      if (body?.test_user_id) {
-        isTest = true;
-        const { data: t, error: te } = await supabase
-          .from("telegram_users")
-          .select("id, first_name, last_reengagement_message_id, last_reengagement_sent_at")
-          .eq("id", Number(body.test_user_id));
-        if (te) throw te;
-        users = (t ?? []).map((u: any) => ({ ...u, prev_sent_at: u.last_reengagement_sent_at }));
-      }
-    } catch (_) { /* body kosong */ }
-
-    if (!isTest) {
-      const { data, error } = await supabase.rpc("claim_reengagement_batch", { p_limit: BATCH });
-      if (error) throw error;
-      users = data ?? [];
-    }
+    const { data, error } = await supabase.rpc("claim_reengagement_drip", { p_limit: REENGAGEMENT_BATCH });
+    if (error) throw error;
+    users = data ?? [];
 
     if (users.length === 0) {
       return new Response(JSON.stringify({ message: "No inactive users found for re-engagement" }), {
@@ -143,23 +132,14 @@ export async function handleReengageUsers(req: Request): Promise<Response> {
       });
     }
 
-    console.log(`[Reengage] Processing batch of ${users.length} users...`);
     let successCount = 0, blockedCount = 0, errorCount = 0;
-    const results: { id: number; status: string; message_id: number | null; prev: string | null }[] = [];
+    const results: { id: number; status: string; message_id: number | null; prev: string | null; claimed_at: string; last_active: string }[] = [];
+    const resultFor = (user: any, status: string, messageId: number | null) => ({
+      id: user.id, status, message_id: messageId, prev: user.prev_sent_at,
+      claimed_at: user.claimed_at, last_active: user.last_active,
+    });
 
-    // ~15 pesan/detik: 15 worker, tiap worker jeda ~1 detik (menjaga jalur obrolan aktif tetap lega)
-    const MAX_CONCURRENT = 15;
-    let currentIndex = 0;
-
-    const processUser = async (user: any) => {
-      if (user.last_reengagement_message_id) {
-        fetch(`https://api.telegram.org/bot${botToken}/deleteMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: user.id, message_id: Number(user.last_reengagement_message_id) }),
-        }).then(r => r.body?.cancel()).catch(() => {});
-      }
-
+    const processUser = async (user: any): Promise<boolean> => {
       const template = templates[Math.floor(Math.random() * templates.length)];
       const photoSource = cachedFileIds[template.imageKey] || template.imageUrl;
       const safeName = String(user.first_name ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
@@ -169,6 +149,7 @@ export async function handleReengageUsers(req: Request): Promise<Response> {
         const sendResp = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(10_000),
           body: JSON.stringify({
             chat_id: user.id,
             photo: photoSource,
@@ -190,62 +171,51 @@ export async function handleReengageUsers(req: Request): Promise<Response> {
               }).then(() => {}, () => {});
             }
           }
-          results.push({ id: user.id, status: "sent", message_id: sendResult.result.message_id, prev: user.prev_sent_at });
+          results.push(resultFor(user, "sent", sendResult.result.message_id));
+          if (user.last_reengagement_message_id) {
+            await fetch(`https://api.telegram.org/bot${botToken}/deleteMessage`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              signal: AbortSignal.timeout(3000),
+              body: JSON.stringify({ chat_id: user.id, message_id: Number(user.last_reengagement_message_id) }),
+            }).then(r => r.body?.cancel()).catch(() => {});
+          }
         } else {
           const desc = sendResult.description || "";
           if (sendResult.error_code === 403 || desc.includes("blocked") || desc.includes("deactivated") || desc.includes("chat not found")) {
             blockedCount++;
-            results.push({ id: user.id, status: "blocked", message_id: null, prev: user.prev_sent_at });
+            results.push(resultFor(user, "blocked", null));
           } else {
             errorCount++;
-            console.error(`[Reengage] sendPhoto failed for ${user.id}: ${desc}`);
             // 400 = error permanen (data/format) → lewati 30 hari; lainnya dicoba lagi
             const st = sendResult.error_code === 400 ? "permanent" : "error";
-            results.push({ id: user.id, status: st, message_id: null, prev: user.prev_sent_at });
+            results.push(resultFor(user, st, null));
+            if (sendResult.error_code === 429 || (sendResult.error_code ?? 0) >= 500) {
+              cooldownUntil = Date.now() + Math.max(60, sendResult.parameters?.retry_after ?? 60) * 1000;
+              return false;
+            }
           }
         }
       } catch (err) {
         errorCount++;
-        results.push({ id: user.id, status: "error", message_id: null, prev: user.prev_sent_at });
+        results.push(resultFor(user, "error", null));
+        cooldownUntil = Date.now() + 60_000;
+        return false;
       }
+      return true;
     };
 
-    const TIME_BUDGET_MS = 110_000;
-    const worker = async () => {
-      while (currentIndex < users.length) {
-        if (Date.now() - startedAt > TIME_BUDGET_MS) break;
-        const idx = currentIndex++;
-        await processUser(users[idx]);
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    };
-    await Promise.all(Array.from({ length: MAX_CONCURRENT }, worker));
-
-    // Pengguna yang diklaim tapi belum sempat diproses → kembalikan agar dikirimi di lanjutan
-    for (let i = currentIndex; i < users.length; i++) {
-      results.push({ id: users[i].id, status: "error", message_id: null, prev: users[i].prev_sent_at });
+    const processed = await runReengagementDrip(users, processUser);
+    for (const user of users.slice(processed)) {
+      results.push(resultFor(user, "error", null));
     }
 
     // 4. Simpan hasil + statistik harian WIB dalam 1 RPC
     if (results.length > 0) {
       const { error: finErr } = await supabase.rpc("finish_reengagement_batch", { p_results: results });
-      if (finErr) console.error("[Reengage] finish batch failed:", finErr.message);
+      if (finErr) throw finErr;
     }
 
     console.log(`[Reengage] Batch completed. Sent: ${successCount}, Blocked: ${blockedCount}, Error: ${errorCount}`);
-
-    // 5. Lanjutkan sendiri jika antrean masih ada dan masih sebelum 21.00 WIB
-    const wibHour = new Date(Date.now() + 7 * 3600_000).getUTCHours();
-    if (!isTest && users.length >= BATCH && wibHour < 21 && hop < MAX_HOPS) {
-      const continuationUrl = Deno.env.get("REENGAGE_FUNCTION_URL")
-        || `${supabaseUrl}/functions/v1/reengage-users`;
-      fetch(continuationUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-cron-secret": expectedCronSecret },
-        body: JSON.stringify({ hop: hop + 1 }),
-      }).catch(() => {});
-      await new Promise(r => setTimeout(r, 500));
-    }
 
     return new Response(JSON.stringify({
       success: true, processed: users.length, sent: successCount, blocked: blockedCount, errors: errorCount,
@@ -255,11 +225,14 @@ export async function handleReengageUsers(req: Request): Promise<Response> {
 
   } catch (e) {
     const msg = (e as Error).message;
-    console.error("[reengage-users] major error:", e);
+    cooldownUntil = Date.now() + 60_000;
+    console.warn("[reengage-users] Batch paused: database or delivery unavailable");
 
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  } finally {
+    running = false;
   }
 }

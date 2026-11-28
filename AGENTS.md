@@ -13,3 +13,7 @@
 - Deploy the Railway bot through the root Dockerfile with repository-root context; keep the legacy railway/Dockerfile identical so builder detection never depends on website sources.
 - Keep database concurrency and total queue/request deadlines in the shared service client; count only HTTP 502/503/504 toward its circuit breaker, so local timeouts cannot disable all bot traffic.
 - Keep channel AI generation and scheduled work in the Supabase `channel-agent` function; Telegram handlers only queue work and require explicit admin approval before channel posting, so AI latency and credentials stay outside the P2P chat path.
+
+- Keep re-engagement pacing in the shared Railway/Edge handler, with bounded DB cursor claims, leases, and timestamp-guarded completion; this prevents blasts, cold-user starvation, and stale block-status writes.
+- Process private bot membership in a service-role-only atomic RPC without changing moderation fields; unblocking the bot must never lift sanctions.
+- Set idle-transaction safeguards on application connection roles rather than the managed database; new pooled connections inherit the safety limit.

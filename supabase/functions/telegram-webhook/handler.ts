@@ -23,6 +23,7 @@ import { isStaleWebhookUpdate, webhookDatabaseFailureStatus } from '../_shared/w
 import { formatCachedDailyAdminStats } from '../_shared/admin-stats-command.ts';
 import { isMessageFlooding } from '../_shared/message-flood-limiter.ts';
 import { handleChannelAgentCallback, handleChannelAgentMessage } from '../_shared/channel-agent-telegram.ts';
+import { handleBotMembership } from '../_shared/bot-membership.ts';
 import {
   buildPaymentMethodKeyboard as sharedPaymentMethodKeyboard,
   isAllowedPaymentMethod,
@@ -4651,56 +4652,15 @@ export async function handleTelegramWebhook(req: Request): Promise<Response> {
 
     // === Handle my_chat_member: deteksi user block/unblock bot ===
     if (update.my_chat_member) {
-      const myChatMember = update.my_chat_member;
-      const memberId = myChatMember.from.id;
-      const newStatus = myChatMember.new_chat_member.status;
-      const chatType = myChatMember.chat.type;
-
-      // Hanya proses event dari private chat (bot <-> user langsung)
-      if (chatType === 'private') {
-        if (newStatus === 'kicked') {
-          // === USER MEMBLOKIR BOT ===
-          console.log(`[MY_CHAT_MEMBER] User ${memberId} BLOCKED the bot`);
-
-          // 1. Set last_reengagement_sent_at ke 2099 agar tidak ditarget re-engagement
-          const { error: blockError } = await supabase
-            .from('telegram_users')
-            .update({ last_reengagement_sent_at: '2099-12-31T00:00:00+00:00' })
-            .eq('id', memberId);
-
-          if (blockError) {
-            console.error(`[MY_CHAT_MEMBER] DB update error for blocked user ${memberId}:`, blockError.message);
-          } else {
-            console.log(`[MY_CHAT_MEMBER] User ${memberId} marked as blocked (last_reengagement_sent_at = 2099)`);
-          }
-
-          // 2. Akhiri chat jika user sedang chatting agar partner tidak menunggu
-          try {
-            await endChat(supabase, botToken, memberId);
-            console.log(`[MY_CHAT_MEMBER] endChat called for blocked user ${memberId}`);
-          } catch (endChatErr) {
-            // endChat bisa gagal jika user tidak sedang chatting, abaikan saja
-            console.log(`[MY_CHAT_MEMBER] endChat for ${memberId} - no active chat or error:`, endChatErr);
-          }
-
-        } else if (newStatus === 'member') {
-          // === USER MEMBUKA BLOKIR BOT ===
-          console.log(`[MY_CHAT_MEMBER] User ${memberId} UNBLOCKED the bot`);
-
-          // Set last_reengagement_sent_at ke hari ini → re-engagement dikirim 7 hari kemudian
-          const { error: unblockError } = await supabase
-            .from('telegram_users')
-            .update({ last_reengagement_sent_at: new Date().toISOString() })
-            .eq('id', memberId);
-
-          if (unblockError) {
-            console.error(`[MY_CHAT_MEMBER] DB update error for unblocked user ${memberId}:`, unblockError.message);
-          } else {
-            console.log(`[MY_CHAT_MEMBER] User ${memberId} unblocked, last_reengagement_sent_at reset to now`);
-          }
-        }
+      try {
+        await handleBotMembership(update, supabase, (partnerId) => sendTelegramMessage(
+          botToken, partnerId,
+          '👋 Partner telah mengakhiri chat.', buildEndChatKeyboard(update.my_chat_member.chat.id),
+        ));
+      } catch {
+        // Ordinary membership updates must not create a Telegram retry storm.
+        console.warn('[MY_CHAT_MEMBER] Status update unavailable');
       }
-
       return new Response('OK', { status: 200 });
     }
 
