@@ -230,3 +230,8 @@
 - [x] Tambah tombol biru "🎙️ Call Acak" di bawah tombol Wola pada pesan keterangan saat user menekan /next.
 - [x] Sembunyikan tombol saat VOICE_BOT_USERNAME belum diatur.
 - [x] Jalankan 6 tes keyboard dan deploy `telegram-webhook`.
+
+## Re-engagement bertahap (28 Nov 2026)
+- [ ] Terapkan prioritas inaktif ≥3 hari, rotasi pengguna lama, batch maksimal 50, pacing, dan penghentian saat Telegram membatasi.
+- [ ] Blokir/buka blokir melalui RPC tanpa menghapus sanksi; pengaman transaksi menggantung PostgreSQL.
+- [ ] Uji aturan, migrasi, deploy fungsi, dan catat kebutuhan redeploy Railway.
